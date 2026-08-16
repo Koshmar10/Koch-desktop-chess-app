@@ -31,3 +31,6 @@ target/
 .env
 .env.*
 !.env.example
+
+CLAUDE.md
+KOCH-HANDOFF.md
