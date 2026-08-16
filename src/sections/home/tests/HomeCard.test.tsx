@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { TrendingUp } from "lucide-react";
 import HomeCard from "../HomeCard";
 import { cleanup, render, screen } from "@testing-library/react";

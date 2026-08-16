@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import Home from "../Home";
 import { STAT_CARDS } from "../mock";
 import { cleanup, render, screen } from "@testing-library/react";
