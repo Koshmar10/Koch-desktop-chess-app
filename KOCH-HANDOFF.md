@@ -59,6 +59,10 @@ tests, CI), and wants to apply it from commit one. They chose:
 4. **Engine tested hard, rest pragmatic.** Perft/FEN/legality tests with real coverage
    on the engine crate; integration tests on DB + commands; frontend gets lint +
    typecheck and tests only for pure logic. CI runs fmt/clippy/test on every PR.
+5. **Own the UCI layer, on tokio.** Drop the `stockfish` crate; write the Stockfish
+   communication layer in-house, async. See §5 for the design and the reasoning.
+6. **AI abstraction deferred.** Call OpenAI directly for now, with one discipline
+   attached — no provider types cross out of `ai/`. See §5.
 
 ### Why a rewrite is justified here
 
@@ -107,7 +111,91 @@ path did not.
 
 ---
 
-## 4. Carry / Rebuild / Drop
+## 4. The three backend concerns
+
+The backend is really three features with very different shapes. Keeping them separate
+is the main structural decision:
+
+| Layer | What it is | Dependency stance |
+|---|---|---|
+| **Chess logic** | Pure, in-process, deterministic | Own it. `koch-engine` crate, no Tauri, heavily tested. |
+| **Stockfish** | Stateful subprocess, streaming, latency-sensitive | **Own it** — see §5. Drop the `stockfish` crate. |
+| **AI** | Stateless HTTP request/response | Own the transport, but thin. Lowest-value layer to hand-roll. |
+
+Weight the effort accordingly: **UCI is a milestone, the AI layer is a ticket.** Splitting
+them evenly means spending a week rebuilding an HTTP client that was never the problem.
+
+---
+
+## 5. Owning UCI and AI — reasoning and design
+
+### Why drop the `stockfish` crate
+
+The crate (v0.2.11, 707 lines, zero deps) has a reasonable API — `go()`, `go_for()`,
+`EngineOutput`. **The old analyzer bypassed almost all of it**, using raw `uci_send()` +
+`read_line()` and parsing `multipv` / `depth` / `score` / `pv` tokens by hand inside the
+thread loop (`analyzer.rs:500–527`).
+
+That wasn't laziness, it was a model mismatch: the crate is **blocking and single-shot**
+(ask for one best move, block, get a result), while the analyzer needs **streaming,
+multipv, interruptible** search where a new position supersedes the in-flight one. Those
+don't reconcile.
+
+Concrete hazard in the escape hatch: `read_line()` is typed `-> String`, not
+`-> io::Result<String>`. If the engine process dies you get empty strings forever and
+the analyzer thread spins silently. Nothing panics, so the `catch_unwind` guard doesn't
+help.
+
+So the argument is not "more control" in the abstract — the hard part was already
+hand-written and badly placed, and the dependency only held process management.
+
+### UCI layer design — three pieces
+
+The split exists so the parsing becomes testable. Right now it can't be tested at all
+because it's welded inside a thread loop.
+
+- **`UciProcess`** — spawn, write a line, read lines onto a channel. I/O only, thin.
+- **`UciParser`** — **pure**: `&str → InfoLine`. No I/O, no state. Record real Stockfish
+  output into fixture files once; test every parse path with no subprocess involved.
+  This is where the test coverage lives.
+- **`Engine`** — typed commands and session state on top of the other two.
+
+**Runtime: tokio** (decided). `tokio::process::Child` + `BufReader::next_line()` +
+broadcast channel; cancellation via `select!` and a `CancellationToken` replaces the old
+`try_recv` polling loop. Chosen because commands go async in M3, and mixing sync `mpsc`
+with async commands is where deadlocks live.
+
+Budget ~400–600 lines including tests. UCI is a stable, specified protocol — write-once.
+
+Note: the old `engine/uci.rs` is **not** a protocol layer — it's algebraic ↔ coordinate
+move encode/decode. That belongs in `koch-engine`, not here.
+
+### AI layer — deferred, and how to keep it cheap
+
+`rig` was already removed from the old `Cargo.toml`; that code was hand-rolled `reqwest`
++ `serde_json::json!` against OpenAI. So owning it is the status quo, not a change. What
+was missing was structure, not ownership: `MODEL = "gpt-4.1"`, `MAX_ITERATIONS = 16`,
+and the tool schemas were all inline constants and raw JSON blobs — nothing configurable,
+nothing testable without network.
+
+The abstraction decision is **deliberately deferred**. Deciding it now means designing a
+trait against a single implementation, which reliably encodes that implementation's
+quirks as if they were universal.
+
+**The rule that keeps it deferrable: don't write the trait, write the boundary.** Call
+OpenAI directly, but every signature the rest of the app touches must be in domain terms
+— `analyze_position(ctx) -> Analysis`, never `chat_completion(msgs) -> OpenAiResponse`.
+No provider JSON shapes cross out of `ai/`. If that holds, extracting a trait later is
+mechanical. If it doesn't, no amount of upfront design saves you.
+
+Do be deliberate about two things, because they are where hand-rolled clients break:
+**retry/backoff on 429 and 5xx**, and **validating tool-call arguments before dispatch**.
+
+Non-goal: a general-purpose LLM framework.
+
+---
+
+## 6. Carry / Rebuild / Drop
 
 ### Carry across (port, don't redesign)
 
@@ -126,7 +214,7 @@ path did not.
   the hardest component in the app and the cleanest.
 - **The visual language.** Warm-brown palette (`#8B6F47` primary, `#C9A875` dark
   primary, `#1A1310` ground, `#F4EEDD` foreground). Design decisions are settled and
-  worth porting — the *implementation* was a mess, see §6.
+  worth porting — the *implementation* was a mess, see §8.
 - **Parameterized SQL.** Every old query used `?1` / `params![]`. No injection anywhere.
   Keep that discipline.
 
@@ -154,7 +242,7 @@ path did not.
 
 ---
 
-## 5. Blockers found in the old repo — do not recreate these
+## 7. Blockers found in the old repo — do not recreate these
 
 1. **Absolute dev paths compiled into the binary.** `server.rs:272`, `create.rs:242`,
    `integrations.rs:37` all hardcoded
@@ -186,7 +274,7 @@ path did not.
 
 ---
 
-## 6. Frontend anti-patterns to avoid repeating
+## 8. Frontend anti-patterns to avoid repeating
 
 - **No data layer.** 33 `invoke` calls scattered across 11 components, so each
   reinvented loading, cancellation, and cache invalidation. → This repo gets `src/api/`,
@@ -228,7 +316,7 @@ React preset — which is why lint lands in M0, before any product code.
 
 ---
 
-## 7. Milestone plan
+## 9. Milestone plan
 
 Ordered so each ends with something demonstrably working and hands over as a ticket.
 
@@ -244,20 +332,25 @@ Ordered so each ends with something demonstrably working and hands over as a tic
   migrations, typed `Settings` with serde, secrets out of config entirely.
 - **M3 — Command layer with real errors.** One `thiserror` enum,
   `Result<T, AppError>`, async by default. ts-rs bindings regenerate free.
-- **M4 — Analyzer + Stockfish.** Port the thread design mostly as-is. Fix/remove the
-  eval flag (§3). Make the Stockfish path configurable with discovery instead of
-  hardcoded `/usr/bin/stockfish` (`etc.rs`). Decide bundled vs prerequisite.
+- **M4 — UCI layer, in-house.** The `UciProcess` / `UciParser` / `Engine` split from §5,
+  on tokio. Parser tested against recorded Stockfish fixtures. Port the old thread
+  design's *ideas* — bounded channel, one reused process, stale-request coalescing —
+  but not its code. Fix/remove the eval flag (§3). Make the Stockfish path configurable
+  with discovery instead of hardcoded `/usr/bin/stockfish`; decide bundled vs
+  prerequisite. **Second-largest milestone after M1.**
 - **M5 — Frontend shell.** Router, `src/api/` layer, single theme system with real
   `dark:` variants, path aliases. Port the chessboard component.
 - **M6 — Feature parity, screen by screen.** PvE → Analyzer → History → Puzzles →
   Settings. One screen per ticket.
-- **M7 — AI assistant.** Rust-native. Model name and iteration cap into config
-  (old code hardcoded `gpt-4.1` and `MAX_ITERATIONS = 16` in `ai/agent.rs`). Key in the
-  keychain.
+- **M7 — AI assistant.** Rust-native, direct OpenAI calls, domain-term boundary only —
+  no trait yet (§5). Model name and iteration cap into config (old code hardcoded
+  `gpt-4.1` and `MAX_ITERATIONS = 16` in `ai/agent.rs`). Typed tool registry instead of
+  `json!` blobs. Retry/backoff on 429 and 5xx. Key in the keychain. **Sized as a ticket,
+  not a milestone.**
 
 ---
 
-## 8. Working agreement
+## 10. Working agreement
 
 - Break work into GitHub Issues; one issue per shippable slice, milestone-labeled.
 - Feature branch per ticket, PR into `main`, CI green before merge.
@@ -266,7 +359,7 @@ Ordered so each ends with something demonstrably working and hands over as a tic
 - The user is learning process deliberately — prefer explaining *why* a practice exists
   over just applying it, and don't skip steps to save time.
 
-## 9. Immediate next actions
+## 11. Immediate next actions
 
 1. Install `gh` CLI (blocker for issue creation).
 2. `git init` here; create the GitHub repo.

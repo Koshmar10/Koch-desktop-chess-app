@@ -1,0 +1,9 @@
+# Rust workspace — formatted by rustfmt, not prettier
+src-tauri/
+koch-engine/
+
+# Hand-formatted project docs (tables, deliberate line breaks)
+*.md
+
+# Build output
+dist/
