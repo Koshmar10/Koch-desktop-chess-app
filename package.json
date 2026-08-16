@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --coverage"
+    "test": "npm run format && npm run lint && npm run typecheck && vitest run --coverage"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

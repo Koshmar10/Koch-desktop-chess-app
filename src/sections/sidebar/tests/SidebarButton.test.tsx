@@ -1,37 +1,39 @@
 // @vitest-environment jsdom
-import { TestTube } from "lucide-react"
-import { BrowserRouter } from "react-router-dom"
-import SidebarButton from "../SidebarButton"
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { TestTube } from "lucide-react";
+import { BrowserRouter } from "react-router-dom";
+import SidebarButton from "../SidebarButton";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-afterEach(cleanup);
+const TEST_PATH = "/test";
+const SIDEBAR_BUTTON_TEST_ID = "sidebar-button";
 
 const TestComponent = () => {
   return (
     <BrowserRouter>
-      <SidebarButton to={"/test"} icon={<TestTube />} />
+      <SidebarButton to={TEST_PATH} icon={TestTube} />
     </BrowserRouter>
-  )
-}
+  );
+};
 
-describe('Sidebar button tests', () => {
+describe("Sidebar button tests", () => {
+  afterEach(cleanup);
 
-  it('Test that Sidebar button renders', () => {
+  it("Test that Sidebar button renders", () => {
+    render(<TestComponent />);
 
-    render(<TestComponent />)
-    const component = screen.getByTestId('sidebar-button')
-    expect(component).toBeInTheDocument()
-  })
+    const component = screen.getByTestId(SIDEBAR_BUTTON_TEST_ID);
 
-  it('Test that Sidebar click works', () => {
+    expect(component).toBeInTheDocument();
+  });
 
-    render(<TestComponent />)
-    const component = screen.getByTestId('sidebar-button')
+  it("Test that Sidebar click works", () => {
+    render(<TestComponent />);
+    const component = screen.getByTestId(SIDEBAR_BUTTON_TEST_ID);
 
-    fireEvent.click(component)
+    fireEvent.click(component);
 
-    expect(window.location.pathname).toBe("/test");
-  })
-})
+    expect(window.location.pathname).toBe(TEST_PATH);
+  });
+});

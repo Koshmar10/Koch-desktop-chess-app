@@ -1,15 +1,13 @@
 import { Home, Play, LineChart, History, Puzzle, Settings } from "lucide-react";
 import SidebarButton from "./SidebarButton";
 
-const SIDEBAR_BUTTON_SIZE_PX = 24
-
 const SIDEBAR_ITEMS = [
-  { to: "/", icon: <Home size={SIDEBAR_BUTTON_SIZE_PX} /> },
-  { to: "/play", icon: <Play size={SIDEBAR_BUTTON_SIZE_PX} /> },
-  { to: "/analysis", icon: <LineChart size={SIDEBAR_BUTTON_SIZE_PX} /> },
-  { to: "/history", icon: <History size={SIDEBAR_BUTTON_SIZE_PX} /> },
-  { to: "/puzzle", icon: <Puzzle size={SIDEBAR_BUTTON_SIZE_PX} /> },
-  { to: "/settings", icon: <Settings size={SIDEBAR_BUTTON_SIZE_PX} /> },
+  { to: "/", icon: Home },
+  { to: "/play", icon: Play },
+  { to: "/analysis", icon: LineChart },
+  { to: "/history", icon: History },
+  { to: "/puzzle", icon: Puzzle },
+  { to: "/settings", icon: Settings },
 ];
 
 const LogoSection = () => (
