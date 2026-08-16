@@ -28,7 +28,7 @@ const ButtonSection = () => (
 
 const Sidebar = () => {
   return (
-    <div className="flex flex-col w-[5%] border-r-[1px] border-sidebar-border gap-6 bg-sidebar-dark">
+    <div className="flex flex-col w-[5%] border-r-[1px] border-sidebar-border gap-6 bg-sidebar">
       <LogoSection />
       <ButtonSection />
     </div>
