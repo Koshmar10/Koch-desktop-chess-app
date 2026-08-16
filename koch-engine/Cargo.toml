@@ -1,0 +1,7 @@
+[package]
+name = "koch-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Chess engine core: board representation, move generation, rules. No Tauri/DB/IO dependencies."
+
+[dependencies]
