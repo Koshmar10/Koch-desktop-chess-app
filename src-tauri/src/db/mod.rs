@@ -1,5 +1,5 @@
 pub mod connection;
 pub mod migrations;
-
-pub use connection::{init, Db};
+pub mod schemas;
 pub mod services;
+pub use connection::{init, Db};

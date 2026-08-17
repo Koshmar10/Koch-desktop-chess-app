@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection};
 
-pub struct SessionLog(pub i64);
+use crate::db::schemas::session::Session;
+pub struct ActiveSessionId(pub i64);
 
 pub struct SessionService<'a> {
     conn: &'a Connection,
@@ -24,6 +25,14 @@ impl<'a> SessionService<'a> {
         params![log_id],
     )?;
         Ok(())
+    }
+
+    pub fn get_sessions(&self) -> rusqlite::Result<Vec<Session>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT log_id, connect_at, disconnect_at FROM time_logs ORDER BY connect_at",
+        )?;
+        let rows = stmt.query_map([], |row| Session::try_from(row))?;
+        rows.collect()
     }
 }
 
@@ -76,5 +85,22 @@ mod tests {
             .unwrap();
 
         assert!(first_disconnect.is_none());
+    }
+
+    #[test]
+    fn get_sessions_returns_every_row_oldest_first() {
+        let conn = test_conn();
+        let session: SessionService = SessionService::new(&conn);
+
+        let first = session.start().unwrap();
+        session.end(first).unwrap();
+        let second = session.start().unwrap();
+
+        let sessions = session.get_sessions().unwrap();
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].log_id, first);
+        assert_eq!(sessions[1].log_id, second);
+        assert!(sessions[1].disconnect_at.is_none());
     }
 }

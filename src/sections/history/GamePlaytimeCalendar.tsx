@@ -1,4 +1,5 @@
 
+import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react'
 
 const WEEK_DAYS_ARRAY = ["Mon", "Wed", "Fri"]
@@ -19,6 +20,7 @@ function generateRandomArray(length: number): number[] {
 const GamePlaytimeCalendar = () => {
   const [dayChart, setDayChart] = useState<number[]>([])
   useEffect(() => {
+    invoke('get_sessions').then((message) => console.log(message));
     setDayChart(generateRandomArray(getDaysInCurrentYear()))
   }, [])
 

@@ -1,8 +1,9 @@
+pub mod app;
 pub mod db;
 
 use tauri::Manager;
 
-use crate::db::services::session::{SessionLog, SessionService};
+use crate::db::services::session::{ActiveSessionId, SessionService};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -21,17 +22,17 @@ pub fn run() {
                 service.start()?
             };
             app.manage(db);
-            app.manage(SessionLog(log_id));
+            app.manage(ActiveSessionId(log_id));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![app::sessions::get_sessions])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
                 let db = app_handle.state::<db::Db>();
 
-                let log_id = app_handle.state::<SessionLog>().0;
+                let log_id = app_handle.state::<ActiveSessionId>().0;
                 let lock_result = db.lock();
                 match lock_result {
                     Ok(conn) => {
