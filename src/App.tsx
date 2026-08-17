@@ -4,7 +4,7 @@ import Sidebar from "./sections/sidebar/Sidebar";
 import Home from "./sections/home/Home";
 import Play from "./sections/Play";
 import Analysis from "./sections/Analysis";
-import History from "./sections/History";
+import History from "./sections/history/History";
 import Puzzle from "./sections/Puzzle";
 import Settings from "./sections/Settings";
 
