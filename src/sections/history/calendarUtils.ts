@@ -15,16 +15,39 @@ export function dateToDayIndex(dateStr: string): number {
   return Math.round((dayMs - startOfYearMs) / MS_PER_DAY);
 }
 
+export function formatDayLabel(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+export function formatDuration(seconds: number): string {
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${minutes}m`;
+}
+
+const MIN_DURATION_SECONDS = 2 * 60; 
+const MAX_DURATION_SECONDS = 4 * 60 * 60; 
+
 export function scaleOpacity(
   duration: number,
-  minDuration: number,
-  maxDuration: number,
   minOpacity = 0.1,
   maxOpacity = 1
 ): number {
-  if (maxDuration === minDuration) {
-    return maxOpacity;
-  }
-  const ratio = (duration - minDuration) / (maxDuration - minDuration);
+  const clamped = Math.min(Math.max(duration, MIN_DURATION_SECONDS), MAX_DURATION_SECONDS);
+  const ratio =
+    (clamped - MIN_DURATION_SECONDS) / (MAX_DURATION_SECONDS - MIN_DURATION_SECONDS);
   return minOpacity + ratio * (maxOpacity - minOpacity);
 }

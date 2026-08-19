@@ -1,9 +1,23 @@
 import { useEffect, useState } from 'react'
 import { getSessions } from '../../api/sessions';
-import { getDaysInCurrentYear, dateToDayIndex, scaleOpacity } from './calendarUtils';
+import { Tooltip } from '../../components/Tooltip';
+import {
+  getDaysInCurrentYear,
+  dateToDayIndex,
+  scaleOpacity,
+  formatDayLabel,
+  formatDuration,
+} from './calendarUtils';
 
 const WEEK_DAYS_ARRAY = ["Mon", "Wed", "Fri"]
 const MONTHS_ARRAY = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+interface DayData {
+  opacity: number;
+  tooltip: string | null;
+}
+
+const EMPTY_DAY: DayData = { opacity: 0.1, tooltip: null };
 
 const WeekDayLabels = () => (
   <div className='h-full flex flex-col items-center justify-between pt-10'>
@@ -17,41 +31,37 @@ const MonthLabels = () => (
   </div>
 )
 
-const DayCell = ({ value, dayIndex }: { value: number; dayIndex: number }) => (
-  <div
-    className="w-5 h-5 rounded bg-primary opacity-(--cell-opacity)"
-    style={{ '--cell-opacity': value } as React.CSSProperties}
-    title={`Day ${dayIndex + 1}: ${value.toFixed(2)}`}
-  />
+const DayCell = ({ opacity, tooltip }: DayData) => (
+  <Tooltip label={tooltip}>
+    <div
+      className="w-5 h-5 rounded bg-primary"
+      style={{ opacity }}
+    />
+  </Tooltip>
 )
 
-const CalendarGrid = ({ dayChart }: { dayChart: number[] }) => (
+const CalendarGrid = ({ dayChart }: { dayChart: DayData[] }) => (
   <div className="grid grid-rows-7 grid-flow-col gap-1">
-    {dayChart.map((value, idx) => (
-      <DayCell key={idx} value={value} dayIndex={idx} />
+    {dayChart.map((day, idx) => (
+      <DayCell key={idx} opacity={day.opacity} tooltip={day.tooltip} />
     ))}
   </div>
 )
 
 const GamePlaytimeCalendar = () => {
-  const [dayChart, setDayChart] = useState<number[]>([])
+  const [dayChart, setDayChart] = useState<DayData[]>([])
   useEffect(() => {
     getSessions()
       .then((sessions) => {
-        const chart = new Array(getDaysInCurrentYear()).fill(0.1);
-        if (sessions.length === 0) {
-          setDayChart(chart);
-          return;
-        }
-
-        const durations = sessions.map((s) => s.duration);
-        const minDuration = Math.min(...durations);
-        const maxDuration = Math.max(...durations);
+        const chart: DayData[] = new Array(getDaysInCurrentYear()).fill(EMPTY_DAY);
 
         for (const session of sessions) {
           const idx = dateToDayIndex(session.date);
           if (idx >= 0 && idx < chart.length) {
-            chart[idx] = scaleOpacity(session.duration, minDuration, maxDuration);
+            chart[idx] = {
+              opacity: scaleOpacity(session.duration),
+              tooltip: `${formatDayLabel(session.date)}: ${formatDuration(session.duration)}`,
+            };
           }
         }
 
