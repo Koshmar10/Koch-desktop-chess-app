@@ -12,14 +12,16 @@ function App() {
   return (
     <div className="flex flex-row w-[100vw] h-[100vh]">
       <Sidebar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/play" element={<Play />} />
-        <Route path="/analysis" element={<Analysis />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/puzzle" element={<Puzzle />} />
-        <Route path="/settings" element={<Settings />} />
-      </Routes>
+      <div className="flex-1 min-w-0 overflow-x-auto">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/play" element={<Play />} />
+          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/puzzle" element={<Puzzle />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </div>
     </div>
   );
 }

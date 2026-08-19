@@ -1,12 +1,12 @@
 import ActivityChart from "./GamePlaytimeCalendar";
-import SearchInputs from "./SearchInputs";
+import HistoryToolbar from "./HistoryToolbar";
 
 const History = () => {
 
   return (
     <div className="w-full h-full flex flex-col">
       <ActivityChart />
-      <SearchInputs />
+      <HistoryToolbar />
     </div>
   );
 
