@@ -5,11 +5,6 @@ use tauri::Manager;
 
 use crate::db::services::session::{ActiveSessionId, SessionService};
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

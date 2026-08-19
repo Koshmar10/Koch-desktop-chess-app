@@ -38,16 +38,20 @@ export function formatDuration(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-const MIN_DURATION_SECONDS = 2 * 60; 
-const MAX_DURATION_SECONDS = 4 * 60 * 60; 
+const MIN_DURATION_SECONDS = 2 * 60;
+const MAX_DURATION_SECONDS = 4 * 60 * 60;
 
 export function scaleOpacity(
   duration: number,
   minOpacity = 0.1,
-  maxOpacity = 1
+  maxOpacity = 1,
 ): number {
-  const clamped = Math.min(Math.max(duration, MIN_DURATION_SECONDS), MAX_DURATION_SECONDS);
+  const clamped = Math.min(
+    Math.max(duration, MIN_DURATION_SECONDS),
+    MAX_DURATION_SECONDS,
+  );
   const ratio =
-    (clamped - MIN_DURATION_SECONDS) / (MAX_DURATION_SECONDS - MIN_DURATION_SECONDS);
+    (clamped - MIN_DURATION_SECONDS) /
+    (MAX_DURATION_SECONDS - MIN_DURATION_SECONDS);
   return minOpacity + ratio * (maxOpacity - minOpacity);
 }

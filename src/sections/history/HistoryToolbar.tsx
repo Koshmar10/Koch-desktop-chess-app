@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-import { Check, ChevronDown, RefreshCcw, Search, Upload } from 'lucide-react';
-import { TooltipButton } from '../../components/TooltipButton';
+import { Check, ChevronDown, RefreshCcw, Search, Upload } from "lucide-react";
+import { TooltipButton } from "../../components/TooltipButton";
 
 type SelectOption = "Last Month" | "Last 3 Months" | "All Time";
-const SelectOptions: SelectOption[] = ["Last Month", "Last 3 Months", "All Time"]
+const SelectOptions: SelectOption[] = [
+  "Last Month",
+  "Last 3 Months",
+  "All Time",
+];
 
 const SearchBox = () => (
   <div className="relative flex items-center bg-input/30 border-2 border-border rounded p-2 gap-2 outline-none focus-within:border-primary transition-colors">
@@ -15,7 +19,7 @@ const SearchBox = () => (
       className="bg-transparent outline-none text-foreground placeholder:text-muted-foreground w-full"
     />
   </div>
-)
+);
 
 const MonthSelectMenu = ({
   selectOption,
@@ -25,18 +29,18 @@ const MonthSelectMenu = ({
   onSelect: (option: SelectOption) => void;
 }) => (
   <div className="absolute left-0 top-full mt-2 bg-card border-2 border-border rounded shadow-lg">
-    {SelectOptions.map(option => (
+    {SelectOptions.map((option) => (
       <div
         key={option}
         className="px-4 py-2 hover:bg-border cursor-pointer flex flex-row w-44 justify-between"
         onClick={() => onSelect(option)}
       >
         <span className="flex-1">{option}</span>
-        <span>{option === selectOption ? <Check /> : ''}</span>
+        <span>{option === selectOption ? <Check /> : ""}</span>
       </div>
     ))}
   </div>
-)
+);
 
 const MonthSelect = () => {
   const [open, setOpen] = useState(false);
@@ -50,11 +54,14 @@ const MonthSelect = () => {
       <span className="block">{selectOption}</span>
       <ChevronDown />
       {open && (
-        <MonthSelectMenu selectOption={selectOption} onSelect={setSelectOption} />
+        <MonthSelectMenu
+          selectOption={selectOption}
+          onSelect={setSelectOption}
+        />
       )}
     </div>
-  )
-}
+  );
+};
 
 const HistoryToolbar = () => {
   return (

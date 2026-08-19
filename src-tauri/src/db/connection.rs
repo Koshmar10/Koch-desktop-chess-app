@@ -24,7 +24,6 @@ fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn std::error::Error
     Ok(conn)
 }
 
-
 #[cfg(debug_assertions)]
 fn seed_dev_data_if_empty(conn: &Connection) -> rusqlite::Result<()> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM time_logs", [], |row| row.get(0))?;

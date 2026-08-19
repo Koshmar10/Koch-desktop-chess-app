@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from "@tauri-apps/api/core";
 
 export interface SessionDuration {
   date: string;
@@ -6,5 +6,5 @@ export interface SessionDuration {
 }
 
 export function getSessions(): Promise<SessionDuration[]> {
-  return invoke<SessionDuration[]>('get_sessions');
+  return invoke<SessionDuration[]>("get_sessions");
 }
