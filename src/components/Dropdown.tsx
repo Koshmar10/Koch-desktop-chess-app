@@ -17,7 +17,12 @@ const ALIGN_CLASS: Record<NonNullable<DropdownProps["align"]>, string> = {
   center: "left-1/2 -translate-x-1/2",
 };
 
-const Dropdown = ({ trigger, children, side = "bottom", align = "left" }: DropdownProps) => {
+const Dropdown = ({
+  trigger,
+  children,
+  side = "bottom",
+  align = "left",
+}: DropdownProps) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +33,10 @@ const Dropdown = ({ trigger, children, side = "bottom", align = "left" }: Dropdo
     if (!open) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -38,10 +46,15 @@ const Dropdown = ({ trigger, children, side = "bottom", align = "left" }: Dropdo
   }, [open]);
 
   return (
-    <div ref={containerRef} className="relative inline-flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="relative inline-flex items-center justify-center"
+    >
       {trigger({ open, toggle })}
       {open && (
-        <div className={`absolute z-10 ${SIDE_CLASS[side]} ${ALIGN_CLASS[align]}`}>
+        <div
+          className={`absolute z-10 ${SIDE_CLASS[side]} ${ALIGN_CLASS[align]}`}
+        >
           {children(close)}
         </div>
       )}

@@ -11,12 +11,16 @@ export interface ChessboardContextValue {
   clearSelection: () => void;
 }
 
-export const ChessboardContext = createContext<ChessboardContextValue | null>(null);
+export const ChessboardContext = createContext<ChessboardContextValue | null>(
+  null,
+);
 
 export function useChessboardContext(): ChessboardContextValue {
   const ctx = useContext(ChessboardContext);
   if (!ctx) {
-    throw new Error("Chessboard subcomponents must be rendered inside <Chessboard>");
+    throw new Error(
+      "Chessboard subcomponents must be rendered inside <Chessboard>",
+    );
   }
   return ctx;
 }

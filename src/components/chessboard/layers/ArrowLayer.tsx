@@ -12,14 +12,18 @@ const ArrowLayer: React.FC = () => {
   const [arrows, setArrows] = useState<ArrowData[]>([]);
   const [startSquare, setStartSquare] = useState<[number, number] | null>(null);
 
-  const squareFromPoint = useCallback((clientX: number, clientY: number): [number, number] | null => {
-    const bounds = svgRef.current?.getBoundingClientRect();
-    if (!bounds) return null;
-    const col = Math.floor((clientX - bounds.left) / squareSize);
-    const row = Math.floor((clientY - bounds.top) / squareSize);
-    if (row < 0 || row >= boardSize || col < 0 || col >= boardSize) return null;
-    return [row, col];
-  }, [boardSize, squareSize]);
+  const squareFromPoint = useCallback(
+    (clientX: number, clientY: number): [number, number] | null => {
+      const bounds = svgRef.current?.getBoundingClientRect();
+      if (!bounds) return null;
+      const col = Math.floor((clientX - bounds.left) / squareSize);
+      const row = Math.floor((clientY - bounds.top) / squareSize);
+      if (row < 0 || row >= boardSize || col < 0 || col >= boardSize)
+        return null;
+      return [row, col];
+    },
+    [boardSize, squareSize],
+  );
 
   // This layer has pointer-events: none (left-clicks must reach the pieces/squares
   // beneath it), so right-click detection listens at the window level instead of on
@@ -47,10 +51,18 @@ const ArrowLayer: React.FC = () => {
       if (e.button !== RIGHT_MOUSE_BUTTON) return;
 
       const endSquare = squareFromPoint(e.clientX, e.clientY);
-      if (endSquare && (endSquare[0] !== startSquare[0] || endSquare[1] !== startSquare[1])) {
+      if (
+        endSquare &&
+        (endSquare[0] !== startSquare[0] || endSquare[1] !== startSquare[1])
+      ) {
         setArrows((prev) => [
           ...prev,
-          { from: startSquare, to: endSquare, color: USER_ARROW_COLOR, type: "user" },
+          {
+            from: startSquare,
+            to: endSquare,
+            color: USER_ARROW_COLOR,
+            type: "user",
+          },
         ]);
       } else {
         setArrows([]);
@@ -63,7 +75,10 @@ const ArrowLayer: React.FC = () => {
   }, [startSquare, boardSize, squareSize, squareFromPoint]);
 
   return (
-    <svg ref={svgRef} className="absolute top-0 left-0 w-full h-full pointer-events-none">
+    <svg
+      ref={svgRef}
+      className="absolute top-0 left-0 w-full h-full pointer-events-none"
+    >
       {arrows.map((arrow, index) => (
         <ChessArrow
           key={`${arrow.from[0]}-${arrow.from[1]}-${arrow.to[0]}-${arrow.to[1]}-${index}`}

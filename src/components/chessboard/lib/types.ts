@@ -6,7 +6,8 @@ export interface ArrowData {
 }
 
 export type PieceColor = "white" | "black";
-export type PieceKind = "pawn" | "knight" | "bishop" | "rook" | "queen" | "king";
+export type PieceKind =
+  "pawn" | "knight" | "bishop" | "rook" | "queen" | "king";
 
 export interface PlacedPiece {
   kind: PieceKind;

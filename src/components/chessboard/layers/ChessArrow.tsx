@@ -1,23 +1,13 @@
+import { getSquareCenter } from "./squareCenter";
+
 interface ChessArrowProps {
   from: [number, number]; // [row, col]
-  to: [number, number];   // [row, col]
+  to: [number, number]; // [row, col]
   color?: string;
   isGhost?: boolean;
   opacity?: number;
   isFlipped?: boolean;
   squareSize: number;
-}
-
-function getSquareCenter(square: [number, number], isFlipped: boolean, squareSize: number) {
-  const [row, col] = square;
-
-  const xIndex = isFlipped ? 7 - col : col;
-  const yIndex = isFlipped ? 7 - row : row;
-
-  return {
-    x: xIndex * squareSize + squareSize / 2,
-    y: yIndex * squareSize + squareSize / 2,
-  };
 }
 
 const ChessArrow: React.FC<ChessArrowProps> = ({
@@ -32,7 +22,7 @@ const ChessArrow: React.FC<ChessArrowProps> = ({
   const start = getSquareCenter(from, isFlipped, squareSize);
   const end = getSquareCenter(to, isFlipped, squareSize);
 
-  const markerId = `arrowhead-${color.replace('#', '')}`;
+  const markerId = `arrowhead-${color.replace("#", "")}`;
   const strokeWidth = squareSize * 0.2;
 
   const effectiveOpacity = isGhost ? Math.min(opacity, 0.5) : opacity;

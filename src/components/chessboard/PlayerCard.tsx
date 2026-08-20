@@ -37,9 +37,13 @@ interface PlayerAvatarProps {
 
 const PlayerAvatar = ({ color }: PlayerAvatarProps) => {
   return (
-    <div className={`relative flex items-center justify-center w-12 h-12 rounded-md shadow-inner ${AVATAR_BG_CLASS[color]}`}>
+    <div
+      className={`relative flex items-center justify-center w-12 h-12 rounded-md shadow-inner ${AVATAR_BG_CLASS[color]}`}
+    >
       <ChessKing className="w-8 h-8 opacity-80" />
-      <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${BADGE_BG_CLASS[color]}`} />
+      <div
+        className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${BADGE_BG_CLASS[color]}`}
+      />
     </div>
   );
 };
@@ -64,21 +68,22 @@ interface TakenPiecesProps {
 const TakenPieces = ({ piecesTaken, materialDiff }: TakenPiecesProps) => {
   return (
     <div className="flex flex-row">
-      {piecesTaken && piecesTaken.map(([kind, pieceColor], idx) => (
-        <img
-          key={idx}
-          src={PIECE_IMAGES[pieceColor][kind]}
-          alt=""
-          style={{
-            zIndex: CAPTURED_PIECE_BASE_Z_INDEX + idx,
-            width: CAPTURED_PIECE_SIZE,
-            height: CAPTURED_PIECE_SIZE,
-            marginLeft: idx === 0 ? 0 : CAPTURED_PIECE_OVERLAP,
-            filter: CAPTURED_PIECE_FILTER[pieceColor],
-          }}
-          draggable={false}
-        />
-      ))}
+      {piecesTaken &&
+        piecesTaken.map(([kind, pieceColor], idx) => (
+          <img
+            key={idx}
+            src={PIECE_IMAGES[pieceColor][kind]}
+            alt=""
+            style={{
+              zIndex: CAPTURED_PIECE_BASE_Z_INDEX + idx,
+              width: CAPTURED_PIECE_SIZE,
+              height: CAPTURED_PIECE_SIZE,
+              marginLeft: idx === 0 ? 0 : CAPTURED_PIECE_OVERLAP,
+              filter: CAPTURED_PIECE_FILTER[pieceColor],
+            }}
+            draggable={false}
+          />
+        ))}
       {materialDiff && materialDiff > 0 && (
         <span className="ml-2 px-2 py-0.5 text-white/90 font-semibold text-sm">
           +{materialDiff}
@@ -88,7 +93,15 @@ const TakenPieces = ({ piecesTaken, materialDiff }: TakenPiecesProps) => {
   );
 };
 
-export const PlayerCard = ({ display, player, color, clock, isTurn, piecesTaken, materialDiff }: PlayerCardProps) => {
+export const PlayerCard = ({
+  display,
+  player,
+  color,
+  clock,
+  isTurn,
+  piecesTaken,
+  materialDiff,
+}: PlayerCardProps) => {
   if (!display) return null;
 
   return (
@@ -103,9 +116,13 @@ export const PlayerCard = ({ display, player, color, clock, isTurn, piecesTaken,
 
         <div className="flex flex-col items-end ml-3">
           {typeof clock !== "undefined" && (
-            <div className={`flex items-center gap-2 ${isTurn ? "text-foreground" : "text-foreground/40"}`}>
+            <div
+              className={`flex items-center gap-2 ${isTurn ? "text-foreground" : "text-foreground/40"}`}
+            >
               <Clock className="w-5 h-5 text-foreground/40" />
-              <span className="font-mono text-2xl tracking-widest">{clock}</span>
+              <span className="font-mono text-2xl tracking-widest">
+                {clock}
+              </span>
             </div>
           )}
         </div>

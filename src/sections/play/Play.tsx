@@ -4,10 +4,14 @@ import PieceLayer from "../../components/chessboard/layers/PieceLayer";
 import ArrowLayer from "../../components/chessboard/layers/ArrowLayer";
 import { PlayerCard } from "../../components/chessboard/PlayerCard";
 import PlayControls from "./PlayControls";
-import { MOCK_BLACK_CAPTURES, MOCK_BLACK_CLOCK, MOCK_WHITE_CAPTURES, MOCK_WHITE_CLOCK } from "./mock";
+import {
+  MOCK_BLACK_CAPTURES,
+  MOCK_BLACK_CLOCK,
+  MOCK_WHITE_CAPTURES,
+  MOCK_WHITE_CLOCK,
+} from "./mock";
 
 const Play = () => {
-
   return (
     <div className="flex flex-col justify-center items-center w-full h-full">
       <div className="flex flex-col gap-2 w-full max-w-[576px]">
@@ -36,7 +40,6 @@ const Play = () => {
       <PlayControls />
     </div>
   );
-
-}
+};
 
 export default Play;

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ChessboardContext } from "./ChessboardContext";
+import { applyMove } from "./lib/applyMove";
 import { BOARD_SIZE, SQUARE_SIZE } from "./lib/constants";
 import { STARTING_POSITION } from "./lib/startingPosition";
 import type { PlacedPiece } from "./lib/types";
@@ -10,7 +11,9 @@ interface ChessboardProps {
 
 const Chessboard: React.FC<ChessboardProps> = ({ children }) => {
   const [pieces, setPieces] = useState<PlacedPiece[]>(STARTING_POSITION);
-  const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(null);
+  const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(
+    null,
+  );
 
   const selectSquare = (row: number, col: number) => {
     setSelectedSquare([row, col]);
@@ -21,12 +24,7 @@ const Chessboard: React.FC<ChessboardProps> = ({ children }) => {
   };
 
   const movePiece = (from: [number, number], to: [number, number]) => {
-    setPieces((prev) => {
-      const withoutCaptured = prev.filter((p) => !(p.row === to[0] && p.col === to[1]));
-      return withoutCaptured.map((p) =>
-        p.row === from[0] && p.col === from[1] ? { ...p, row: to[0], col: to[1] } : p
-      );
-    });
+    setPieces((prev) => applyMove(prev, from, to));
     setSelectedSquare(null);
   };
 
