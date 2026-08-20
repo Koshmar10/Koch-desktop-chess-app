@@ -1,6 +1,10 @@
-// Placeholder — real board/move-gen code lands in M1 (see KOCH-HANDOFF.md §7).
-// This stub exists so the workspace, clippy, fmt, and `cargo test` have something
-// to run against before the port happens.
+pub mod board;
+pub mod piece;
+pub mod square;
+
+pub use board::Board;
+pub use piece::{ChessPiece, PieceColor, PieceType};
+pub use square::Square;
 
 #[cfg(test)]
 mod tests {
