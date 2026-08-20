@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Check, ChevronDown, RefreshCcw, Search, Upload } from "lucide-react";
 import { TooltipButton } from "../../components/TooltipButton";
+import Dropdown from "../../components/Dropdown";
 
 type SelectOption = "Last Month" | "Last 3 Months" | "All Time";
 const SelectOptions: SelectOption[] = [
@@ -28,7 +29,7 @@ const MonthSelectMenu = ({
   selectOption: SelectOption;
   onSelect: (option: SelectOption) => void;
 }) => (
-  <div className="absolute left-0 top-full mt-2 bg-card border-2 border-border rounded shadow-lg">
+  <div className="bg-card border-2 border-border rounded shadow-lg">
     {SelectOptions.map((option) => (
       <div
         key={option}
@@ -43,23 +44,30 @@ const MonthSelectMenu = ({
 );
 
 const MonthSelect = () => {
-  const [open, setOpen] = useState(false);
   const [selectOption, setSelectOption] = useState<SelectOption>("Last Month");
 
   return (
-    <div
-      className="w-44 relative bg-card/30 border-2 border-border rounded cursor-pointer select-none flex flex-row items-center justify-between p-2"
-      onClick={() => setOpen((o) => !o)}
+    <Dropdown
+      trigger={({ toggle }) => (
+        <div
+          className="w-44 bg-card/30 border-2 border-border rounded cursor-pointer select-none flex flex-row items-center justify-between p-2"
+          onClick={toggle}
+        >
+          <span className="block">{selectOption}</span>
+          <ChevronDown />
+        </div>
+      )}
     >
-      <span className="block">{selectOption}</span>
-      <ChevronDown />
-      {open && (
+      {(close) => (
         <MonthSelectMenu
           selectOption={selectOption}
-          onSelect={setSelectOption}
+          onSelect={(option) => {
+            setSelectOption(option);
+            close();
+          }}
         />
       )}
-    </div>
+    </Dropdown>
   );
 };
 
