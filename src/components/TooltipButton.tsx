@@ -7,14 +7,15 @@ const buttonCls =
 interface TooltipButtonProps {
   icon: ReactNode;
   tooltip: string | null;
+  onClick?: () => void;
 }
 
-export function TooltipButton({ icon, tooltip }: TooltipButtonProps) {
+export const TooltipButton = ({ icon, tooltip, onClick }: TooltipButtonProps) => {
   return (
     <Tooltip label={tooltip} color="primary/80">
-      <button type="button" className={buttonCls}>
+      <button type="button" className={buttonCls} onClick={onClick}>
         {icon}
       </button>
     </Tooltip>
   );
-}
+};
