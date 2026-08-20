@@ -9,4 +9,3 @@ pub use castling::CastlingRights;
 pub use fen::{FenError, FenString};
 pub use piece::{ChessPiece, PieceColor, PieceType};
 pub use square::Square;
-

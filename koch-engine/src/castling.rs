@@ -1,3 +1,4 @@
+use crate::board::{BLACK_BACK_RANK, KINGSIDE_ROOK_FILE, QUEENSIDE_ROOK_FILE, WHITE_BACK_RANK};
 use crate::piece::PieceColor;
 use crate::square::Square;
 
@@ -60,10 +61,10 @@ impl CastlingRights {
     /// square and when a rook is captured on it — same rule, same call.
     pub fn revoke_for_rook_square(&mut self, square: Square) {
         match (square.rank, square.file) {
-            (7, 0) => self.white_queen_side = false,
-            (7, 7) => self.white_king_side = false,
-            (0, 0) => self.black_queen_side = false,
-            (0, 7) => self.black_king_side = false,
+            (WHITE_BACK_RANK, QUEENSIDE_ROOK_FILE) => self.white_queen_side = false,
+            (WHITE_BACK_RANK, KINGSIDE_ROOK_FILE) => self.white_king_side = false,
+            (BLACK_BACK_RANK, QUEENSIDE_ROOK_FILE) => self.black_queen_side = false,
+            (BLACK_BACK_RANK, KINGSIDE_ROOK_FILE) => self.black_king_side = false,
             _ => {}
         }
     }
@@ -71,22 +72,20 @@ impl CastlingRights {
     /// Renders the FEN castling-availability field: some subset of "KQkq", or
     /// "-" if neither side can castle either way.
     pub fn to_fen_string(&self) -> String {
-        let mut s = String::new();
-        if self.white_king_side {
-            s.push('K');
+        let rights: String = [
+            (self.white_king_side, 'K'),
+            (self.white_queen_side, 'Q'),
+            (self.black_king_side, 'k'),
+            (self.black_queen_side, 'q'),
+        ]
+        .into_iter()
+        .filter_map(|(has_right, ch)| has_right.then_some(ch))
+        .collect();
+
+        if rights.is_empty() {
+            "-".to_string()
+        } else {
+            rights
         }
-        if self.white_queen_side {
-            s.push('Q');
-        }
-        if self.black_king_side {
-            s.push('k');
-        }
-        if self.black_queen_side {
-            s.push('q');
-        }
-        if s.is_empty() {
-            s.push('-');
-        }
-        s
     }
 }

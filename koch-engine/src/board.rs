@@ -5,6 +5,13 @@ use crate::square::Square;
 
 pub const BOARD_SIZE: usize = 8;
 
+// Chess-setup geometry, shared by anything that needs to know where a color's
+// back rank or rooks start (castling rights, castle-move generation, ...).
+pub const WHITE_BACK_RANK: usize = BOARD_SIZE - 1;
+pub const BLACK_BACK_RANK: usize = 0;
+pub const QUEENSIDE_ROOK_FILE: usize = 0;
+pub const KINGSIDE_ROOK_FILE: usize = BOARD_SIZE - 1;
+
 #[derive(Clone, Debug)]
 pub struct Board {
     pub squares: [[Option<ChessPiece>; BOARD_SIZE]; BOARD_SIZE],
