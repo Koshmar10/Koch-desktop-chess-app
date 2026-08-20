@@ -1,21 +1,29 @@
+use crate::castling::CastlingRights;
+use crate::fen::{FenString, DEFAULT_FEN};
 use crate::piece::{ChessPiece, PieceColor};
 use crate::square::Square;
 
+pub const BOARD_SIZE: usize = 8;
+
 #[derive(Clone, Debug)]
 pub struct Board {
-    pub squares: [[Option<ChessPiece>; 8]; 8],
+    pub squares: [[Option<ChessPiece>; BOARD_SIZE]; BOARD_SIZE],
     pub turn: PieceColor,
-    pub white_big_castle: bool,
-    pub black_big_castle: bool,
-    pub white_small_castle: bool,
-    pub black_small_castle: bool,
+    pub castling_rights: CastlingRights,
     pub halfmove_clock: u32,
     pub fullmove_number: u32,
     pub en_passant_target: Option<Square>,
-    pub move_cache: std::collections::HashMap<u32, PieceMoves>,
-    pub next_id: u32,
+    pub legal_moves: std::collections::HashMap<u32, PieceMoves>,
+    pub next_piece_id: u32,
     pub game_phase: GamePhase,
     pub ply_count: u32,
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        let fen = FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is a valid FEN string");
+        Board::from(&fen)
+    }
 }
 
 #[derive(Clone, Debug)]
