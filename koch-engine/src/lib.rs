@@ -1,11 +1,20 @@
-// Placeholder — real board/move-gen code lands in M1 (see KOCH-HANDOFF.md §7).
-// This stub exists so the workspace, clippy, fmt, and `cargo test` have something
-// to run against before the port happens.
+pub mod board;
+pub mod capture;
+pub mod castling;
+pub mod direction;
+pub mod fen;
+pub mod move_gen;
+pub mod piece;
+pub mod quiet;
+pub mod san;
+pub mod simulate;
+pub mod square;
+pub mod uci;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn pipeline_runs() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub use board::{Board, MoveStruct};
+pub use castling::CastlingRights;
+pub use direction::Direction;
+pub use fen::{FenError, FenString};
+pub use move_gen::MoveError;
+pub use piece::{ChessPiece, PieceColor, PieceType};
+pub use square::Square;
