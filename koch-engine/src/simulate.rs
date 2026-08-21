@@ -71,7 +71,7 @@ impl Board {
     /// safe. Plays the move on a scratch clone of the board and checks it
     /// there — simple and correct, though not the cheapest possible legality
     /// check (a full-board clone per candidate move).
-    pub fn simulate_move(&self, piece: &ChessPiece, new_pos: Square) -> bool {
+    pub fn is_move_safe(&self, piece: &ChessPiece, new_pos: Square) -> bool {
         let mut board = self.clone();
 
         let is_en_passant = piece.kind == PieceType::Pawn
@@ -120,21 +120,21 @@ mod tests {
     }
 
     #[test]
-    fn simulate_move_rejects_move_that_exposes_king_to_check() {
+    fn move_that_exposes_king_to_check_is_rejected() {
         let board = board_from("4r3/8/8/8/8/8/4B3/4K3 w - - 0 1");
         let bishop = board.squares[6][4].unwrap(); // e2, pinned to the king by the rook on e8
 
-        let legal = board.simulate_move(&bishop, Square::new(5, 3)); // d3, off the e-file
+        let legal = board.is_move_safe(&bishop, Square::new(5, 3)); // d3, off the e-file
 
         assert!(!legal);
     }
 
     #[test]
-    fn simulate_move_allows_move_that_keeps_king_safe() {
+    fn move_that_keeps_king_safe_is_allowed() {
         let board = board_from("8/8/8/8/8/8/4B3/4K3 w - - 0 1");
         let bishop = board.squares[6][4].unwrap();
 
-        let legal = board.simulate_move(&bishop, Square::new(5, 3));
+        let legal = board.is_move_safe(&bishop, Square::new(5, 3));
 
         assert!(legal);
     }

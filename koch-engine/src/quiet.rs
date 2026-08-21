@@ -32,7 +32,7 @@ impl Board {
     ) -> Vec<Square> {
         quiet_moves
             .into_iter()
-            .filter(|&target_square| self.simulate_move(piece, target_square))
+            .filter(|&target_square| self.is_move_safe(piece, target_square))
             .collect()
     }
 }

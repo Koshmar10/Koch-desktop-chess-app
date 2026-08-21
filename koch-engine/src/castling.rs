@@ -102,6 +102,15 @@ impl CastlingRights {
         self.revoke_queen_side(color);
     }
 
+    /// True if neither side has moved a king or rook yet — every right is
+    /// still available. Used as an "opening still ongoing" signal.
+    pub fn all_intact(&self) -> bool {
+        self.white_king_side
+            && self.white_queen_side
+            && self.black_king_side
+            && self.black_queen_side
+    }
+
     /// Revoke whichever right corresponds to a rook's home square, if `square` is
     /// one of the four home squares. Used both when a rook moves off its home
     /// square and when a rook is captured on it — same rule, same call.

@@ -78,7 +78,7 @@ impl Board {
     /// whether or not anything is standing on it), unlike `get_all_moves`,
     /// which only returns a pawn's actual quiet/capture candidates. Every
     /// other piece's attack set is just its normal move set. This must never
-    /// depend on legality (no `simulate_move`) — legality is computed *from*
+    /// depend on legality (no `is_move_safe`) — legality is computed *from*
     /// attack squares (is the king's square attacked?), so the reverse
     /// dependency would recurse forever.
     pub fn get_attack_squares(&self, piece: &ChessPiece) -> Vec<Square> {
@@ -168,7 +168,7 @@ impl Board {
 
     /// Recomputes every piece's legal moves from scratch. Not cheap (every
     /// piece re-derives its own legality, which itself clones the board per
-    /// candidate move via `simulate_move`), but simple and obviously correct;
+    /// candidate move via `is_move_safe`), but simple and obviously correct;
     /// this is the board-wide snapshot consumers like the frontend render
     /// from, not something `move_piece` needs internally per move.
     pub fn refresh_legal_moves(&mut self) {

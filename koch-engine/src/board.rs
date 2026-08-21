@@ -4,10 +4,9 @@ use crate::move_gen::MoveError;
 use crate::piece::{ChessPiece, PieceColor, PieceType};
 use crate::square::Square;
 
-pub const BOARD_SIZE: usize = 8;
-
 // Chess-setup geometry, shared by anything that needs to know where a color's
 // back rank or rooks start (castling rights, castle-move generation, ...).
+pub const BOARD_SIZE: usize = 8;
 pub const WHITE_BACK_RANK: usize = BOARD_SIZE - 1;
 pub const BLACK_BACK_RANK: usize = 0;
 pub const QUEENSIDE_ROOK_FILE: usize = 0;
@@ -79,7 +78,7 @@ impl Board {
         self.turn = self.turn.opposite();
     }
 
-    pub fn material_value(kind: PieceType) -> u8 {
+    pub fn material_value(kind: PieceType) -> u32 {
         match kind {
             PieceType::Bishop => 3,
             PieceType::Knight => 3,
@@ -120,58 +119,54 @@ impl Board {
         };
 
         let backrank_targets = [PieceType::Bishop, PieceType::Queen, PieceType::Knight];
-        let mut material_sum: u32 = 0;
-        let mut white_backrank_count: u32 = 0;
-        let mut black_backrank_count: u32 = 0;
-        for rank in 0..BOARD_SIZE {
-            for file in 0..BOARD_SIZE {
-                let Some(piece) = self.squares[rank][file] else {
-                    continue;
-                };
-                material_sum += Self::material_value(piece.kind) as u32;
-                if rank == BLACK_BACK_RANK
-                    && piece.color == PieceColor::Black
-                    && backrank_targets.contains(&piece.kind)
-                {
-                    black_backrank_count += 1;
-                }
-                if rank == WHITE_BACK_RANK
-                    && piece.color == PieceColor::White
-                    && backrank_targets.contains(&piece.kind)
-                {
-                    white_backrank_count += 1;
-                }
-            }
-        }
+
+        // One pass over every piece on the board, tallying all three figures
+        // at once instead of scanning three separate times.
+        let (material_sum, white_backrank_count, black_backrank_count) =
+            self.squares.iter().flatten().flatten().fold(
+                (0u32, 0u32, 0u32),
+                |(material, white, black), piece| {
+                    let material = material + Self::material_value(piece.kind);
+
+                    if !backrank_targets.contains(&piece.kind) {
+                        return (material, white, black);
+                    }
+                    match (piece.color, piece.position.rank) {
+                        (PieceColor::White, WHITE_BACK_RANK) => (material, white + 1, black),
+                        (PieceColor::Black, BLACK_BACK_RANK) => (material, white, black + 1),
+                        _ => (material, white, black),
+                    }
+                },
+            );
 
         let classify_backrank = |count: u32| {
             if count > 3 {
-                BackRank::Blocked
-            } else if count > 0 {
-                BackRank::Open
-            } else {
-                BackRank::Empty
+                return BackRank::Blocked;
             }
+            if count > 0 {
+                return BackRank::Open;
+            }
+            BackRank::Empty
         };
         let white_backrank = classify_backrank(white_backrank_count);
         let black_backrank = classify_backrank(black_backrank_count);
 
-        let kings_untouched = self.castling_rights.white_king_side
-            && self.castling_rights.white_queen_side
-            && self.castling_rights.black_king_side
-            && self.castling_rights.black_queen_side;
+        let kings_untouched = self.castling_rights.all_intact();
 
-        self.game_phase = match (material_sum, move_count, white_backrank, black_backrank) {
-            (material, _, _, _) if material <= 30 => GamePhase::EndGame,
-            (_, MoveCount::Low, _, _)
-            | (_, _, BackRank::Blocked, _)
-            | (_, _, _, BackRank::Blocked)
-            | (_, _, _, _)
-                if kings_untouched =>
-            {
-                GamePhase::Opening
-            }
-            _ => GamePhase::MiddleGame,
+        // Any one of these on its own is a sign the game is still early:
+        // few moves played, either side's minor pieces still stuck on the
+        // back rank, or nobody's moved a king or rook yet.
+        let is_opening = matches!(move_count, MoveCount::Low)
+            || white_backrank == BackRank::Blocked
+            || black_backrank == BackRank::Blocked
+            || kings_untouched;
+
+        self.game_phase = if material_sum <= 30 {
+            GamePhase::EndGame
+        } else if is_opening {
+            GamePhase::Opening
+        } else {
+            GamePhase::MiddleGame
         };
     }
 
@@ -185,23 +180,25 @@ impl Board {
         to: Square,
         promotion: Option<PieceType>,
     ) -> Result<MoveStruct, MoveError> {
+        let piece_moves = PieceMoves {
+            quiet_moves: vec![],
+            capture_moves: vec![],
+            attacks: vec![],
+        };
         let moving_piece = self.squares[from.rank][from.file].ok_or(MoveError::NoAvailableMoves)?;
+
         if moving_piece.color != self.turn {
             return Err(MoveError::IllegalMove);
         }
 
         self.refresh_legal_moves();
-        let empty_moves = PieceMoves {
-            quiet_moves: vec![],
-            capture_moves: vec![],
-            attacks: vec![],
-        };
         let legal = self
             .legal_moves
             .get(&moving_piece.id)
-            .unwrap_or(&empty_moves);
+            .unwrap_or(&piece_moves);
         let is_capture = legal.capture_moves.contains(&to);
         let is_quiet = legal.quiet_moves.contains(&to);
+
         if !is_capture && !is_quiet {
             return Err(MoveError::IllegalMove);
         }
@@ -231,6 +228,7 @@ impl Board {
 
         self.execute_castle(from, to);
         self.advance_turn_and_fullmove();
+        self.update_gamephase();
 
         MoveStruct {
             move_number: self.ply_count,
@@ -258,14 +256,15 @@ impl Board {
 
         self.squares[from.rank][from.file] = None;
 
+        let is_pawn_move = moving_piece.kind == PieceType::Pawn;
+
         let promotion_applied = Self::pawn_reaches_promotion_rank(moving_piece.color, to.rank)
             .then(|| requested_promotion.unwrap_or(PieceType::Queen))
-            .filter(|_| moving_piece.kind == PieceType::Pawn);
+            .filter(|_| is_pawn_move);
         if let Some(kind) = promotion_applied {
             moving_piece.kind = kind;
         }
 
-        let is_pawn_move = moving_piece.kind == PieceType::Pawn;
         if is_pawn_move && !is_capture && from.rank.abs_diff(to.rank) == 2 {
             let mid_rank = (from.rank + to.rank) / 2;
             self.en_passant_target = Some(Square::new(mid_rank, from.file));
@@ -333,10 +332,10 @@ impl Board {
 
     fn advance_turn_and_fullmove(&mut self) {
         let was_black = self.turn == PieceColor::Black;
-        self.change_turn();
         if was_black {
             self.fullmove_number = self.fullmove_number.saturating_add(1);
         }
+        self.change_turn();
     }
 }
 
@@ -427,6 +426,18 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.promotion, Some(PieceType::Queen));
+    }
+
+    #[test]
+    fn non_capturing_promotion_still_resets_the_halfmove_clock() {
+        let mut board = board_from("8/4P3/8/8/8/8/8/4K2k w - - 5 10");
+
+        let result = board
+            .move_piece(Square::new(1, 4), Square::new(0, 4), None)
+            .unwrap();
+
+        assert!(!result.is_capture);
+        assert_eq!(board.halfmove_clock, 0);
     }
 
     #[test]

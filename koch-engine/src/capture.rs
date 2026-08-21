@@ -51,7 +51,7 @@ impl Board {
         let is_real_capture =
             occupant.is_some() || self.is_valid_en_passant_capture(piece, target_square);
 
-        is_real_capture && self.simulate_move(piece, target_square)
+        is_real_capture && self.is_move_safe(piece, target_square)
     }
 
     fn is_valid_en_passant_capture(&self, piece: &ChessPiece, target_square: Square) -> bool {
