@@ -37,6 +37,15 @@ impl Default for ChessPiece {
     }
 }
 
+impl PieceColor {
+    pub fn opposite(self) -> PieceColor {
+        match self {
+            PieceColor::White => PieceColor::Black,
+            PieceColor::Black => PieceColor::White,
+        }
+    }
+}
+
 impl std::fmt::Display for PieceColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
