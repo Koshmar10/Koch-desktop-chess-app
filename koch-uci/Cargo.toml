@@ -1,0 +1,21 @@
+[package]
+name = "koch-uci"
+version = "0.1.0"
+edition = "2021"
+description = "Async UCI protocol client for a Stockfish (or any UCI-compliant) subprocess. No Tauri dependency."
+
+# No "macros" feature (deliberately): it pulls in `tokio-macros`, which this
+# workspace's tokio 1.53.1 pins to "~2.7.0" — a version this machine's cargo
+# registry index doesn't have (it tops out at 2.6.1). Runtime entry points
+# use a manual `Runtime::block_on` instead of `#[tokio::main]`/`#[tokio::test]`,
+# and cancellation uses `tokio_util::sync::CancellationToken::run_until_cancelled`
+# instead of `tokio::select!` (both avoid needing the macro crate). Safe to
+# add "macros" back if a future environment resolves it fine.
+[dependencies]
+tokio = { version = "1", features = ["process", "io-util", "io-std", "rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7"
+thiserror = "2"
+
+[[bin]]
+name = "uci-cli"
+path = "src/bin/cli.rs"
