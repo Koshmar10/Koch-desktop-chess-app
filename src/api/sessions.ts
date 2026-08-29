@@ -5,6 +5,6 @@ export interface SessionDuration {
   duration: number;
 }
 
-export function getSessions(): Promise<SessionDuration[]> {
+export const getSessions = () : Promise<SessionDuration[]> => {
   return invoke<SessionDuration[]>("get_sessions");
 }

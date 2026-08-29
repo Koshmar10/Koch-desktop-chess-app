@@ -13,5 +13,6 @@ export const MOCK_BLACK_CAPTURES: [PieceKind, PieceColor][] = [
   ["pawn", "white"],
 ];
 
+
 export const MOCK_WHITE_CLOCK = "09:58";
 export const MOCK_BLACK_CLOCK = "08:42";

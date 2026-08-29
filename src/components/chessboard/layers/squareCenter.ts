@@ -1,12 +1,12 @@
+import { flipCoords } from "../lib/orientation";
+
 export function getSquareCenter(
   square: [number, number],
   isFlipped: boolean,
   squareSize: number,
 ) {
   const [row, col] = square;
-
-  const xIndex = isFlipped ? 7 - col : col;
-  const yIndex = isFlipped ? 7 - row : row;
+  const [yIndex, xIndex] = flipCoords(row, col, isFlipped);
 
   return {
     x: xIndex * squareSize + squareSize / 2,

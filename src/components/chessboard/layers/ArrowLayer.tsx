@@ -1,28 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChessArrow from "./ChessArrow";
 import { useChessboardContext } from "../ChessboardContext";
+import { flipCoords } from "../lib/orientation";
 import type { ArrowData } from "../lib/types";
 
 const USER_ARROW_COLOR = "#ff9900";
 const RIGHT_MOUSE_BUTTON = 2;
 
 const ArrowLayer: React.FC = () => {
-  const { squareSize, boardSize } = useChessboardContext();
+  const { squareSize, boardSize, isFlipped } = useChessboardContext();
   const svgRef = useRef<SVGSVGElement>(null);
   const [arrows, setArrows] = useState<ArrowData[]>([]);
   const [startSquare, setStartSquare] = useState<[number, number] | null>(null);
 
+  // Returns a board (rank/file) square — `ChessArrow` does its own
+  // domain -> screen conversion via `isFlipped`, so this undoes the pixel
+  // math's screen coordinates first.
   const squareFromPoint = useCallback(
     (clientX: number, clientY: number): [number, number] | null => {
       const bounds = svgRef.current?.getBoundingClientRect();
       if (!bounds) return null;
-      const col = Math.floor((clientX - bounds.left) / squareSize);
-      const row = Math.floor((clientY - bounds.top) / squareSize);
-      if (row < 0 || row >= boardSize || col < 0 || col >= boardSize)
+      const screenCol = Math.floor((clientX - bounds.left) / squareSize);
+      const screenRow = Math.floor((clientY - bounds.top) / squareSize);
+      if (
+        screenRow < 0 ||
+        screenRow >= boardSize ||
+        screenCol < 0 ||
+        screenCol >= boardSize
+      )
         return null;
-      return [row, col];
+      return flipCoords(screenRow, screenCol, isFlipped);
     },
-    [boardSize, squareSize],
+    [boardSize, squareSize, isFlipped],
   );
 
   // This layer has pointer-events: none (left-clicks must reach the pieces/squares
@@ -86,6 +95,7 @@ const ArrowLayer: React.FC = () => {
           to={arrow.to}
           color={arrow.color}
           isGhost={arrow.type === "ghost"}
+          isFlipped={isFlipped}
           squareSize={squareSize}
         />
       ))}

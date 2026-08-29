@@ -1,4 +1,5 @@
 import { useChessboardContext } from "../ChessboardContext";
+import { flipCoords } from "../lib/orientation";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const DARK_SQUARE_COLOR = "#a37a58";
@@ -41,35 +42,86 @@ const File: React.FC<FileProps> = ({ fileLabel, labelColor }: FileProps) => {
   );
 };
 
+const LegalMoveDot: React.FC = () => (
+  <div className="size-[50%] rounded-full bg-gray-600/70" />
+);
+
+const LegalMoveRing: React.FC = () => (
+  <div className="size-[50%] rounded-full border-6 border-gray-600/70 box-border" />
+);
+
 const Squares: React.FC = () => {
-  const { boardSize, squareSize, selectedSquare, movePiece, clearSelection } =
-    useChessboardContext();
+  const {
+    boardSize,
+    squareSize,
+    isFlipped,
+    selectedSquare,
+    selectSquare,
+    legalDestinations,
+    pieces,
+    movePiece,
+    clearSelection,
+  } = useChessboardContext();
 
   const handleSquareClick = (row: number, col: number) => {
     if (!selectedSquare) return;
 
-    if (selectedSquare[0] === row && selectedSquare[1] === col) {
+    const [rank, file] = flipCoords(row, col, isFlipped);
+    if (selectedSquare[0] === rank && selectedSquare[1] === file) {
       clearSelection();
-    } else {
-      movePiece(selectedSquare, [row, col]);
+      return;
     }
+
+    // Clicking another piece of your own color should switch the
+    // selection to it, not attempt an (illegal) move onto your own piece.
+    const clickedPiece = pieces.find(
+      (p) => p.square.rank === rank && p.square.file === file,
+    );
+    const selectedPiece = pieces.find(
+      (p) =>
+        p.square.rank === selectedSquare[0] &&
+        p.square.file === selectedSquare[1],
+    );
+    if (clickedPiece && selectedPiece?.color === clickedPiece.color) {
+      selectSquare(rank, file);
+      return;
+    }
+
+    movePiece(selectedSquare, [rank, file]);
   };
+
+  // `selectedSquare` is a board (rank/file) coordinate; convert it once to
+  // the screen position it should highlight, rather than re-converting each
+  // grid cell's row/col back to board space just to compare.
+  const selectedScreenSquare = selectedSquare
+    ? flipCoords(selectedSquare[0], selectedSquare[1], isFlipped)
+    : null;
 
   const squares = Array.from({ length: boardSize * boardSize }, (_, i) => {
     const row = Math.floor(i / boardSize);
     const col = i % boardSize;
     const dark = (row + col) % 2 === 1;
     const isSelected =
-      selectedSquare?.[0] === row && selectedSquare?.[1] === col;
+      selectedScreenSquare?.[0] === row && selectedScreenSquare?.[1] === col;
 
-    const rankLabel = col === 0 ? 8 - row : null;
-    const fileLabel = row === 7 ? FILES[col] : null;
+    const [rank, file] = flipCoords(row, col, isFlipped);
+    const rankLabel = col === 0 ? 8 - rank : null;
+    const fileLabel = row === 7 ? FILES[file] : null;
     const labelColor = dark ? "text-white/60" : "text-black/60";
+    const isLegalDestination = legalDestinations.some(
+      (sq) => sq.rank === rank && sq.file === file,
+    );
+    // A legal destination with a piece already on it is a capture — those
+    // render as a ring around the piece instead of a dot.
+    const isCapture =
+      isLegalDestination &&
+      pieces.some((p) => p.square.rank === rank && p.square.file === file);
 
     return (
       <div
         key={`${row}-${col}`}
         onClick={() => handleSquareClick(row, col)}
+        className="transition-colors duration-150"
         style={{
           position: "relative",
           width: squareSize,
@@ -83,6 +135,11 @@ const Squares: React.FC = () => {
       >
         <Rank rankLabel={rankLabel} labelColor={labelColor} />
         <File fileLabel={fileLabel} labelColor={labelColor} />
+        {isLegalDestination && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-2">
+            {isCapture ? <LegalMoveRing /> : <LegalMoveDot />}
+          </div>
+        )}
       </div>
     );
   });

@@ -3,12 +3,16 @@ pub mod db;
 
 use tauri::Manager;
 
-use crate::db::services::session::{ActiveSessionId, SessionService};
+use crate::{
+    app::app_state::AppState,
+    db::services::session::{ActiveSessionId, SessionService},
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(AppState::new())
         .setup(|app| {
             let db = db::init(app.handle())?;
             let log_id = {
@@ -20,7 +24,12 @@ pub fn run() {
             app.manage(ActiveSessionId(log_id));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app::sessions::get_sessions])
+        .invoke_handler(tauri::generate_handler![
+            app::sessions::get_sessions,
+            app::game::start_game,
+            app::game::end_game,
+            app::game::make_move
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {

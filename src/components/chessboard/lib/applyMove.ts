@@ -6,11 +6,11 @@ export const applyMove = (
   to: [number, number],
 ): PlacedPiece[] => {
   const withoutCaptured = pieces.filter(
-    (p) => !(p.row === to[0] && p.col === to[1]),
+    (p) => !(p.square.rank === to[0] && p.square.file === to[1]),
   );
   return withoutCaptured.map((p) =>
-    p.row === from[0] && p.col === from[1]
-      ? { ...p, row: to[0], col: to[1] }
+    p.square.rank === from[0] && p.square.file === from[1]
+      ? { ...p, square: { rank: to[0], file: to[1] } }
       : p,
   );
 };

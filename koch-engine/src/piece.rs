@@ -1,6 +1,10 @@
 use crate::square::Square;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, ts_rs::TS,
+)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, rename_all = "lowercase")]
 pub enum PieceType {
     Pawn,
     Rook,
@@ -10,7 +14,11 @@ pub enum PieceType {
     King,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, ts_rs::TS,
+)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, rename_all = "lowercase")]
 pub enum PieceColor {
     White,
     Black,
