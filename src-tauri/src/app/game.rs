@@ -1,12 +1,24 @@
 use std::collections::HashMap;
 
 use koch_engine::{Board, MoveStruct, PieceColor, PieceType, Square};
-use koch_uci::{Engine, UciError};
+use koch_uci::{Engine, GoLimits, SearchEvent, UciError};
 use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Manager};
 use ts_rs::TS;
 
 use crate::app::analysis;
 use crate::app::app_state::AppState;
+use crate::db::{self, services::opening::OpeningService};
+
+// Stockfish's UCI_Elo floor is 1320 (confirmed against the actual binary's
+// option list, docs/stockfish/fixtures/handshake-sf17.1.txt) — there's no
+// lower calibrated target the engine itself supports.
+const STOCKFISH_ELO: u32 = 1320;
+
+// How long the engine thinks over its own move. Fixed rather than
+// clock-aware for now — the engine doesn't yet budget its own remaining
+// time against `time_control`.
+const ENGINE_MOVETIME_MS: u64 = 1000;
 
 /// Who won, or that nobody has yet — never accepted as a command *input*,
 /// only ever computed server-side from a `TerminationReason` and handed
@@ -63,7 +75,7 @@ pub struct TimeControl {
 
 /// One piece on the board, flattened for the frontend — just enough to
 /// render it, not `koch_engine::ChessPiece`'s internal `has_moved` etc.
-#[derive(Serialize, TS)]
+#[derive(Clone, Serialize, TS)]
 #[ts(export)]
 pub struct PieceView {
     pub id: u32,
@@ -72,10 +84,20 @@ pub struct PieceView {
     pub square: Square,
 }
 
+/// The two squares of the most recently played move — for highlighting it
+/// on the board, distinct from `selectedSquare` (which is about the
+/// player's *next* move, not the one that just happened).
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
+pub struct LastMove {
+    pub from: Square,
+    pub to: Square,
+}
+
 /// Board snapshot the frontend renders from. Shared between `start_game`
 /// and (eventually) `make_move` — everything here changes on every move
 /// except `move_history` only growing.
-#[derive(Serialize, TS)]
+#[derive(Clone, Serialize, TS)]
 #[ts(export)]
 pub struct GameStateView {
     pub turn: PieceColor,
@@ -87,6 +109,11 @@ pub struct GameStateView {
     pub legal_moves: HashMap<u32, Vec<Square>>,
     /// SAN, e.g. `["e4", "e5", "Nf3"]` — empty right after `start_game`.
     pub move_history: Vec<String>,
+    /// None right after `start_game`, before anyone has moved.
+    pub last_move: Option<LastMove>,
+    /// The most specific catalogued opening reached so far, or None before
+    /// any moves / once the game has gone off any known book line.
+    pub opening_name: Option<String>,
     pub result: GameResult,
     pub white_remaining_ms: u32,
     pub black_remaining_ms: u32,
@@ -144,6 +171,12 @@ impl Game {
         time_control: TimeControl,
     ) -> Result<Self, UciError> {
         let mut engine = Engine::spawn(engine_path).await?;
+        engine
+            .set_option("UCI_LimitStrength", Some("true"))
+            .await?;
+        engine
+            .set_option("UCI_Elo", Some(&STOCKFISH_ELO.to_string()))
+            .await?;
         engine.new_game().await?;
         engine.set_position_startpos(&[]).await?;
 
@@ -170,7 +203,7 @@ impl Game {
     }
 
     /// Snapshot of the current position, shaped for the frontend.
-    pub fn state_view(&self) -> GameStateView {
+    pub fn state_view(&self, db_conn: &rusqlite::Connection) -> GameStateView {
         let pieces = self
             .board
             .squares
@@ -202,11 +235,31 @@ impl Game {
 
         let move_history = self.move_list.iter().map(|m| m.san.clone()).collect();
 
+        let last_move = self.move_list.last().and_then(|mv| {
+            self.board
+                .decode_uci_move(&mv.uci)
+                .map(|(from, to, _)| LastMove { from, to })
+        });
+
+        let played_uci = self
+            .move_list
+            .iter()
+            .map(|m| m.uci.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let opening_name = OpeningService::new(db_conn)
+            .find_by_uci_prefix(&played_uci)
+            .ok()
+            .flatten()
+            .map(|opening| opening.opening_name);
+
         GameStateView {
             turn: self.board.turn,
             pieces,
             legal_moves,
             move_history,
+            last_move,
+            opening_name,
             result: self.result,
             white_remaining_ms: self.white_remaining_ms,
             black_remaining_ms: self.black_remaining_ms,
@@ -223,9 +276,129 @@ fn restore_active_game(state: &AppState, game: Game) {
     *state.pve_game.lock().unwrap() = Some(game);
 }
 
+/// Records an already-legal move and its bookkeeping — clock deduction,
+/// checkmate/game-over check — shared between the human's move
+/// (`make_move`) and the engine's own reply (`spawn_engine_reply`), which
+/// both need exactly the same treatment once a move has been applied to
+/// the board. Returns whether this move ended the game.
+fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> bool {
+    game.move_list.push(mv);
+
+    let elapsed_ms = game.turn_started_at.elapsed().as_millis() as u32;
+    game.move_times_ms.push(elapsed_ms);
+    match mover {
+        PieceColor::White => {
+            game.white_remaining_ms = game
+                .white_remaining_ms
+                .saturating_sub(elapsed_ms)
+                .saturating_add(game.time_control.increment_ms);
+        }
+        PieceColor::Black => {
+            game.black_remaining_ms = game
+                .black_remaining_ms
+                .saturating_sub(elapsed_ms)
+                .saturating_add(game.time_control.increment_ms);
+        }
+    }
+    game.turn_started_at = std::time::Instant::now();
+
+    let is_checkmate = game.board.is_checkmate();
+    let is_game_over = game.board.is_game_over();
+
+    if is_checkmate {
+        game.result = match game.board.turn {
+            PieceColor::White => GameResult::BlackWin,
+            PieceColor::Black => GameResult::WhiteWin,
+        };
+    }
+    if is_game_over {
+        game.result = GameResult::Draw;
+    }
+
+    is_checkmate || is_game_over
+}
+
+/// Runs a fixed-time search on the engine's current position and returns
+/// the resulting best move's UCI string. No cancellation: the game is
+/// checked out of `AppState` for the duration, so nothing else can
+/// interleave a `make_move` call while this is in flight.
+async fn search_best_move(engine: &mut Engine, limits: &GoLimits) -> Result<String, UciError> {
+    engine.go(limits).await?;
+    loop {
+        match engine.next_search_event().await? {
+            SearchEvent::Info(_) => {}
+            SearchEvent::BestMove { mv, .. } => return Ok(mv),
+        }
+    }
+}
+
+/// Runs the engine's reply in the background and emits
+/// `engine-move-complete` with the result once done — the counterpart to
+/// `make_move` returning right after the human's own move, so the frontend
+/// isn't blocked waiting on the engine to think.
+fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
+    tauri::async_runtime::spawn(async move {
+        let mover = game.board.turn;
+        let limits = GoLimits {
+            movetime_ms: Some(ENGINE_MOVETIME_MS),
+            ..Default::default()
+        };
+
+        let best_move = match search_best_move(&mut game.engine, &limits).await {
+            Ok(mv) => mv,
+            Err(err) => {
+                eprintln!("engine search failed: {err}");
+                restore_active_game(&app.state::<AppState>(), game);
+                return;
+            }
+        };
+
+        let Some((from, to, promotion)) = game.board.decode_uci_move(&best_move) else {
+            eprintln!("engine returned an undecodable move: {best_move}");
+            restore_active_game(&app.state::<AppState>(), game);
+            return;
+        };
+
+        let mv = match game.board.move_piece(from, to, promotion) {
+            Ok(mv) => mv,
+            Err(err) => {
+                eprintln!("engine's own move was rejected: {err:?}");
+                restore_active_game(&app.state::<AppState>(), game);
+                return;
+            }
+        };
+
+        let game_ended = apply_move(&mut game, mover, mv);
+
+        if game_ended {
+            let response = game.state_view(&app.state::<db::Db>().lock().unwrap());
+            analysis::spawn_analysis(
+                app.clone(),
+                game.human_color,
+                game.move_list.clone(),
+                game.move_times_ms.clone(),
+                game.time_control,
+            );
+            let _ = game.engine.quit().await;
+            let _ = app.emit("engine-move-complete", response);
+            return;
+        }
+
+        game.board.refresh_legal_moves();
+        let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
+        let _ = game.engine.set_position_startpos(&uci_moves).await;
+
+        let response = game.state_view(&app.state::<db::Db>().lock().unwrap());
+        restore_active_game(&app.state::<AppState>(), game);
+        let _ = app.emit("engine-move-complete", response);
+    });
+}
+
 #[tauri::command]
 pub async fn start_game(
     state: tauri::State<'_, AppState>,
+    db: tauri::State<'_, db::Db>,
+    app: tauri::AppHandle,
     human_color: PieceColor,
     time_control: TimeControl,
 ) -> Result<GameCreateResponse, String> {
@@ -235,7 +408,7 @@ pub async fn start_game(
     };
     let engine_player = PlayerInfo {
         name: String::from("Stockfish"),
-        elo: 800,
+        elo: STOCKFISH_ELO,
     };
 
     let (white_player, black_player) = match human_color {
@@ -254,13 +427,20 @@ pub async fn start_game(
     .map_err(|e| e.to_string())?;
 
     let response = GameCreateResponse {
-        state: game.state_view(),
+        state: game.state_view(&db.lock().unwrap()),
         white_player: game.white_player.clone(),
         black_player: game.black_player.clone(),
         time_control: game.time_control,
     };
 
-    restore_active_game(&state, game);
+    // White moves first — if the human picked Black, the engine has to
+    // make the opening move itself, same as after any other move that
+    // leaves it the engine's turn.
+    if game.board.turn == human_color {
+        restore_active_game(&state, game);
+    } else {
+        spawn_engine_reply(app, game);
+    }
 
     Ok(response)
 }
@@ -307,6 +487,7 @@ pub async fn end_game(
 #[tauri::command]
 pub async fn make_move(
     state: tauri::State<'_, AppState>,
+    db: tauri::State<'_, db::Db>,
     app: tauri::AppHandle,
     from: Square,
     to: Square,
@@ -322,45 +503,11 @@ pub async fn make_move(
             return Err(format!("{err:?}"));
         }
     };
-    game.move_list.push(mv);
 
-    // Computed unconditionally, before the game-over check below — this
-    // used to happen after it and return early, which meant the move that
-    // actually ended the game had its time (and clock deduction) silently
-    // dropped instead of recorded.
-    let elapsed_ms = game.turn_started_at.elapsed().as_millis() as u32;
-    game.move_times_ms.push(elapsed_ms);
-    match mover {
-        PieceColor::White => {
-            game.white_remaining_ms = game
-                .white_remaining_ms
-                .saturating_sub(elapsed_ms)
-                .saturating_add(game.time_control.increment_ms);
-        }
-        PieceColor::Black => {
-            game.black_remaining_ms = game
-                .black_remaining_ms
-                .saturating_sub(elapsed_ms)
-                .saturating_add(game.time_control.increment_ms);
-        }
-    }
-    game.turn_started_at = std::time::Instant::now();
+    let game_ended = apply_move(&mut game, mover, mv);
 
-    let is_checkmate = game.board.is_checkmate();
-    let is_game_over = game.board.is_game_over();
-    let game_ended = is_checkmate || is_game_over;
-
-    if is_checkmate {
-        game.result = match game.board.turn {
-            PieceColor::White => GameResult::BlackWin,
-            PieceColor::Black => GameResult::WhiteWin,
-        };
-    }
-    if is_game_over {
-        game.result = GameResult::Draw;
-    }
     if game_ended {
-        let response = game.state_view();
+        let response = game.state_view(&db.lock().unwrap());
         analysis::spawn_analysis(
             app,
             game.human_color,
@@ -377,8 +524,17 @@ pub async fn make_move(
     let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
     let _ = game.engine.set_position_startpos(&uci_moves).await;
 
-    let response = game.state_view();
-    restore_active_game(&state, game);
+    let response = game.state_view(&db.lock().unwrap());
+
+    // The human just moved, so it's necessarily the other color's turn now
+    // (turn strictly alternates) — but check explicitly rather than assume,
+    // so a future bug in `move_piece`'s turn handling fails loudly instead
+    // of silently letting the engine move on the human's behalf.
+    if game.board.turn == game.human_color {
+        restore_active_game(&state, game);
+    } else {
+        spawn_engine_reply(app, game);
+    }
 
     Ok(response)
 }

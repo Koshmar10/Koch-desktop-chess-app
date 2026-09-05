@@ -3,23 +3,14 @@ import type { ReactNode } from "react";
 import { Target, Clock3, ListChecks } from "lucide-react";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { MoveQuality } from "../../api/bindings/MoveQuality";
+import type { PieceColor } from "../../api/bindings/PieceColor";
 import { CentipawnGraph, TimeGraph } from "./StatGraphs";
 import { formatClock } from "./GameContext";
 
-const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
-
-interface StatEntry {
-  label: string;
-  value: string | number;
-}
-
-interface StatSection {
-  id: string;
-  label: string;
-  icon: ReactNode;
-  graph?: ReactNode;
-  stats: StatEntry[];
-}
+const SLIDE_DURATION_MS = 220;
+const SLIDE_DISTANCE_PX = 20;
+const AUTO_ADVANCE_MS = 4000;
+const SECTION_COUNT = 3;
 
 const MOVE_QUALITY_ORDER: MoveQuality[] = [
   "Brilliant",
@@ -41,7 +32,21 @@ const MOVE_QUALITY_LABEL: Record<MoveQuality, string> = {
   Blunder: "Blunders",
 };
 
-// Real, from the backend's analysis pass — unlike Time/Summary below.
+const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+
+interface StatEntry {
+  label: string;
+  value: string | number;
+}
+
+interface StatSection {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  graph?: ReactNode;
+  stats: StatEntry[];
+}
+
 const buildAccuracySection = (analysis: GameAnalysis): StatSection => {
   const counts: Record<MoveQuality, number> = {
     Brilliant: 0,
@@ -74,7 +79,6 @@ const buildAccuracySection = (analysis: GameAnalysis): StatSection => {
   };
 };
 
-// Real — derived from GameAnalysis.human_move_times_ms, same as the graph.
 const buildTimeSection = (analysis: GameAnalysis): StatSection => ({
   id: "time",
   label: "Time",
@@ -95,11 +99,10 @@ const buildTimeSection = (analysis: GameAnalysis): StatSection => ({
   ],
 });
 
-// Everything here is real now — graph, total moves, game length, and
-// biggest blunder are all derived from the analysis payload.
 const buildSummarySection = (
   analysis: GameAnalysis,
   moveHistory: string[],
+  humanColor: PieceColor | null,
 ): StatSection => {
   const worstMove = analysis.move_qualities.reduce<
     (typeof analysis.move_qualities)[number] | null
@@ -117,7 +120,12 @@ const buildSummarySection = (
     id: "summary",
     label: "Summary",
     icon: <ListChecks size={16} className="text-primary" />,
-    graph: <CentipawnGraph history={analysis.centipawn_history} />,
+    graph: (
+      <CentipawnGraph
+        history={analysis.centipawn_history}
+        humanColor={humanColor}
+      />
+    ),
     stats: [
       { label: "Total moves", value: moveHistory.length },
       { label: "Game length", value: formatClock(analysis.total_duration_ms) },
@@ -133,37 +141,31 @@ const StatRow = ({ label, value }: StatEntry) => (
   </div>
 );
 
-const SLIDE_DURATION_MS = 220;
-const SLIDE_DISTANCE_PX = 20;
-const AUTO_ADVANCE_MS = 4000;
-// Accuracy, Time, Summary — structurally fixed, unlike `statSections`
-// itself (rebuilt from `analysis` every render, so its `.length` isn't a
-// stable dependency to close over).
-const SECTION_COUNT = 3;
-
 interface PostGameStatsProps {
   analysis: GameAnalysis;
   moveHistory: string[];
+  humanColor: PieceColor | null;
 }
 
-const PostGameStats = ({ analysis, moveHistory }: PostGameStatsProps) => {
+const PostGameStats = ({
+  analysis,
+  moveHistory,
+  humanColor,
+}: PostGameStatsProps) => {
   const statSections = [
     buildAccuracySection(analysis),
     buildTimeSection(analysis),
-    buildSummarySection(analysis, moveHistory),
+    buildSummarySection(analysis, moveHistory, humanColor),
   ];
 
   const [displayedIndex, setDisplayedIndex] = useState(0);
-  // 0 = settled/readable. ±SLIDE_DISTANCE_PX = pushed out to one side —
-  // this is the moment the content underneath gets swapped.
   const [offset, setOffset] = useState(0);
   const [transitionOn, setTransitionOn] = useState(true);
   const isAnimatingRef = useRef(false);
   const pendingIndexRef = useRef<number | null>(null);
-  // Ref, not state — hovering shouldn't itself trigger a render or reset
-  // the auto-advance interval, it should just be checked when the interval
-  // next fires.
   const isHoveredRef = useRef(false);
+
+  const active = statSections[displayedIndex];
 
   const goTo = useCallback(
     (targetIndex: number) => {
@@ -171,33 +173,17 @@ const PostGameStats = ({ analysis, moveHistory }: PostGameStatsProps) => {
       isAnimatingRef.current = true;
       pendingIndexRef.current = targetIndex;
       setTransitionOn(true);
-      // Always exits left, regardless of which dot was clicked or whether
-      // the target section comes before or after — one consistent direction.
       setOffset(-SLIDE_DISTANCE_PX);
     },
     [displayedIndex],
   );
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (isHoveredRef.current) return;
-      goTo((displayedIndex + 1) % SECTION_COUNT);
-    }, AUTO_ADVANCE_MS);
-    return () => clearInterval(interval);
-  }, [displayedIndex, goTo]);
-
-  // Fires once per transitioned property, so filter to `transform` — else
-  // this runs twice (transform + opacity) per phase.
   const handleTransitionEnd = (e: React.TransitionEvent) => {
     if (e.propertyName !== "transform") return;
 
     if (offset !== 0 && pendingIndexRef.current !== null) {
       setDisplayedIndex(pendingIndexRef.current);
       pendingIndexRef.current = null;
-      // Snap to the entry side with no transition, then re-enable it and
-      // slide back to 0 — a double rAF forces that snap to actually paint
-      // before the animated style change, or the browser would collapse
-      // both into one frame and skip the slide-in entirely.
       setTransitionOn(false);
       setOffset(SLIDE_DISTANCE_PX);
       requestAnimationFrame(() => {
@@ -211,7 +197,13 @@ const PostGameStats = ({ analysis, moveHistory }: PostGameStatsProps) => {
     }
   };
 
-  const active = statSections[displayedIndex];
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isHoveredRef.current) return;
+      goTo((displayedIndex + 1) % SECTION_COUNT);
+    }, AUTO_ADVANCE_MS);
+    return () => clearInterval(interval);
+  }, [displayedIndex, goTo]);
 
   return (
     <div className="flex flex-col items-center gap-3 w-72">
@@ -247,7 +239,6 @@ const PostGameStats = ({ analysis, moveHistory }: PostGameStatsProps) => {
           {active.icon}
           {active.label}
         </h3>
-
 
         <div className="flex flex-col gap-2">
           {active.stats.map((stat: StatEntry) => (

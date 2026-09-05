@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChessboardContext } from "../ChessboardContext";
-import { flipCoords } from "../lib/orientation";
+import { flipCoords, squaresEqual } from "../lib/orientation";
 import { PIECE_IMAGES } from "../lib/pieceImages";
 import type { PieceColor } from "../lib/types";
 import { getPieceVisualState } from "./pieceVisualState";
+import { coordinateFromMouseEvent, type Coordinate } from "./coordinate";
 
 // Below this drag distance, a mousedown+mouseup on a piece is treated as a click (select) rather than a drag (move).
 const CLICK_THRESHOLD_PX = 6;
@@ -23,7 +24,7 @@ const PieceLayer = () => {
   } = useChessboardContext();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartPixelRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStartPixelRef = useRef<Coordinate | null>(null);
   // Whether the piece being picked up was already the selection *before*
   // this mousedown — distinguishes "click it again to deselect" from
   // "click a different piece to select it", since mousedown now selects
@@ -33,10 +34,7 @@ const PieceLayer = () => {
   // Board (rank/file) coordinates, not screen coordinates — same space as
   // `selectedSquare`/`movePiece`.
   const [dragFrom, setDragFrom] = useState<[number, number] | null>(null);
-  const [dragPosition, setDragPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [dragPosition, setDragPosition] = useState<Coordinate | null>(null);
 
   const canDragPiece = useCallback(
     (color: PieceColor) => canPlayerMove && color === humanColor,
@@ -51,23 +49,44 @@ const PieceLayer = () => {
       if (!bounds) return null;
       const screenCol = Math.floor((clientX - bounds.left) / squareSize);
       const screenRow = Math.floor((clientY - bounds.top) / squareSize);
-      if (
-        screenRow < 0 ||
-        screenRow >= boardSize ||
-        screenCol < 0 ||
-        screenCol >= boardSize
-      )
+
+      const rowInBounds = screenRow >= 0 && screenRow < boardSize
+      const colInBounds = screenCol >= 0 && screenCol < boardSize
+      
+      if (!rowInBounds || !colInBounds)
         return null;
+      
       return flipCoords(screenRow, screenCol, isFlipped);
     },
     [boardSize, squareSize, isFlipped],
   );
 
+  const handlePieceMouseDown = (
+    rank: number,
+    file: number,
+    color: PieceColor,
+    e: React.MouseEvent,
+  ) => {
+    if (e.button !== 0 || !canDragPiece(color)) return;
+    
+    wasAlreadySelectedRef.current = squaresEqual(selectedSquare, [rank, file]);
+    const start = coordinateFromMouseEvent(e);
+
+    dragStartPixelRef.current = start;
+    setDragPosition(start);
+    setDragFrom([rank, file]);
+    // Selecting immediately (not just on a completed click) means legal
+    // moves are highlighted from the moment the drag starts, and picking
+    // up a different own piece switches the selection right away instead
+    // of dragging it around under the old selection.
+    selectSquare(rank, file);
+  };
+
   useEffect(() => {
     if (!dragFrom) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      setDragPosition({ x: e.clientX, y: e.clientY });
+      setDragPosition(coordinateFromMouseEvent(e));
     };
 
     const handleMouseUp = (e: MouseEvent) => {
@@ -83,7 +102,7 @@ const PieceLayer = () => {
         if (wasAlreadySelectedRef.current) {
           clearSelection();
         }
-      } else if (to && (to[0] !== dragFrom[0] || to[1] !== dragFrom[1])) {
+      } else if (to && !squaresEqual(to, dragFrom)) {
         movePiece(dragFrom, to);
       }
 
@@ -100,25 +119,6 @@ const PieceLayer = () => {
     };
   }, [dragFrom, movePiece, clearSelection, squareFromPoint]);
 
-  const handlePieceMouseDown = (
-    rank: number,
-    file: number,
-    color: PieceColor,
-    e: React.MouseEvent,
-  ) => {
-    if (e.button !== 0 || !canDragPiece(color)) return;
-    wasAlreadySelectedRef.current =
-      selectedSquare?.[0] === rank && selectedSquare?.[1] === file;
-    dragStartPixelRef.current = { x: e.clientX, y: e.clientY };
-    setDragPosition({ x: e.clientX, y: e.clientY });
-    setDragFrom([rank, file]);
-    // Selecting immediately (not just on a completed click) means legal
-    // moves are highlighted from the moment the drag starts, and picking
-    // up a different own piece switches the selection right away instead
-    // of dragging it around under the old selection.
-    selectSquare(rank, file);
-  };
-
   return (
     <div
       ref={containerRef}
@@ -127,8 +127,7 @@ const PieceLayer = () => {
       {pieces.map(({ id, kind, color, square }) => {
         const { rank, file } = square;
         const [screenRow, screenCol] = flipCoords(rank, file, isFlipped);
-        const isBeingDragged =
-          dragFrom?.[0] === rank && dragFrom?.[1] === file;
+        const isBeingDragged = squaresEqual(dragFrom, [rank, file]);
         const { className, style } = getPieceVisualState(
           isBeingDragged,
           dragPosition,

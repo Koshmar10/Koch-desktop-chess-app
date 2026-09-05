@@ -13,3 +13,12 @@ export const flipCoords = (
   isFlipped
     ? [BOARD_SIZE - 1 - row, BOARD_SIZE - 1 - col]
     : [row, col];
+
+// Value equality for the [row, col]/[rank, file] tuples this whole board
+// subsystem uses (ChessboardContext's `selectedSquare`, PieceLayer's
+// `dragFrom`, etc.) — replaces the scattered `a?.[0] === b[0] && a?.[1] ===
+// b[1]` checks with one named comparison, either side can be null.
+export const squaresEqual = (
+  a: [number, number] | null,
+  b: [number, number] | null,
+): boolean => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];

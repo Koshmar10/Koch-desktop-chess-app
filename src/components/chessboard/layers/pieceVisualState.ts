@@ -13,7 +13,7 @@ export const getPieceVisualState = (
   if (isBeingDragged && dragPosition) {
     return {
       className:
-        "fixed p-2 box-border select-none pointer-events-none z-50 transition-[width,height] duration-100 ease-out",
+        "fixed p-2 box-border select-none pointer-events-none z-50 transition-[width,height] duration-100 ease-out transition-[left, top] duration-200 ease-in",
       style: {
         left: dragPosition.x - squareSize / 2,
         top: dragPosition.y - squareSize / 2,

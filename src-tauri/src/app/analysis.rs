@@ -7,7 +7,7 @@ use ts_rs::TS;
 use crate::app::game::TimeControl;
 
 const ENGINE_PATH: &str = "stockfish";
-const ANALYSIS_DEPTH: u32 = 14;
+const ANALYSIS_DEPTH: u32 = 20;
 // A forced mate has no natural centipawn value — clamping it to this keeps
 // it comparable to (and dominant over) ordinary centipawn swings without
 // risking overflow once two of these get summed.
@@ -26,6 +26,20 @@ const MISTAKE_MAX_CP: i32 = 200;
 // left reads as "time trouble" the same way regardless of whether this was
 // a bullet or classical game. Simple starting point, not tuned.
 const TIME_TROUBLE_THRESHOLD_MS: u32 = 30_000;
+
+// Centipawns -> win% curve (the one Lichess's accuracy model uses):
+// win% = midpoint + scale * (2 / (1 + e^(-steepness * cp)) - 1)
+const WIN_PERCENT_LOGISTIC_STEEPNESS: f64 = 0.00368208;
+const WIN_PERCENT_MIDPOINT: f64 = 50.0;
+const WIN_PERCENT_SCALE: f64 = 50.0;
+
+// Win%-loss -> per-move accuracy curve, same source:
+// accuracy% = scale * e^(-steepness * winPercentLoss) - offset
+const ACCURACY_CURVE_SCALE: f64 = 103.1668;
+const ACCURACY_CURVE_STEEPNESS: f64 = 0.04354;
+const ACCURACY_CURVE_OFFSET: f64 = 3.1669;
+const ACCURACY_MIN_PERCENT: f64 = 0.0;
+const ACCURACY_MAX_PERCENT: f64 = 100.0;
 
 #[derive(Clone, Copy, Serialize, TS)]
 #[ts(export)]
@@ -115,13 +129,17 @@ fn score_to_cp(score: Score) -> i32 {
 /// uses) — converts a score, from one side's perspective, into that side's
 /// expected win probability.
 fn win_percent(cp: i32) -> f64 {
-    50.0 + 50.0 * (2.0 / (1.0 + (-0.00368208 * cp as f64).exp()) - 1.0)
+    let exponent = -WIN_PERCENT_LOGISTIC_STEEPNESS * cp as f64;
+    let sigmoid = 2.0 / (1.0 + exponent.exp()) - 1.0;
+    WIN_PERCENT_MIDPOINT + WIN_PERCENT_SCALE * sigmoid
 }
 
 /// Per-move accuracy from the win% a move gave up, same curve as above.
 fn move_accuracy(win_percent_before: f64, win_percent_after: f64) -> f64 {
     let win_percent_loss = (win_percent_before - win_percent_after).max(0.0);
-    (103.1668 * (-0.04354 * win_percent_loss).exp() - 3.1669).clamp(0.0, 100.0)
+    let accuracy = ACCURACY_CURVE_SCALE * (-ACCURACY_CURVE_STEEPNESS * win_percent_loss).exp()
+        - ACCURACY_CURVE_OFFSET;
+    accuracy.clamp(ACCURACY_MIN_PERCENT, ACCURACY_MAX_PERCENT)
 }
 
 fn quality_for_loss(loss_cp: i32) -> MoveQuality {
@@ -224,21 +242,24 @@ pub async fn run_analysis(
     move_list: Vec<MoveStruct>,
     move_times_ms: Vec<u32>,
     time_control: TimeControl,
+    app: &AppHandle,
 ) -> Result<GameAnalysis, UciError> {
     let mut engine = Engine::spawn(ENGINE_PATH).await?;
     engine.new_game().await?;
 
     let uci_moves: Vec<String> = move_list.iter().map(|m| m.uci.clone()).collect();
+    let total_positions = uci_moves.len() + 1;
 
     // evals[i] = score after i plies, from the perspective of whoever is to
     // move next (UCI convention) — evals[0] is the start position, White to
     // move.
-    let mut evals = Vec::with_capacity(uci_moves.len() + 1);
-    engine.set_position_startpos(&[]).await?;
-    evals.push(score_to_cp(search_eval(&mut engine).await?));
-    for i in 1..=uci_moves.len() {
+    let mut evals = Vec::with_capacity(total_positions);
+    for i in 0..=uci_moves.len() {
         engine.set_position_startpos(&uci_moves[..i]).await?;
         evals.push(score_to_cp(search_eval(&mut engine).await?));
+
+        let percent = (((i + 1) * 100) / total_positions) as u8;
+        let _ = app.emit("update-analysis-progress", percent);
     }
     let _ = engine.quit().await;
 
@@ -262,25 +283,24 @@ pub async fn run_analysis(
         } else {
             PieceColor::Black
         };
-        if mover != human_color {
-            continue;
+
+        if mover == human_color {
+            // `before` is already from the mover's perspective (their turn
+            // to move); `after` needs negating since evals[idx + 1] is from
+            // the opponent's perspective (their turn now).
+            let before = evals[idx];
+            let after = -evals[idx + 1];
+            let loss = (before - after).max(0);
+
+            total_loss += loss as u64;
+            total_accuracy += move_accuracy(win_percent(before), win_percent(after));
+            scored_moves += 1;
+            move_qualities.push(MoveQualityEntry {
+                ply_number,
+                quality: quality_for_loss(loss),
+                centipawn_loss: loss as u32,
+            });
         }
-
-        // `before` is already from the mover's perspective (their turn to
-        // move); `after` needs negating since evals[idx + 1] is from the
-        // opponent's perspective (their turn now).
-        let before = evals[idx];
-        let after = -evals[idx + 1];
-        let loss = (before - after).max(0);
-
-        total_loss += loss as u64;
-        total_accuracy += move_accuracy(win_percent(before), win_percent(after));
-        scored_moves += 1;
-        move_qualities.push(MoveQualityEntry {
-            ply_number,
-            quality: quality_for_loss(loss),
-            centipawn_loss: loss as u32,
-        });
     }
 
     let time_stats = analyze_time(human_color, &move_times_ms, time_control);
@@ -319,7 +339,7 @@ pub fn spawn_analysis(
     time_control: TimeControl,
 ) {
     tauri::async_runtime::spawn(async move {
-        match run_analysis(human_color, move_list, move_times_ms, time_control).await {
+        match run_analysis(human_color, move_list, move_times_ms, time_control, &app).await {
             Ok(analysis) => {
                 if let Err(err) = app.emit("game-analysis-complete", analysis) {
                     eprintln!("failed to emit game-analysis-complete: {err}");

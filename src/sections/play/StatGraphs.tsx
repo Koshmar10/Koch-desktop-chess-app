@@ -1,3 +1,5 @@
+import type { PieceColor } from "../../api/bindings/PieceColor";
+
 // The graph's vertical range is derived per-game from the actual eval
 // swing (see `displayRangeCp` below), bounded by these two — a floor so a
 // quiet, balanced game doesn't zoom into noise, a ceiling so a forced mate
@@ -14,11 +16,15 @@ const GRAPH_TITLE_CLASS =
 
 interface CentipawnGraphProps {
   history: number[];
+  humanColor: PieceColor | null;
 }
 
-// Real data — `history` is `GameAnalysis.centipawn_history`, White-relative
-// throughout, one point per ply including the starting position.
-export const CentipawnGraph = ({ history }: CentipawnGraphProps) => {
+// `history` is `GameAnalysis.centipawn_history`, which the backend emits
+// White-relative throughout, one point per ply including the starting
+// position. Playing Black, that reads inverted — the line would dip when
+// the player is winning — so it gets negated here to make "up" always mean
+// "the player is better", which is what the axis labels below claim.
+export const CentipawnGraph = ({ history, humanColor }: CentipawnGraphProps) => {
   if (history.length < 2) {
     return (
       <div className="h-16 flex items-center justify-center text-foreground/40 text-sm">
@@ -27,18 +33,20 @@ export const CentipawnGraph = ({ history }: CentipawnGraphProps) => {
     );
   }
 
-  const lastPly = history.length - 1;
+  const playerRelative =
+    humanColor === "black" ? history.map((cp) => -cp) : history;
+  const lastPly = playerRelative.length - 1;
 
   // Round up to the nearest pawn so the axis label is a clean integer, then
   // clamp between the floor and ceiling above.
-  const maxAbsCp = Math.max(...history.map((cp) => Math.abs(cp)));
+  const maxAbsCp = Math.max(...playerRelative.map((cp) => Math.abs(cp)));
   const displayRangeCp = Math.min(
     MAX_DISPLAY_CP,
     Math.max(MIN_DISPLAY_CP, Math.ceil(maxAbsCp / 100) * 100),
   );
   const displayRangePawns = displayRangeCp / 100;
 
-  const points = history.map((cp, idx) => {
+  const points = playerRelative.map((cp, idx) => {
     const clamped = Math.max(-displayRangeCp, Math.min(displayRangeCp, cp));
     const x = (idx / lastPly) * GRAPH_VIEWBOX_WIDTH;
     const y =
@@ -63,6 +71,17 @@ export const CentipawnGraph = ({ history }: CentipawnGraphProps) => {
         </span>
         <span className={`absolute left-0 bottom-0 ${AXIS_LABEL_CLASS}`}>
           -{displayRangePawns}
+        </span>
+
+        <span
+          className={`absolute right-0 top-0 ${AXIS_LABEL_CLASS} pointer-events-none`}
+        >
+          You
+        </span>
+        <span
+          className={`absolute right-0 bottom-0 ${AXIS_LABEL_CLASS} pointer-events-none`}
+        >
+          Opponent
         </span>
 
         <svg

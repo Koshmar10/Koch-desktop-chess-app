@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { Square } from "../../api/bindings/Square";
+import type { LastMove } from "../../api/bindings/LastMove";
 import type { PieceColor, PlacedPiece } from "./lib/types";
 
 export interface ChessboardContextValue {
@@ -24,6 +25,10 @@ export interface ChessboardContextValue {
   // canPlayerMove alone doesn't stop someone grabbing an opponent piece.
   canPlayerMove: boolean;
   humanColor: PieceColor | null;
+  // The two squares of whichever move was played most recently, by either
+  // side — distinct from `selectedSquare`, which is about the *next* move,
+  // not the one that just happened.
+  lastMove: LastMove | null;
 }
 
 export const ChessboardContext = createContext<ChessboardContextValue | null>(

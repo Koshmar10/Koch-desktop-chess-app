@@ -7,6 +7,7 @@ import {
 } from "../../api/game";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
+import type { GameStateView } from "../../api/bindings/GameStateView";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
@@ -17,20 +18,23 @@ import {
   type GameMode,
 } from "./GameContext";
 
+const randomColor = (): PieceColor => (Math.random() < 0.5 ? "white" : "black");
+
+const CYCLE_ORDER: ColorPreference[] = ["random", "white", "black"];
+
+const nextColorPreference = (current: ColorPreference): ColorPreference =>
+  CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % CYCLE_ORDER.length];
+
 interface GameProviderProps {
   children: ReactNode;
 }
 
-const randomColor = (): PieceColor => (Math.random() < 0.5 ? "white" : "black");
-
-const CYCLE_ORDER: ColorPreference[] = ["random", "white", "black"];
-const nextColorPreference = (current: ColorPreference): ColorPreference =>
-  CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % CYCLE_ORDER.length];
 
 export function GameProvider({ children }: GameProviderProps) {
   const [game, setGame] = useState<GameCreateResponse | null>(null);
   const [gameReceivedAt, setGameReceivedAt] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState<number | null>(null);
   const [isResultDismissed, setIsResultDismissed] = useState(false);
   const [humanColor, setHumanColor] = useState<PieceColor | null>(null);
   const [colorPreference, setColorPreference] =
@@ -45,6 +49,29 @@ export function GameProvider({ children }: GameProviderProps) {
   useEffect(() => {
     const unlisten = listen<GameAnalysis>("game-analysis-complete", (event) => {
       setAnalysis(event.payload);
+      setAnalysisProgress(null);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<number>("update-analysis-progress", (event) => {
+      setAnalysisProgress(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // The backend pushes this once the engine's own reply has finished
+  // thinking — `make_move` returns right after the human's move, it
+  // doesn't wait on this.
+  useEffect(() => {
+    const unlisten = listen<GameStateView>("engine-move-complete", (event) => {
+      setGame((prev) => (prev ? { ...prev, state: event.payload } : prev));
+      setGameReceivedAt(Date.now());
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -69,6 +96,7 @@ export function GameProvider({ children }: GameProviderProps) {
       setGame(response);
       setGameReceivedAt(Date.now());
       setAnalysis(null);
+      setAnalysisProgress(null);
       setIsResultDismissed(false);
     } catch (err) {
       console.error("failed to start game:", err);
@@ -111,6 +139,7 @@ export function GameProvider({ children }: GameProviderProps) {
         game,
         gameReceivedAt,
         analysis,
+        analysisProgress,
         isResultDismissed,
         dismissResult,
         humanColor,

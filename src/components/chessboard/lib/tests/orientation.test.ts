@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flipCoords } from "../orientation";
+import { flipCoords, squaresEqual } from "../orientation";
 
 describe("flipCoords", () => {
   it("is the identity when not flipped", () => {
@@ -18,5 +18,22 @@ describe("flipCoords", () => {
     const twice = flipCoords(once[0], once[1], true);
 
     expect(twice).toEqual([2, 5]);
+  });
+});
+
+describe("squaresEqual", () => {
+  it("is true for tuples with equal values", () => {
+    expect(squaresEqual([3, 5], [3, 5])).toBe(true);
+  });
+
+  it("is false for tuples that differ in either position", () => {
+    expect(squaresEqual([3, 5], [3, 6])).toBe(false);
+    expect(squaresEqual([3, 5], [4, 5])).toBe(false);
+  });
+
+  it("is false whenever either side is null", () => {
+    expect(squaresEqual(null, [3, 5])).toBe(false);
+    expect(squaresEqual([3, 5], null)).toBe(false);
+    expect(squaresEqual(null, null)).toBe(false);
   });
 });

@@ -24,6 +24,21 @@ export const formatClock = (ms: number): string => {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 };
 
+// A game exists and hasn't reached a terminal result yet. `GameCreateResponse`
+// is plain ts-rs-generated data (no methods of its own), so this lives here
+// as the one place both `Play.tsx` and `PlayControls.tsx` derive it from,
+// rather than each re-deriving the same `!== null && ... === "Unfinished"`
+// check independently.
+export const isGameOngoing = (game: GameCreateResponse | null): boolean =>
+  game !== null && game.state.result === "Unfinished";
+
+// Before a game exists, the board should read as "White to move" (the
+// starting position), so `color === "white"` is the fallback rather than
+// `false` for both — that asymmetry is what a plain `game?.state.turn ===
+// color` would lose.
+export const isTurn = (game: GameCreateResponse | null, color: PieceColor): boolean =>
+  game ? game.state.turn === color : color === "white";
+
 export interface GameContextValue {
   game: GameCreateResponse | null;
   // When `game` was last set, from Date.now() — the baseline the live
@@ -34,6 +49,10 @@ export interface GameContextValue {
   // finished game and pushes this in once it's done, it isn't part of the
   // move/end-game response itself.
   analysis: GameAnalysis | null;
+  // 0-100, pushed by the backend as it works through the position-by-
+  // position eval pass — null before analysis starts and once it's done
+  // (superseded by `analysis` itself being set).
+  analysisProgress: number | null;
   // True once the player has closed the result card — the game itself
   // isn't reset by this (see `endGame`, which keeps `game` around with its
   // terminal result), only whether the card is showing. Reset to false by

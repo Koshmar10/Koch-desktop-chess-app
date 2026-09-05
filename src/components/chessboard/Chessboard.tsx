@@ -5,6 +5,7 @@ import { BOARD_PIXEL_SIZE, BOARD_SIZE, SQUARE_SIZE } from "./lib/constants";
 import { STARTING_POSITION } from "./lib/startingPosition";
 import type { PieceColor, PlacedPiece } from "./lib/types";
 import type { GameStateView } from "../../api/bindings/GameStateView";
+import type { LastMove } from "../../api/bindings/LastMove";
 import type { Square } from "../../api/bindings/Square";
 
 const toSquare = ([rank, file]: [number, number]): Square => ({ rank, file });
@@ -33,6 +34,9 @@ interface ChessboardProps {
   // Piece id -> its legal destination squares. Left undefined, nothing
   // gets highlighted as a legal move.
   legalMoves?: GameStateView["legal_moves"];
+  // The two squares of whichever move was played most recently. Left
+  // undefined/null, nothing gets highlighted.
+  lastMove?: LastMove | null;
 }
 
 const Chessboard: React.FC<ChessboardProps> = ({
@@ -43,6 +47,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   humanColor = null,
   onMove,
   legalMoves,
+  lastMove = null,
 }) => {
   const [pieces, setPieces] = useState<PlacedPiece[]>(
     externalPieces ?? STARTING_POSITION,
@@ -104,6 +109,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
         clearSelection,
         canPlayerMove,
         humanColor,
+        lastMove,
       }}
     >
       <div

@@ -61,6 +61,7 @@ const Squares: React.FC = () => {
     pieces,
     movePiece,
     clearSelection,
+    lastMove,
   } = useChessboardContext();
 
   const handleSquareClick = (row: number, col: number) => {
@@ -111,6 +112,10 @@ const Squares: React.FC = () => {
     const isLegalDestination = legalDestinations.some(
       (sq) => sq.rank === rank && sq.file === file,
     );
+    const isLastMoveSquare =
+      lastMove !== null &&
+      ((lastMove.from.rank === rank && lastMove.from.file === file) ||
+        (lastMove.to.rank === rank && lastMove.to.file === file));
     // A legal destination with a piece already on it is a capture — those
     // render as a ring around the piece instead of a dot.
     const isCapture =
@@ -126,11 +131,12 @@ const Squares: React.FC = () => {
           position: "relative",
           width: squareSize,
           height: squareSize,
-          backgroundColor: isSelected
-            ? SELECTED_SQUARE_COLOR
-            : dark
-              ? DARK_SQUARE_COLOR
-              : LIGHT_SQUARE_COLOR,
+          backgroundColor:
+            isSelected || isLastMoveSquare
+              ? SELECTED_SQUARE_COLOR
+              : dark
+                ? DARK_SQUARE_COLOR
+                : LIGHT_SQUARE_COLOR,
         }}
       >
         <Rank rankLabel={rankLabel} labelColor={labelColor} />
