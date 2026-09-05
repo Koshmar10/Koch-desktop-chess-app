@@ -8,7 +8,10 @@ use ts_rs::TS;
 
 use crate::app::analysis;
 use crate::app::app_state::AppState;
-use crate::db::{self, services::opening::OpeningService};
+use crate::db::{
+    self,
+    services::{game::GameService, opening::OpeningService},
+};
 
 // Stockfish's UCI_Elo floor is 1320 (confirmed against the actual binary's
 // option list, docs/stockfish/fixtures/handshake-sf17.1.txt) — there's no
@@ -19,7 +22,7 @@ const STOCKFISH_ELO: u32 = 1320;
 // clock-aware for now — the engine doesn't yet budget its own remaining
 // time against `time_control`.
 const ENGINE_MOVETIME_MS: u64 = 1000;
-
+const ANALYSIS_ENABLED: bool = true;
 /// Who won, or that nobody has yet — never accepted as a command *input*,
 /// only ever computed server-side from a `TerminationReason` and handed
 /// back. A client claiming "WhiteWin" directly, with no reason, isn't a
@@ -31,6 +34,20 @@ pub enum GameResult {
     WhiteWin,
     Draw,
     Unfinished,
+}
+
+impl std::fmt::Display for GameResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Standard PGN Result-tag tokens — same values a PGN export will
+        // want, not an app-specific spelling.
+        let s = match self {
+            GameResult::WhiteWin => "1-0",
+            GameResult::BlackWin => "0-1",
+            GameResult::Draw => "1/2-1/2",
+            GameResult::Unfinished => "*",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 /// *Why* a game ended — distinct from `GameResult`, which only says *who*
@@ -156,6 +173,13 @@ pub struct Game {
     pub time_control: TimeControl,
     pub white_remaining_ms: u32,
     pub black_remaining_ms: u32,
+    /// The most specific catalogued opening reached so far. Held as the
+    /// full row (not just the name) so its `opening_id` is on hand for
+    /// whatever eventually saves this game — re-deriving the id from the
+    /// name at save time would mean looking it up twice. None before any
+    /// moves are played; updated in `apply_move`, not recomputed per
+    /// `state_view()` call.
+    pub opening: Option<db::schemas::opening::Opening>,
     /// When the side currently to move started their turn — used to
     /// compute `elapsed_this_turn_ms` on demand rather than ticking a
     /// timer server-side.
@@ -171,9 +195,7 @@ impl Game {
         time_control: TimeControl,
     ) -> Result<Self, UciError> {
         let mut engine = Engine::spawn(engine_path).await?;
-        engine
-            .set_option("UCI_LimitStrength", Some("true"))
-            .await?;
+        engine.set_option("UCI_LimitStrength", Some("true")).await?;
         engine
             .set_option("UCI_Elo", Some(&STOCKFISH_ELO.to_string()))
             .await?;
@@ -196,14 +218,17 @@ impl Game {
             human_color,
             result: GameResult::Unfinished,
             time_control,
+            opening: None,
             white_remaining_ms: time_control.initial_ms,
             black_remaining_ms: time_control.initial_ms,
             turn_started_at: std::time::Instant::now(),
         })
     }
 
-    /// Snapshot of the current position, shaped for the frontend.
-    pub fn state_view(&self, db_conn: &rusqlite::Connection) -> GameStateView {
+    /// Snapshot of the current position, shaped for the frontend. Pure —
+    /// no DB access — since `opening` is already resolved and kept
+    /// up to date on `Game` itself by `apply_move`.
+    pub fn state_view(&self) -> GameStateView {
         let pieces = self
             .board
             .squares
@@ -241,17 +266,7 @@ impl Game {
                 .map(|(from, to, _)| LastMove { from, to })
         });
 
-        let played_uci = self
-            .move_list
-            .iter()
-            .map(|m| m.uci.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let opening_name = OpeningService::new(db_conn)
-            .find_by_uci_prefix(&played_uci)
-            .ok()
-            .flatten()
-            .map(|opening| opening.opening_name);
+        let opening_name = self.opening.as_ref().map(|o| o.opening_name.clone());
 
         GameStateView {
             turn: self.board.turn,
@@ -318,6 +333,22 @@ fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> bool {
     is_checkmate || is_game_over
 }
 
+/// Re-resolves `game.opening` against the moves played so far. Separate
+/// from `apply_move` (which stays DB-free) but called right after it from
+/// the same two places, for the same reason `apply_move` itself is
+/// shared — both the human's move and the engine's own reply need it.
+fn update_opening(game: &mut Game, db_conn: &rusqlite::Connection) {
+    let played_uci: String = game
+        .move_list
+        .iter()
+        .map(|m| m.uci.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if let Ok(Some(opening)) = OpeningService::new(db_conn).find_by_uci_prefix(&played_uci) {
+        game.opening = Some(opening);
+    }
+}
+
 /// Runs a fixed-time search on the engine's current position and returns
 /// the resulting best move's UCI string. No cancellation: the game is
 /// checked out of `AppState` for the duration, so nothing else can
@@ -369,16 +400,21 @@ fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
         };
 
         let game_ended = apply_move(&mut game, mover, mv);
+        update_opening(&mut game, &app.state::<db::Db>().lock().unwrap());
 
         if game_ended {
-            let response = game.state_view(&app.state::<db::Db>().lock().unwrap());
-            analysis::spawn_analysis(
-                app.clone(),
-                game.human_color,
-                game.move_list.clone(),
-                game.move_times_ms.clone(),
-                game.time_control,
-            );
+            let response = game.state_view();
+            let game_id = GameService::new(&app.state::<db::Db>().lock().unwrap()).save(&game);
+            if let Some(game_id) = game_id {
+                analysis::spawn_analysis(
+                    app.clone(),
+                    game_id,
+                    game.human_color,
+                    game.move_list.clone(),
+                    game.move_times_ms.clone(),
+                    game.time_control,
+                );
+            }
             let _ = game.engine.quit().await;
             let _ = app.emit("engine-move-complete", response);
             return;
@@ -388,7 +424,7 @@ fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
         let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
         let _ = game.engine.set_position_startpos(&uci_moves).await;
 
-        let response = game.state_view(&app.state::<db::Db>().lock().unwrap());
+        let response = game.state_view();
         restore_active_game(&app.state::<AppState>(), game);
         let _ = app.emit("engine-move-complete", response);
     });
@@ -397,7 +433,6 @@ fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
 #[tauri::command]
 pub async fn start_game(
     state: tauri::State<'_, AppState>,
-    db: tauri::State<'_, db::Db>,
     app: tauri::AppHandle,
     human_color: PieceColor,
     time_control: TimeControl,
@@ -427,7 +462,7 @@ pub async fn start_game(
     .map_err(|e| e.to_string())?;
 
     let response = GameCreateResponse {
-        state: game.state_view(&db.lock().unwrap()),
+        state: game.state_view(),
         white_player: game.white_player.clone(),
         black_player: game.black_player.clone(),
         time_control: game.time_control,
@@ -448,6 +483,7 @@ pub async fn start_game(
 #[tauri::command]
 pub async fn end_game(
     state: tauri::State<'_, AppState>,
+    db: tauri::State<'_, db::Db>,
     app: tauri::AppHandle,
     reason: TerminationReason,
     losing_side: Option<PieceColor>,
@@ -472,13 +508,21 @@ pub async fn end_game(
     };
 
     game.result = result;
-    analysis::spawn_analysis(
-        app,
-        game.human_color,
-        game.move_list.clone(),
-        game.move_times_ms.clone(),
-        game.time_control,
-    );
+    // Saved regardless of ANALYSIS_ENABLED — that flag only decides whether
+    // analysis *runs*, not whether the game itself is worth keeping.
+    let game_id = GameService::new(&db.lock().unwrap()).save(&game);
+    if ANALYSIS_ENABLED {
+        if let Some(game_id) = game_id {
+            analysis::spawn_analysis(
+                app,
+                game_id,
+                game.human_color,
+                game.move_list.clone(),
+                game.move_times_ms.clone(),
+                game.time_control,
+            );
+        }
+    }
     let _ = game.engine.quit().await;
 
     Ok(result)
@@ -505,16 +549,21 @@ pub async fn make_move(
     };
 
     let game_ended = apply_move(&mut game, mover, mv);
+    update_opening(&mut game, &db.lock().unwrap());
 
     if game_ended {
-        let response = game.state_view(&db.lock().unwrap());
-        analysis::spawn_analysis(
-            app,
-            game.human_color,
-            game.move_list.clone(),
-            game.move_times_ms.clone(),
-            game.time_control,
-        );
+        let response = game.state_view();
+        let game_id = GameService::new(&db.lock().unwrap()).save(&game);
+        if let Some(game_id) = game_id {
+            analysis::spawn_analysis(
+                app,
+                game_id,
+                game.human_color,
+                game.move_list.clone(),
+                game.move_times_ms.clone(),
+                game.time_control,
+            );
+        }
         let _ = game.engine.quit().await;
         return Ok(response);
     }
@@ -524,7 +573,7 @@ pub async fn make_move(
     let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
     let _ = game.engine.set_position_startpos(&uci_moves).await;
 
-    let response = game.state_view(&db.lock().unwrap());
+    let response = game.state_view();
 
     // The human just moved, so it's necessarily the other color's turn now
     // (turn strictly alternates) — but check explicitly rather than assume,

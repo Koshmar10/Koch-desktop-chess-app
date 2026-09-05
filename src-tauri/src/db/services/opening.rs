@@ -20,7 +20,7 @@ impl<'a> OpeningService<'a> {
     pub fn find_by_uci_prefix(&self, played_uci: &str) -> rusqlite::Result<Option<Opening>> {
         self.conn
             .query_row(
-                "SELECT opening_name, uci FROM openings
+                "SELECT opening_id, opening_name, uci FROM openings
                  WHERE ?1 LIKE uci || '%'
                  ORDER BY LENGTH(uci) DESC
                  LIMIT 1",

@@ -1,10 +1,14 @@
 use koch_engine::{MoveStruct, PieceColor};
 use koch_uci::{Engine, GoLimits, Score, SearchEvent, UciError};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use ts_rs::TS;
 
 use crate::app::game::TimeControl;
+use crate::db::{
+    self,
+    services::{analysis::AnalysisService, game::GameService},
+};
 
 const ENGINE_PATH: &str = "stockfish";
 const ANALYSIS_DEPTH: u32 = 20;
@@ -51,6 +55,21 @@ pub enum MoveQuality {
     Inaccuracy,
     Mistake,
     Blunder,
+}
+
+impl std::fmt::Display for MoveQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            MoveQuality::Brilliant => "brilliant",
+            MoveQuality::Great => "great",
+            MoveQuality::Excellent => "excellent",
+            MoveQuality::Good => "good",
+            MoveQuality::Inaccuracy => "inaccuracy",
+            MoveQuality::Mistake => "mistake",
+            MoveQuality::Blunder => "blunder",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Clone, Serialize, TS)]
@@ -330,9 +349,13 @@ pub async fn run_analysis(
 /// Runs the analysis in the background and emits `game-analysis-complete`
 /// with the result once done — deliberately detached from whatever ended
 /// the game (`make_move`/`end_game`), so neither has to block its own
-/// response on a full engine analysis pass.
+/// response on a full engine analysis pass. `game_id` is the row
+/// `GameService::save` already wrote before this was spawned — analysis
+/// only ever completes *into* a game that's already on disk, never
+/// creates one itself.
 pub fn spawn_analysis(
     app: AppHandle,
+    game_id: u32,
     human_color: PieceColor,
     move_list: Vec<MoveStruct>,
     move_times_ms: Vec<u32>,
@@ -341,6 +364,14 @@ pub fn spawn_analysis(
     tauri::async_runtime::spawn(async move {
         match run_analysis(human_color, move_list, move_times_ms, time_control, &app).await {
             Ok(analysis) => {
+                GameService::new(&app.state::<db::Db>().lock().unwrap()).save_move_analysis(
+                    game_id,
+                    &analysis.move_qualities,
+                    &analysis.centipawn_history,
+                );
+                AnalysisService::new(&app.state::<db::Db>().lock().unwrap())
+                    .save(game_id, &analysis);
+
                 if let Err(err) = app.emit("game-analysis-complete", analysis) {
                     eprintln!("failed to emit game-analysis-complete: {err}");
                 }
