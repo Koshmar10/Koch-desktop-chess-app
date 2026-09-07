@@ -30,7 +30,9 @@ pub struct Board {
 impl Default for Board {
     fn default() -> Self {
         let fen = FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is a valid FEN string");
-        Board::from(&fen)
+        let mut board = Board::from(&fen);
+        board.refresh_legal_moves();
+        board
     }
 }
 

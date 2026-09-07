@@ -1,13 +1,18 @@
-import { ChessKing, Clock } from "lucide-react";
+import { ChessKing, Clock, Loader2 } from "lucide-react";
 import { PIECE_IMAGES } from "./lib/pieceImages";
 import type { PieceColor, PieceKind } from "./lib/types";
+import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
 
 interface PlayerCardProps {
   display: boolean;
   color: PieceColor;
-  player: string;
+  playerInfo: PlayerInfo;
   clock?: string;
   isTurn?: boolean;
+  // True specifically while it's this player's turn *and* they're the
+  // engine, not the human — the "waiting on Stockfish" signal, distinct
+  // from isTurn (which is also true on the human's own turn).
+  isThinking?: boolean;
   piecesTaken?: [PieceKind, PieceColor][];
   materialDiff?: number;
 }
@@ -22,6 +27,13 @@ const BADGE_BG_CLASS: Record<PieceColor, string> = {
   black: "bg-black border-white/60 border-[1px]",
 };
 
+// Inverted from the badge's own color — a white circle spins with a black
+// loader and vice versa, so it reads against the (unchanged) badge/king color.
+const SPINNER_COLOR_CLASS: Record<PieceColor, string> = {
+  white: "black",
+  black: "white",
+};
+
 const CAPTURED_PIECE_FILTER: Record<PieceColor, string> = {
   white: "drop-shadow(0 0 2px black)",
   black: "drop-shadow(0 0 1px white)",
@@ -33,18 +45,28 @@ const CAPTURED_PIECE_BASE_Z_INDEX = 10;
 
 interface PlayerAvatarProps {
   color: PieceColor;
+  isThinking?: boolean;
 }
 
-const PlayerAvatar = ({ color }: PlayerAvatarProps) => {
+const PlayerAvatar = ({ color, isThinking }: PlayerAvatarProps) => {
   return (
     <div
       className={`relative flex items-center justify-center w-12 h-12 rounded-md shadow-inner ${AVATAR_BG_CLASS[color]}`}
     >
       <ChessKing className="w-8 h-8 opacity-80" />
       <div
-        className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-background ${BADGE_BG_CLASS[color]}`}
-      />
-    </div>
+        className={`absolute -bottom-1 -right-1 rounded-full border-2 border-background flex items-center justify-center transition-all w-4 h-4 ${BADGE_BG_CLASS[color]}`
+        }
+      >
+        {isThinking && (
+          <Loader2
+            size={10}
+            color={SPINNER_COLOR_CLASS[color]}
+            className={`animate-spin`}
+          />
+        )}
+      </div>
+    </div >
   );
 };
 
@@ -95,29 +117,33 @@ const TakenPieces = ({ piecesTaken, materialDiff }: TakenPiecesProps) => {
 
 export const PlayerCard = ({
   display,
-  player,
+  playerInfo,
   color,
   clock,
   isTurn,
+  isThinking,
   piecesTaken,
   materialDiff,
 }: PlayerCardProps) => {
   if (!display) return null;
 
   return (
-    <div className="flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-secondary/60 shadow-sm transition-colors border-[1px] border-border/80">
-      <PlayerAvatar color={color} />
+    <div
+      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-secondary/60 shadow-sm transition-all h-20 ${isTurn ? "opacity-100" : "opacity-50"
+        }`}
+    >
+      <PlayerAvatar color={color} isThinking={isThinking} />
 
-      <div className="flex-1 flex items-center justify-between">
-        <div className="flex flex-col gap-1 justify-center min-w-0 py-0">
-          <PlayerName player={player} />
+      <div className="flex-1 flex items-center justify-between h-full py-1">
+        <div className="flex flex-col gap-1 justify-start h-full min-w-0 py-0">
+          <PlayerName player={playerInfo.name} />
           <TakenPieces piecesTaken={piecesTaken} materialDiff={materialDiff} />
         </div>
 
-        <div className="flex flex-col items-end ml-3">
+        <div className="flex flex-col items-end justify-start h-full mt-2 ml-3">
           {typeof clock !== "undefined" && (
             <div
-              className={`flex items-center gap-2 ${isTurn ? "text-foreground" : "text-foreground/40"}`}
+              className={`flex items-center gap-2 transition-colors duration-150 ${isTurn ? "text-foreground" : "text-foreground/40"}`}
             >
               <Clock className="w-5 h-5 text-foreground/40" />
               <span className="font-mono text-2xl tracking-widest">

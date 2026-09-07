@@ -1,0 +1,6 @@
+[env]
+# Base directory ts-rs writes generated TypeScript bindings into (see
+# `#[ts(export)]` on shared types in koch-engine). `relative = true` resolves
+# this against the workspace root, so no absolute, machine-specific path
+# ends up in source or in this file.
+TS_RS_EXPORT_DIR = { value = "src/api/bindings", relative = true }

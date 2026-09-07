@@ -23,6 +23,10 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+koch-engine = { path = "../koch-engine" }
+koch-uci = { path = "../koch-uci" }
+ts-rs = "11"
+
 
 # `bundled` compiles SQLite from source instead of linking the system copy, so the
 # shipped binary does not depend on whatever version a user's distro happens to have.

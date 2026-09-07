@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+import { flipCoords, squaresEqual } from "../orientation";
+
+describe("flipCoords", () => {
+  it("is the identity when not flipped", () => {
+    expect(flipCoords(0, 0, false)).toEqual([0, 0]);
+    expect(flipCoords(3, 5, false)).toEqual([3, 5]);
+  });
+
+  it("mirrors both axes when flipped", () => {
+    expect(flipCoords(0, 0, true)).toEqual([7, 7]);
+    expect(flipCoords(7, 7, true)).toEqual([0, 0]);
+    expect(flipCoords(2, 3, true)).toEqual([5, 4]);
+  });
+
+  it("is its own inverse", () => {
+    const once = flipCoords(2, 5, true);
+    const twice = flipCoords(once[0], once[1], true);
+
+    expect(twice).toEqual([2, 5]);
+  });
+});
+
+describe("squaresEqual", () => {
+  it("is true for tuples with equal values", () => {
+    expect(squaresEqual([3, 5], [3, 5])).toBe(true);
+  });
+
+  it("is false for tuples that differ in either position", () => {
+    expect(squaresEqual([3, 5], [3, 6])).toBe(false);
+    expect(squaresEqual([3, 5], [4, 5])).toBe(false);
+  });
+
+  it("is false whenever either side is null", () => {
+    expect(squaresEqual(null, [3, 5])).toBe(false);
+    expect(squaresEqual([3, 5], null)).toBe(false);
+    expect(squaresEqual(null, null)).toBe(false);
+  });
+});

@@ -1,3 +1,4 @@
+import GameCardsSection from "./GameCardsSection";
 import ActivityChart from "./GamePlaytimeCalendar";
 import HistoryToolbar from "./HistoryToolbar";
 
@@ -6,6 +7,7 @@ const History = () => {
     <div className="w-full h-full flex flex-col">
       <ActivityChart />
       <HistoryToolbar />
+      <GameCardsSection />
     </div>
   );
 };
