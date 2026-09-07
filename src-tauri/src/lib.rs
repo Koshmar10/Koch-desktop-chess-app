@@ -28,7 +28,14 @@ pub fn run() {
             app::sessions::get_sessions,
             app::game::start_game,
             app::game::end_game,
-            app::game::make_move
+            app::game::make_move,
+            app::game::get_games,
+            app::settings::get_app_settings,
+            app::settings::get_analyzer_engine_settings,
+            app::settings::get_player_engine_settings,
+            app::settings::save_app_settings,
+            app::settings::save_analyzer_engine_settings,
+            app::settings::save_player_engine_settings
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

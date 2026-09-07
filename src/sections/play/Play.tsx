@@ -11,7 +11,6 @@ import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
 import { getTakenPieces } from "../../components/chessboard/lib/takenPieces";
 import PlayControls from "./PlayControls";
 import GameSidePanel from "./GameSidePanel";
-import { GameProvider } from "./GameProvider";
 import {
   useGameContext,
   MODE_TIME_CONTROL,
@@ -49,9 +48,12 @@ const liveRemainingMs = (
   return Math.max(0, baseline - game.state.elapsed_this_turn_ms - sinceReceived);
 };
 
-// Reads GameContext, so it has to be a descendant of <GameProvider>, not the
-// same component that renders the provider.
-const PlayBoard = () => {
+// Reads GameContext. GameProvider is mounted at the app root (App.tsx), not
+// here — it listens for backend events (analysis progress/completion) that
+// keep firing after a game ends even if the player navigates away from
+// /play, so its listeners need to outlive this route rather than unmount
+// with it.
+const Play = () => {
   const {
     game,
     gameReceivedAt,
@@ -153,14 +155,6 @@ const PlayBoard = () => {
         <GameSidePanel />
       </div>
     </div>
-  );
-};
-
-const Play = () => {
-  return (
-    <GameProvider>
-      <PlayBoard />
-    </GameProvider>
   );
 };
 

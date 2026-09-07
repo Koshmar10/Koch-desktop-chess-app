@@ -7,7 +7,7 @@ const SIDEBAR_ITEMS = [
   { to: "/analysis", icon: LineChart },
   { to: "/history", icon: History },
   { to: "/puzzle", icon: Puzzle },
-  { to: "/settings", icon: Settings },
+  // { to: "/settings", icon: Settings },
 ];
 
 const LogoSection = () => (
@@ -28,9 +28,12 @@ const ButtonSection = () => (
 
 const Sidebar = () => {
   return (
-    <div className="flex flex-col w-24 shrink-0 border-r-[1px] border-sidebar-border gap-6 bg-sidebar">
+    <div className="flex flex-col w-20 shrink-0 border-r-[1px] border-sidebar-border gap-6 bg-sidebar">
       <LogoSection />
       <ButtonSection />
+      <div className="flex flex-row justify-center py-4 items-center border-t-[1px] border-sidebar-border">
+      <SidebarButton key={'/settings'} to={'/settings'} icon={Settings} />
+      </div>
     </div>
   );
 };

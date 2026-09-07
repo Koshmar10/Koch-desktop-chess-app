@@ -29,7 +29,7 @@ CREATE TABLE analysis (
 );
 
 CREATE TABLE game_moves (
-  game_id INTEGER NOT NULL REFERENCES games(id),
+  game_id INTEGER NOT NULL REFERENCES games(game_id),
   ply_number INTEGER NOT NULL,
   san TEXT NOT NULL,
   uci TEXT NOT NULL,

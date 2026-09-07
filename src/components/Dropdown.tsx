@@ -4,7 +4,7 @@ interface DropdownProps {
   trigger: (state: { open: boolean; toggle: () => void }) => ReactNode;
   children: (close: () => void) => ReactNode;
   side?: "top" | "bottom";
-  align?: "left" | "center";
+  align?: "left" | "center" | "right";
 }
 
 const SIDE_CLASS: Record<NonNullable<DropdownProps["side"]>, string> = {
@@ -15,6 +15,7 @@ const SIDE_CLASS: Record<NonNullable<DropdownProps["side"]>, string> = {
 const ALIGN_CLASS: Record<NonNullable<DropdownProps["align"]>, string> = {
   left: "left-0",
   center: "left-1/2 -translate-x-1/2",
+  right: "right-0",
 };
 
 const Dropdown = ({

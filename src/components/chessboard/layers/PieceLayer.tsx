@@ -122,7 +122,10 @@ const PieceLayer = () => {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 grid grid-cols-8 grid-rows-8"
+      // pointer-events-none so clicks on empty squares / capture targets fall
+      // through to the Squares layer beneath (which owns click-to-move). Only
+      // the draggable pieces below opt back in, via pointer-events-auto.
+      className="absolute inset-0 grid grid-cols-8 grid-rows-8 pointer-events-none"
     >
       {pieces.map(({ id, kind, color, square }) => {
         const { rank, file } = square;
@@ -135,13 +138,13 @@ const PieceLayer = () => {
           screenCol,
           squareSize,
         );
-        // Only the player's own, currently-movable pieces stay interactive
-        // here — everything else (opponent pieces, or all pieces when it's
-        // not a legal moment to move) is pointer-events-none so clicks on
-        // them fall through to Squares (e.g. clicking a capture square).
+        // The container is pointer-events-none; only the player's own,
+        // currently-movable pieces opt back in so they can be picked up.
+        // Everything else stays non-interactive, so clicks on it fall
+        // through to Squares (e.g. clicking a capture square).
         const pieceClassName = canDragPiece(color)
-          ? className
-          : `${className} pointer-events-none`;
+          ? `${className} pointer-events-auto`
+          : className;
 
         return (
           <img

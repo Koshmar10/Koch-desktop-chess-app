@@ -7,6 +7,7 @@ import { GameCreateResponse } from "./bindings/GameCreateResponse";
 import { TerminationReason } from "./bindings/TerminationReason";
 import { GameResult } from "./bindings/GameResult";
 import { TimeControl } from "./bindings/TimeControl";
+import { GameSummary } from "./bindings/GameSummary";
 
 
 
@@ -39,4 +40,8 @@ export const makeMove = (
   promotion: PieceType | null = null,
 ): Promise<GameStateView> => {
   return invoke<GameStateView>("make_move", { from, to, promotion });
+};
+
+export const getGames = (): Promise<GameSummary[]> => {
+  return invoke<GameSummary[]>("get_games");
 };

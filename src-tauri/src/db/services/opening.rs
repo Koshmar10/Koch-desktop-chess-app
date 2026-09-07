@@ -33,6 +33,23 @@ impl<'a> OpeningService<'a> {
                 err => Err(err),
             })
     }
+
+    /// Resolves an `opening_id` (as saved on a `games` row) back into its
+    /// name — the app layer's own lookup for a history / library view,
+    /// which only has the bare id off `db::schemas::game::Game`.
+    pub fn find_by_id(&self, opening_id: i64) -> rusqlite::Result<Option<Opening>> {
+        self.conn
+            .query_row(
+                "SELECT opening_id, opening_name, uci FROM openings WHERE opening_id = ?1",
+                params![opening_id],
+                |row| Opening::try_from(row),
+            )
+            .map(Some)
+            .or_else(|err| match err {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                err => Err(err),
+            })
+    }
 }
 
 #[cfg(test)]

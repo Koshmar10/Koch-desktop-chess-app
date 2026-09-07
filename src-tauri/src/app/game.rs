@@ -10,7 +10,7 @@ use crate::app::analysis;
 use crate::app::app_state::AppState;
 use crate::db::{
     self,
-    services::{game::GameService, opening::OpeningService},
+    services::{analysis::AnalysisService, game::GameService, opening::OpeningService},
 };
 
 // Stockfish's UCI_Elo floor is 1320 (confirmed against the actual binary's
@@ -150,6 +150,63 @@ pub struct GameCreateResponse {
     pub white_player: PlayerInfo,
     pub black_player: PlayerInfo,
     pub time_control: TimeControl,
+}
+
+/// One saved game, for a game-history / library view — a straight copy of
+/// the `games` row (`db::schemas::game::Game`), widened/typed for the
+/// frontend the same way every other command payload here is. `opening_id`
+/// stays around alongside the resolved `opening_name` (built via
+/// `game_summary_from`, not a plain `From` — resolving the name needs a DB
+/// connection `Game` alone doesn't carry). `pgn_data` is left off entirely
+/// — it's still just an empty-string placeholder until a real PGN
+/// serializer exists.
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
+pub struct GameSummary {
+    pub game_id: u32,
+    pub game_hash: String,
+    pub date_played: Option<String>,
+    pub white_player: String,
+    pub black_player: String,
+    pub white_elo: u32,
+    pub black_elo: u32,
+    pub result: String,
+    pub opening_id: Option<u32>,
+    pub opening_name: Option<String>,
+    pub time_control: Option<String>,
+    pub source: String,
+    pub human_color: Option<String>,
+    /// Whether this game has an aggregate `analysis` row — drives the
+    /// analysed/not-analysed marker in the history card, nothing more. The
+    /// actual analysis numbers are fetched separately when a game is opened.
+    pub has_analysis: bool,
+}
+
+fn game_summary_from(game: &db::schemas::game::Game, db_conn: &rusqlite::Connection) -> GameSummary {
+    let opening_name = game.opening_id.and_then(|id| {
+        OpeningService::new(db_conn)
+            .find_by_id(id)
+            .ok()
+            .flatten()
+            .map(|opening| opening.opening_name)
+    });
+
+    GameSummary {
+        game_id: game.game_id as u32,
+        game_hash: game.game_hash.clone(),
+        date_played: game.date_played.clone(),
+        white_player: game.white_player.clone(),
+        black_player: game.black_player.clone(),
+        white_elo: game.white_elo as u32,
+        black_elo: game.black_elo as u32,
+        result: game.result.clone(),
+        opening_id: game.opening_id.map(|id| id as u32),
+        opening_name,
+        time_control: game.time_control.clone(),
+        source: game.source.clone(),
+        human_color: game.human_color.clone(),
+        has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32),
+    }
 }
 
 pub struct Game {
@@ -586,4 +643,18 @@ pub async fn make_move(
     }
 
     Ok(response)
+}
+
+#[tauri::command]
+pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, String> {
+    let conn = db.lock().map_err(|e| e.to_string())?;
+
+    let games = GameService::new(&conn)
+        .get_games()
+        .map_err(|e| e.to_string())?;
+
+    Ok(games
+        .iter()
+        .map(|game| game_summary_from(game, &conn))
+        .collect())
 }

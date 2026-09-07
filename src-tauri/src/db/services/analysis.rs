@@ -49,4 +49,20 @@ impl<'a> AnalysisService<'a> {
 
         Some(self.conn.last_insert_rowid() as u32)
     }
+
+    /// Whether `game_id` has an aggregate analysis row yet. Cheap existence
+    /// check for history/library views that only need the yes/no, not the
+    /// numbers — `UNIQUE(game_id)` means there's at most one. A query error
+    /// is reported as "no analysis" rather than propagated: the caller
+    /// (`game_summary_from`) has nowhere useful to surface it and a missing
+    /// badge is the safe default.
+    pub fn has_analysis(&self, game_id: u32) -> bool {
+        self.conn
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM analysis WHERE game_id = ?1)",
+                params![game_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .unwrap_or(false)
+    }
 }
