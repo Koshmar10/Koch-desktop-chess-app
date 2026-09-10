@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { getGames } from "../../api/game"
+import { getGames, deleteGame, analyzeGame } from "../../api/game"
 import { GameSummary } from "../../api/bindings/GameSummary"
 import GameCard from "./GameCard"
 
@@ -14,13 +14,34 @@ const GameCardsSection = () => {
   useEffect(() => {
     getGames().then(setGameData).catch(console.error)
   }, [])
+
+  const handleDelete = (game: GameSummary) => {
+    deleteGame(game.game_id)
+      .then(() =>
+        setGameData(
+          (prev) => prev?.filter((g) => g.game_id !== game.game_id) ?? null,
+        ),
+      )
+      .catch(console.error)
+  }
+
+  // Fire-and-forget — the analysis runs on the backend queue. The
+  // `has_analysis` badge picks up the result on the next History visit.
+  const handleAnalyze = (game: GameSummary) => {
+    analyzeGame(game.game_id).catch(console.error)
+  }
+
   return (
     <>
       {gameData && gameData.length > 0 ? (
         <div className="flex flex-wrap gap-3 px-6 py-4">
           {gameData.map((game) => (
             <div key={game.game_id} className="w-full max-w-[calc(25%-0.6875rem)]">
-              <GameCard gameSummary={game} />
+              <GameCard
+                gameSummary={game}
+                onAnalyze={handleAnalyze}
+                onDelete={handleDelete}
+              />
             </div>
           ))}
         </div>

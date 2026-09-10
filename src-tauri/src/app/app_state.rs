@@ -1,8 +1,5 @@
-use std::sync::Mutex;
-
-use tauri::App;
-
 use crate::app::game::Game;
+use std::sync::Mutex;
 
 pub struct AppState {
     pub pve_game: Mutex<Option<Game>>,

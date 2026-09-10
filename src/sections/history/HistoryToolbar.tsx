@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Check, ChevronDown, RefreshCcw, Search, Upload } from "lucide-react";
 import { TooltipButton } from "../../components/TooltipButton";
 import Dropdown from "../../components/Dropdown";
+import ImportPgnPopup from "./ImportPgnPopup";
 
 type SelectOption = "Last Month" | "Last 3 Months" | "All Time";
 const SelectOptions: SelectOption[] = [
@@ -72,12 +73,19 @@ const MonthSelect = () => {
 };
 
 const HistoryToolbar = () => {
+  const [importOpen, setImportOpen] = useState(false);
+
   return (
     <div className="gap-4 text-foreground border-b-2 border-border flex flex-row items-center p-3">
       <SearchBox />
       <MonthSelect />
       <TooltipButton icon={<RefreshCcw />} tooltip={"Sync with chess.com"} />
-      <TooltipButton icon={<Upload />} tooltip={"Import PGN"} />
+      <TooltipButton
+        icon={<Upload />}
+        tooltip={"Import PGN"}
+        onClick={() => setImportOpen(true)}
+      />
+      <ImportPgnPopup open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 };

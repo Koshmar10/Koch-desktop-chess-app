@@ -4,6 +4,7 @@ pub mod db;
 use tauri::Manager;
 
 use crate::{
+    app::analysis::{self, AnalysisJob, AnalysisQueue},
     app::app_state::AppState,
     db::services::session::{ActiveSessionId, SessionService},
 };
@@ -22,20 +23,32 @@ pub fn run() {
             };
             app.manage(db);
             app.manage(ActiveSessionId(log_id));
+
+            // Analysis job queue: the Sender is shared state; the Receiver
+            // is owned solely by the worker task that drains it one job at
+            // a time, so queued games never run competing engine passes.
+            let (analysis_tx, analysis_rx) = tokio::sync::mpsc::unbounded_channel::<AnalysisJob>();
+            app.manage(AnalysisQueue(analysis_tx));
+            tauri::async_runtime::spawn(analysis::worker(app.handle().clone(), analysis_rx));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             app::sessions::get_sessions,
-            app::game::start_game,
-            app::game::end_game,
-            app::game::make_move,
-            app::game::get_games,
+            app::game::commands::start_game,
+            app::game::commands::end_game,
+            app::game::commands::make_move,
+            app::game::commands::get_games,
+            app::game::commands::delete_game,
+            app::game::commands::analyze_game,
             app::settings::get_app_settings,
             app::settings::get_analyzer_engine_settings,
             app::settings::get_player_engine_settings,
             app::settings::save_app_settings,
             app::settings::save_analyzer_engine_settings,
-            app::settings::save_player_engine_settings
+            app::settings::save_player_engine_settings,
+            app::stats::get_player_stats,
+            app::stats::get_rating_history
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

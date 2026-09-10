@@ -45,3 +45,13 @@ export const makeMove = (
 export const getGames = (): Promise<GameSummary[]> => {
   return invoke<GameSummary[]>("get_games");
 };
+
+export const deleteGame = (gameId: number): Promise<void> => {
+  return invoke("delete_game", { gameId });
+};
+
+// Queues a fresh analysis pass for an already-saved game. Resolves once
+// it's enqueued, not when the pass completes.
+export const analyzeGame = (gameId: number): Promise<void> => {
+  return invoke("analyze_game", { gameId });
+};

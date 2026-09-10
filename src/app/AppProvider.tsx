@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { AppContext, type Theme } from "./AppContext";
+import { AnalysisStage } from "../api/bindings/AnalysisStage";
+import { AnalysisStatus } from "../api/bindings/AnalysisStatus";
 
 const THEME_STORAGE_KEY = "koch-theme";
 
@@ -19,23 +22,40 @@ interface AppProviderProps {
   children: ReactNode;
 }
 
-// App-wide state that outlives any one route or game — theme for now, the
-// place to hang future app preferences (board style, sound, etc.).
-// GameProvider stays nested inside this, not the other way round: a game
-// is one thing the app contains, the app isn't one thing a game contains.
+// State that outlives any one route or game — theme and per-game analysis
+// status. GameProvider nests inside this, not the other way round.
 export function AppProvider({ children }: AppProviderProps) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [analysisStages, setAnalysisStages] = useState<
+    Record<number, AnalysisStage>
+  >({});
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
+  // One subscription for the whole app; cards read from `analysisStages` by
+  // game_id, so their indicator doesn't reset every time the card unmounts.
+  useEffect(() => {
+    const unlisten = listen<AnalysisStatus>("analysis-status", (event) => {
+      setAnalysisStages((prev) => ({
+        ...prev,
+        [event.payload.game_id]: event.payload.stage,
+      }));
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const toggleTheme = () =>
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
 
   return (
-    <AppContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <AppContext.Provider
+      value={{ theme, setTheme, toggleTheme, analysisStages }}
+    >
       {children}
     </AppContext.Provider>
   );

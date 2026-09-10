@@ -7,53 +7,61 @@ import {
   Clock,
   LucideIcon,
 } from "lucide-react";
+import { PlayerStats } from "../../api/bindings/PlayerStats";
 
+// Layout + presentation for each Home stat card. The value comes from live
+// `PlayerStats` via `format`; the icon / label / grid span are fixed here.
 export interface StatCard {
   icon: LucideIcon;
-  value: string | number;
   label: string;
-  delta?: string;
   className: string;
+  delta?: string;
+  format: (stats: PlayerStats) => string | number;
 }
+
+const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  return `${minutes}m`;
+};
 
 export const STAT_CARDS: StatCard[] = [
   {
     icon: TrendingUp,
-    value: 1450,
     label: "Current Rating",
-    delta: "+32 this month",
     className: "row-span-2 col-span-1",
+    format: (s) => s.current_rating,
   },
   {
     icon: Medal,
-    value: "87.3%",
     label: "Avg. Accuracy",
     className: "row-span-2 col-span-1",
+    format: (s) => `${s.avg_accuracy.toFixed(1)}%`,
   },
   {
     icon: Trophy,
-    value: "62%",
     label: "Win Rate",
-    delta: "+5%",
     className: "row-span-1 col-span-2",
+    format: (s) => `${Math.round(s.win_rate)}%`,
   },
   {
     icon: Clock,
-    value: "48h",
     label: "Total Time",
     className: "row-span-2 col-span-1",
+    format: (s) => formatDuration(s.total_seconds),
   },
   {
     icon: Zap,
-    value: 12,
     label: "Best Streak",
     delta: "wins",
     className: "row-span-2 col-span-1",
+    format: (s) => s.best_streak,
   },
   {
     icon: Target,
-    value: 214,
     label: "Games Played",
     className: "row-span-1 col-span-2",
+    format: (s) => s.games_played,
   },
 ];

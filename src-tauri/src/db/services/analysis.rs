@@ -65,4 +65,17 @@ impl<'a> AnalysisService<'a> {
             )
             .unwrap_or(false)
     }
+
+    /// Mean `accuracy_percent` across analysed games the human played, or
+    /// `None` when nothing analysed applies. For the Home stats card.
+    pub fn average_human_accuracy(&self) -> rusqlite::Result<Option<f64>> {
+        self.conn.query_row(
+            "SELECT AVG(a.accuracy_percent)
+             FROM analysis a
+             JOIN games g ON g.game_id = a.game_id
+             WHERE g.human_color IS NOT NULL",
+            [],
+            |row| row.get::<_, Option<f64>>(0),
+        )
+    }
 }

@@ -41,3 +41,26 @@ impl TryFrom<&Row<'_>> for Game {
         })
     }
 }
+
+/// One `game_moves` row — only the fields known at save time (the
+/// analysis-derived `eval_cp` / `quality` / `centipawn_loss` are left
+/// out). Enough to replay a saved game through the analyzer.
+pub struct GameMoveRow {
+    pub ply_number: u32,
+    pub san: String,
+    pub uci: String,
+    pub time_ms: u32,
+}
+
+impl TryFrom<&Row<'_>> for GameMoveRow {
+    type Error = rusqlite::Error;
+
+    fn try_from(row: &Row<'_>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            ply_number: row.get("ply_number")?,
+            san: row.get("san")?,
+            uci: row.get("uci")?,
+            time_ms: row.get("time_ms")?,
+        })
+    }
+}

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Flame,
   Zap,
@@ -11,24 +11,27 @@ import {
   Download,
   Trash2,
   RotateCcw,
+  Check,
+  X,
+  Hourglass,
 } from "lucide-react";
 import { GameSummary } from "../../api/bindings/GameSummary";
 import { PieceColor } from "../../api/bindings/PieceColor";
+import { AnalysisStage } from "../../api/bindings/AnalysisStage";
+import { useAnalysisStage } from "../../app/AppContext";
 import { MODE_TIME_CONTROL, type GameMode } from "../play/GameContext";
 import Dropdown from "../../components/Dropdown";
 
 interface GameCardProps {
   gameSummary: GameSummary;
   onOpen?: (game: GameSummary) => void;
+  onAnalyze?: (game: GameSummary) => void;
   onExportPgn?: (game: GameSummary) => void;
   onDelete?: (game: GameSummary) => void;
 }
 
 const MODE_ICON_SIZE = 18;
 
-// Same hue per mode the old app's time-control tags used (Bullet red,
-// Blitz orange, Rapid blue, Classical purple) — just carried by the icon's
-// own color now instead of a colored badge chip.
 const MODE_ICON: Record<GameMode, ReactNode> = {
   Bullet: <Flame size={MODE_ICON_SIZE} className="text-red-500" />,
   Blitz: <Zap size={MODE_ICON_SIZE} className="text-amber-500" />,
@@ -36,10 +39,6 @@ const MODE_ICON: Record<GameMode, ReactNode> = {
   Classical: <ChessKnight size={MODE_ICON_SIZE} className="text-violet-400" />,
 };
 
-// Ascending by initial_ms — the same presets PlayControls offers. A saved
-// game's time_control gets bucketed into the first preset it doesn't
-// exceed, falling through to Classical for anything longer (or anything
-// off-preset, e.g. a future chess.com import).
 const MODE_ORDER: GameMode[] = ["Bullet", "Blitz", "Rapid", "Classical"];
 
 const modeForTimeControl = (timeControl: string | null): GameMode | null => {
@@ -52,9 +51,7 @@ const modeForTimeControl = (timeControl: string | null): GameMode | null => {
   );
 };
 
-// `date_played` comes off SQLite's `datetime('now')` as "YYYY-MM-DD
-// HH:MM:SS", UTC but with no timezone marker — reshape it into something
-// `Date` parses reliably before falling back to the raw string.
+// SQLite's `datetime('now')` is UTC "YYYY-MM-DD HH:MM:SS" with no zone marker.
 const formatDatePlayed = (datePlayed: string | null): string => {
   if (!datePlayed) return "";
   const date = new Date(`${datePlayed.replace(" ", "T")}Z`);
@@ -77,11 +74,7 @@ const LOSE_SCORE_CARD_COLOR =
 const DRAW_SCORE_CARD_COLOR =
   "bg-muted/40 text-muted-foreground border border-border"
 
-// `human_color` is stored lowercase ('white'/'black', see GameService::
-// save_game) and is null for a game with no human side (self-play, or a
-// future import) — neither "win" nor "lose" means anything there, so that
-// and an actual draw both get the neutral color rather than falling
-// through to whichever check happens to be last.
+// A null `human_color` (self-play, imports) is deliberately neutral, like a draw.
 const getScoreCardStyle = (game: GameSummary): string => {
   if (game.human_color === null || game.result === "1/2-1/2") {
     return DRAW_SCORE_CARD_COLOR
@@ -93,9 +86,80 @@ const getScoreCardStyle = (game: GameSummary): string => {
 }
 const CardSeparator = () => <hr className="border-border my-[1px]" />
 
+const ANALYSIS_ICON_SIZE = 18
+
+const AnalysisRing = ({ percent }: { percent: number }) => {
+  const radius = 8
+  const circumference = 2 * Math.PI * radius
+  return (
+    <span
+      title={`Analysing… ${percent}%`}
+      className="relative inline-flex animate-pulse items-center justify-center"
+      style={{ width: ANALYSIS_ICON_SIZE, height: ANALYSIS_ICON_SIZE }}
+    >
+      <svg
+        width={ANALYSIS_ICON_SIZE}
+        height={ANALYSIS_ICON_SIZE}
+        className="-rotate-90"
+      >
+        <circle
+          cx={ANALYSIS_ICON_SIZE / 2}
+          cy={ANALYSIS_ICON_SIZE / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={2}
+          className="stroke-border"
+        />
+        <circle
+          cx={ANALYSIS_ICON_SIZE / 2}
+          cy={ANALYSIS_ICON_SIZE / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={2}
+          strokeLinecap="round"
+          className="stroke-primary transition-[stroke-dashoffset] duration-300"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - percent / 100)}
+        />
+      </svg>
+      <span className="absolute text-[7px] font-semibold text-foreground/70">
+        {percent}
+      </span>
+    </span>
+  )
+}
+
+// A `Done` event counts as analysed straight away, before the list refetches.
+const AnalysisIndicator = ({
+  hasAnalysis,
+  stage,
+}: {
+  hasAnalysis: boolean
+  stage: AnalysisStage | undefined
+}) => {
+  if (stage?.kind === "Running") return <AnalysisRing percent={stage.percent} />
+  if (stage?.kind === "Queued") {
+    return (
+      <span title="Analysis queued">
+        <Hourglass size={ANALYSIS_ICON_SIZE} className="text-foreground/50" />
+      </span>
+    )
+  }
+  const analysed = hasAnalysis || stage?.kind === "Done"
+  return (
+    <span title={analysed ? "Analysed" : "Not analysed"}>
+      <ChartSpline
+        size={ANALYSIS_ICON_SIZE}
+        className={analysed ? "text-primary" : "text-foreground/25"}
+      />
+    </span>
+  )
+}
+
 interface GameActionsMenuProps {
   close: () => void;
   onOpen?: () => void;
+  onAnalyze?: () => void;
   onExportPgn?: () => void;
   onDelete?: () => void;
 }
@@ -104,26 +168,28 @@ const MENU_ITEM_CLASS =
   "flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 cursor-pointer"
 const MENU_ICONS_SIZE = 14
 
-// The card only ever renders the handlers its parent passes — an action
-// with no handler is shown disabled rather than hidden, so the menu's
-// shape stays stable across the grid.
+// Delete is two-step: the row swaps to a confirm/cancel pair before it runs.
 const GameActionsMenu = ({
   close,
   onOpen,
+  onAnalyze,
   onExportPgn,
   onDelete,
 }: GameActionsMenuProps) => {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   const run = (handler?: () => void) => () => {
     handler?.();
     close();
   };
+
   return (
     <div className="w-40 py-1 rounded-md bg-card border border-accent/60 shadow-lg">
       <button
         type="button"
         className={MENU_ITEM_CLASS}
-        disabled={!onExportPgn}
-        onClick={run(onExportPgn)}
+        disabled={!onAnalyze}
+        onClick={run(onAnalyze)}
       >
         <RotateCcw size={MENU_ICONS_SIZE} /> Analyze
       </button>
@@ -144,14 +210,38 @@ const GameActionsMenu = ({
         <Download size={MENU_ICONS_SIZE} /> Export PGN
       </button>
 
-      <button
-        type="button"
-        className={`${MENU_ITEM_CLASS} text-red-600 dark:text-red-400`}
-        disabled={!onDelete}
-        onClick={run(onDelete)}
-      >
-        <Trash2 size={MENU_ICONS_SIZE} /> Delete
-      </button>
+      {confirmingDelete ? (
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-red-600 dark:text-red-400">
+          <span>Delete?</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Confirm delete"
+              className="rounded p-0.5 hover:bg-white/10"
+              onClick={run(onDelete)}
+            >
+              <Check size={MENU_ICONS_SIZE} />
+            </button>
+            <button
+              type="button"
+              aria-label="Cancel delete"
+              className="rounded p-0.5 text-foreground/60 hover:bg-white/10"
+              onClick={() => setConfirmingDelete(false)}
+            >
+              <X size={MENU_ICONS_SIZE} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={`${MENU_ITEM_CLASS} text-red-600 dark:text-red-400`}
+          disabled={!onDelete}
+          onClick={() => setConfirmingDelete(true)}
+        >
+          <Trash2 size={MENU_ICONS_SIZE} /> Delete
+        </button>
+      )}
     </div>
   );
 }
@@ -176,26 +266,22 @@ const PlayerRow = ({ color, name, elo }: PlayerRowProps) => (
 const GameCard = ({
   gameSummary,
   onOpen,
+  onAnalyze,
   onExportPgn,
   onDelete,
 }: GameCardProps) => {
   const mode = modeForTimeControl(gameSummary.time_control);
+  const analysisStage = useAnalysisStage(gameSummary.game_id);
 
   return (
-    <div className="flex flex-col gap-2 px-4 py-3 w-full rounded-lg bg-card border border-border">
+    <div className="flex flex-col justify-between gap-2 px-4 py-3 w-full h-62 rounded-lg bg-card border border-border">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground/50">
           <span title={mode ?? undefined}>{mode && MODE_ICON[mode]}</span>
-          <span
-            title={gameSummary.has_analysis ? "Analysed" : "Not analysed"}
-          >
-            <ChartSpline
-              size={MODE_ICON_SIZE}
-              className={
-                gameSummary.has_analysis ? "text-primary" : "text-foreground/25"
-              }
-            />
-          </span>
+          <AnalysisIndicator
+            hasAnalysis={gameSummary.has_analysis}
+            stage={analysisStage}
+          />
         </div>
         <Dropdown
           align="right"
@@ -214,6 +300,7 @@ const GameCard = ({
             <GameActionsMenu
               close={close}
               onOpen={onOpen && (() => onOpen(gameSummary))}
+              onAnalyze={onAnalyze && (() => onAnalyze(gameSummary))}
               onExportPgn={onExportPgn && (() => onExportPgn(gameSummary))}
               onDelete={onDelete && (() => onDelete(gameSummary))}
             />

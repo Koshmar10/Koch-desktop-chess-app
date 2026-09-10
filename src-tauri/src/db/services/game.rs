@@ -1,11 +1,11 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::app::analysis::MoveQualityEntry;
 use crate::app::game::{Game, GameResult};
-use crate::db::schemas::game::Game as GameRow;
+use crate::db::schemas::game::{Game as GameRow, GameMoveRow};
 
 pub struct GameService<'a> {
     pub conn: &'a Connection,
@@ -173,6 +173,69 @@ impl<'a> GameService<'a> {
         )?;
         let rows = stmt.query_map([], |row| GameRow::try_from(row))?;
         rows.collect()
+    }
+
+    /// A single saved game by id, or `None` if there's no such row.
+    pub fn find_game(&self, game_id: u32) -> rusqlite::Result<Option<GameRow>> {
+        self.conn
+            .query_row(
+                "SELECT game_id, game_hash, date_played, white_player, black_player,
+                        white_elo, black_elo, result, opening_id, time_control,
+                        pgn_data, source, human_color
+                 FROM games WHERE game_id = ?1",
+                params![game_id],
+                |row| GameRow::try_from(row),
+            )
+            .optional()
+    }
+
+    /// Every ply of a saved game, in order — for replaying it through the
+    /// analyzer.
+    pub fn game_moves(&self, game_id: u32) -> rusqlite::Result<Vec<GameMoveRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ply_number, san, uci, time_ms FROM game_moves
+             WHERE game_id = ?1 ORDER BY ply_number",
+        )?;
+        let rows = stmt.query_map(params![game_id], |row| GameMoveRow::try_from(row))?;
+        rows.collect()
+    }
+
+    /// `(result, human_color)` for every game the human actually played
+    /// (imported games with no human side are skipped), oldest first.
+    /// Enough to derive games-played, wins, and win streaks without
+    /// pulling whole rows.
+    pub fn human_game_results(&self) -> rusqlite::Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT result, human_color FROM games
+             WHERE human_color IS NOT NULL
+             ORDER BY date_played",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect()
+    }
+
+    /// Deletes a game and everything hanging off it — moves, analysis, and
+    /// its chat. The `games` foreign keys carry no `ON DELETE` clause (and
+    /// SQLite FK enforcement is off on this connection anyway), so the
+    /// children are removed explicitly, all in one transaction. Returns
+    /// the number of `games` rows removed: 0 if `game_id` didn't exist,
+    /// 1 otherwise.
+    pub fn delete_game(&self, game_id: u32) -> rusqlite::Result<usize> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM messages
+             WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1)",
+            params![game_id],
+        )?;
+        tx.execute("DELETE FROM chats WHERE game_id = ?1", params![game_id])?;
+        tx.execute("DELETE FROM analysis WHERE game_id = ?1", params![game_id])?;
+        tx.execute(
+            "DELETE FROM game_moves WHERE game_id = ?1",
+            params![game_id],
+        )?;
+        let removed = tx.execute("DELETE FROM games WHERE game_id = ?1", params![game_id])?;
+        tx.commit()?;
+        Ok(removed)
     }
 }
 
@@ -386,5 +449,84 @@ mod tests {
 
             quit(game).await;
         });
+    }
+
+    // Seeds one game plus a row in every table that hangs off it, using
+    // raw SQL so the test needs no `stockfish` subprocess. Returns the
+    // `game_id`.
+    fn seed_game_with_children(conn: &Connection, hash: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO games
+                 (game_hash, white_player, black_player, white_elo, black_elo,
+                  result, pgn_data, source)
+             VALUES (?1, 'W', 'B', 600, 1320, '1-0', '', 'koch')",
+            params![hash],
+        )
+        .unwrap();
+        let game_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO game_moves (game_id, ply_number, san, uci, time_ms)
+             VALUES (?1, 1, 'e4', 'e2e4', 1000)",
+            params![game_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO analysis
+                 (game_id, accuracy_percent, average_centipawn_loss,
+                  average_move_time_ms, longest_think_ms, time_trouble_moves,
+                  total_duration_ms)
+             VALUES (?1, 90.0, 12, 1000, 3000, 0, 5000)",
+            params![game_id],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO chats (game_id) VALUES (?1)", params![game_id])
+            .unwrap();
+        let chat_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (chat_id, role, content) VALUES (?1, 'user', 'hi')",
+            params![chat_id],
+        )
+        .unwrap();
+
+        game_id
+    }
+
+    fn count(conn: &Connection, table: &str, game_id: i64) -> i64 {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM {table} WHERE game_id = ?1"),
+            [game_id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn delete_game_removes_the_game_and_all_its_children() {
+        let conn = test_conn();
+        let game_id = seed_game_with_children(&conn, "hash-a");
+        let other = seed_game_with_children(&conn, "hash-b");
+
+        let removed = GameService::new(&conn).delete_game(game_id as u32).unwrap();
+
+        assert_eq!(removed, 1);
+        assert_eq!(count(&conn, "games", game_id), 0);
+        assert_eq!(count(&conn, "game_moves", game_id), 0);
+        assert_eq!(count(&conn, "analysis", game_id), 0);
+        assert_eq!(count(&conn, "chats", game_id), 0);
+        let orphan_messages: i64 = conn
+            .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(orphan_messages, 1, "only the other game's message remains");
+
+        // The untouched game is intact.
+        assert_eq!(count(&conn, "games", other), 1);
+        assert_eq!(count(&conn, "game_moves", other), 1);
+    }
+
+    #[test]
+    fn delete_game_returns_zero_for_an_unknown_id() {
+        let conn = test_conn();
+        assert_eq!(GameService::new(&conn).delete_game(999).unwrap(), 0);
     }
 }

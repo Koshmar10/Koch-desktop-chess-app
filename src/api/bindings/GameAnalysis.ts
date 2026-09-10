@@ -24,8 +24,7 @@ centipawn_history: Array<number>,
  */
 average_move_time_ms: number, longest_think_ms: number, longest_think_ply: number | null, 
 /**
- * How many of the human's moves were made with less than
- * `TIME_TROUBLE_THRESHOLD_MS` left on their own clock.
+ * How many of the human's moves were made while low on their own clock.
  */
 time_trouble_moves: number, 
 /**
