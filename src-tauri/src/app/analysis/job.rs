@@ -12,5 +12,7 @@ pub struct AnalysisJob {
     pub human_color: PieceColor,
     pub move_list: Vec<MoveStruct>,
     pub move_times_ms: Vec<u32>,
-    pub time_control: TimeControl,
+    /// `None` for an imported game whose PGN carried no clock — the time
+    /// metrics then fall back to move-time sums only (no time-trouble).
+    pub time_control: Option<TimeControl>,
 }

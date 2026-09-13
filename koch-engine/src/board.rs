@@ -61,6 +61,18 @@ impl std::fmt::Display for GamePhase {
     }
 }
 
+/// A move by coordinates alone — what `san_to_move` and `decode_uci_move`
+/// resolve a token into, before anything is known about capture/check/SAN.
+/// `move_piece` takes its fields separately rather than this struct itself:
+/// callers building a move by hand (tests, `make_move`) already have
+/// `from`/`to`/`promotion` as named values, nothing to unpack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PieceMove {
+    pub from: Square,
+    pub to: Square,
+    pub promotion: Option<PieceType>,
+}
+
 /// One executed move, as returned by `Board::move_piece`. Deliberately just
 /// what the engine itself produces — PGN-authoring fields (annotations, NAGs,
 /// clock, timestamp) are never set by the engine and belong on a richer

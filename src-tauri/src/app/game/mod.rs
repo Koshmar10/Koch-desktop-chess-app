@@ -8,6 +8,7 @@
 // `generate_handler!` — the `#[tauri::command]` macro generates helper
 // items next to each fn that a `pub use` re-export wouldn't carry along.
 pub(crate) mod commands;
+pub(crate) mod import;
 mod live;
 mod play;
 mod view;

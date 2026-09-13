@@ -16,4 +16,10 @@ export type GameSummary = { game_id: number, game_hash: string, date_played: str
  * analysed/not-analysed marker in the history card, nothing more. The
  * actual analysis numbers are fetched separately when a game is opened.
  */
-has_analysis: boolean, };
+has_analysis: boolean, 
+/**
+ * An import whose movetext stopped part way — the move list is a
+ * prefix. The history card flags it so a partial game isn't mistaken
+ * for a complete one.
+ */
+partial_import: boolean, };

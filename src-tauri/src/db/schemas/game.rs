@@ -18,6 +18,9 @@ pub struct Game {
     pub pgn_data: String,
     pub source: String,
     pub human_color: Option<String>,
+    /// True when this game was imported but its movetext stopped replaying
+    /// part way through — `move_list` is a prefix, not the whole game.
+    pub partial_import: bool,
 }
 
 impl TryFrom<&Row<'_>> for Game {
@@ -38,6 +41,7 @@ impl TryFrom<&Row<'_>> for Game {
             pgn_data: row.get("pgn_data")?,
             source: row.get("source")?,
             human_color: row.get("human_color")?,
+            partial_import: row.get("partial_import")?,
         })
     }
 }

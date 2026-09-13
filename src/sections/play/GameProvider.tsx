@@ -36,6 +36,7 @@ export function GameProvider({ children }: GameProviderProps) {
   const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<number | null>(null);
   const [isResultDismissed, setIsResultDismissed] = useState(false);
+  const [isSharingPgn, setIsSharingPgn] = useState(false);
   const [humanColor, setHumanColor] = useState<PieceColor | null>(null);
   const [colorPreference, setColorPreference] =
     useState<ColorPreference>("random");
@@ -86,6 +87,14 @@ export function GameProvider({ children }: GameProviderProps) {
     setIsResultDismissed(true);
   };
 
+  const openSharePgn = () => {
+    setIsSharingPgn(true);
+  };
+
+  const closeSharePgn = () => {
+    setIsSharingPgn(false);
+  };
+
   const startGame = async () => {
     setIsStartingGame(true);
     try {
@@ -98,6 +107,7 @@ export function GameProvider({ children }: GameProviderProps) {
       setAnalysis(null);
       setAnalysisProgress(null);
       setIsResultDismissed(false);
+      setIsSharingPgn(false);
     } catch (err) {
       console.error("failed to start game:", err);
     } finally {
@@ -142,6 +152,9 @@ export function GameProvider({ children }: GameProviderProps) {
         analysisProgress,
         isResultDismissed,
         dismissResult,
+        isSharingPgn,
+        openSharePgn,
+        closeSharePgn,
         humanColor,
         colorPreference,
         cycleColorPreference,

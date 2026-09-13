@@ -8,6 +8,7 @@ import { TerminationReason } from "./bindings/TerminationReason";
 import { GameResult } from "./bindings/GameResult";
 import { TimeControl } from "./bindings/TimeControl";
 import { GameSummary } from "./bindings/GameSummary";
+import { ImportPgnResult } from "./bindings/ImportPgnResult";
 
 
 
@@ -51,7 +52,15 @@ export const deleteGame = (gameId: number): Promise<void> => {
 };
 
 // Queues a fresh analysis pass for an already-saved game. Resolves once
-// it's enqueued, not when the pass completes.
-export const analyzeGame = (gameId: number): Promise<void> => {
-  return invoke("analyze_game", { gameId });
+// it's enqueued, not when the pass completes. `humanColor` picks the side
+// to grade for an imported game that has none stored yet.
+export const analyzeGame = (
+  gameId: number,
+  humanColor?: PieceColor,
+): Promise<void> => {
+  return invoke("analyze_game", { gameId, humanColor });
+};
+
+export const importPgn = (pgn: string): Promise<ImportPgnResult> => {
+  return invoke<ImportPgnResult>("import_pgn", { pgn });
 };

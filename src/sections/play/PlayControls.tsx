@@ -142,6 +142,7 @@ const PlayControls = () => {
     cycleColorPreference,
     selectedMode,
     setSelectedMode,
+    openSharePgn,
   } = useGameContext();
 
   return (
@@ -193,7 +194,12 @@ const PlayControls = () => {
         )}
       </Dropdown>
 
-      <TooltipButton icon={<Share2 size={ICON_SIZE} />} tooltip="Share game" disabled={isStartingGame || isGameOngoing(game)} />
+      <TooltipButton
+        icon={<Share2 size={ICON_SIZE} />}
+        tooltip="Share game"
+        onClick={openSharePgn}
+        disabled={isStartingGame || !game}
+      />
     </div>
   );
 };

@@ -5,7 +5,7 @@ use crate::piece::{ChessPiece, PieceColor, PieceType};
 use crate::square::Square;
 use crate::Direction;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveError {
     IllegalMove,
     NoAvailableMoves,

@@ -14,6 +14,8 @@ import {
   Check,
   X,
   Hourglass,
+  TriangleAlert,
+  Import,
 } from "lucide-react";
 import { GameSummary } from "../../api/bindings/GameSummary";
 import { PieceColor } from "../../api/bindings/PieceColor";
@@ -282,6 +284,19 @@ const GameCard = ({
             hasAnalysis={gameSummary.has_analysis}
             stage={analysisStage}
           />
+          {gameSummary.source !== "koch" && (
+            <span title={`Imported from ${gameSummary.source}`}>
+              <Import size={ANALYSIS_ICON_SIZE} />
+            </span>
+          )}
+          {gameSummary.partial_import && (
+            <span title="Imported partially — some moves couldn't be read">
+              <TriangleAlert
+                size={ANALYSIS_ICON_SIZE}
+                className="text-amber-500"
+              />
+            </span>
+          )}
         </div>
         <Dropdown
           align="right"

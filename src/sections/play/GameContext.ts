@@ -59,6 +59,12 @@ export interface GameContextValue {
   // `startGame`.
   isResultDismissed: boolean;
   dismissResult: () => void;
+  // Whether the share-PGN card is showing over the board. Independent of
+  // the result card — sharing is available for an ongoing game too, not
+  // just a finished one.
+  isSharingPgn: boolean;
+  openSharePgn: () => void;
+  closeSharePgn: () => void;
   humanColor: PieceColor | null;
   colorPreference: ColorPreference;
   cycleColorPreference: () => void;

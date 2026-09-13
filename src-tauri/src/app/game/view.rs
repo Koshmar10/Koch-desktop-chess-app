@@ -7,32 +7,13 @@ use koch_engine::{PieceColor, PieceType, Square};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Who won, or that nobody has yet — never accepted as a command *input*,
-/// only ever computed server-side from a `TerminationReason` and handed
-/// back. A client claiming "WhiteWin" directly, with no reason, isn't a
-/// thing this API allows.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-pub enum GameResult {
-    BlackWin,
-    WhiteWin,
-    Draw,
-    Unfinished,
-}
-
-impl std::fmt::Display for GameResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Standard PGN Result-tag tokens — same values a PGN export will
-        // want, not an app-specific spelling.
-        let s = match self {
-            GameResult::WhiteWin => "1-0",
-            GameResult::BlackWin => "0-1",
-            GameResult::Draw => "1/2-1/2",
-            GameResult::Unfinished => "*",
-        };
-        write!(f, "{}", s)
-    }
-}
+// `GameResult` is `koch_engine`'s, not a separate app-layer enum — a PGN's
+// `[Result]` tag and trailing movetext token encode exactly these four
+// outcomes, so `koch_engine::pgn` and this IPC boundary share one type
+// instead of two hand-kept-in-sync copies. Never accepted as a command
+// *input* here regardless: only ever computed server-side from a
+// `TerminationReason`, or read off a PGN.
+pub use koch_engine::GameResult;
 
 /// *Why* a game ended — distinct from `GameResult`, which only says *who*
 /// won. Resignation and Timeout don't determine a winner by themselves
@@ -72,6 +53,19 @@ pub struct TimeControl {
     // maps to `number` on the TS side, matching what actually arrives.
     pub initial_ms: u32,
     pub increment_ms: u32,
+}
+
+impl TimeControl {
+    /// Parses the `"<initial_ms>+<increment_ms>"` string `games.time_control`
+    /// stores. `None` for a missing or malformed value (e.g. an imported
+    /// game whose PGN carried no usable `[TimeControl]`).
+    pub fn from_ms_pair(raw: &str) -> Option<TimeControl> {
+        let (initial, increment) = raw.split_once('+')?;
+        Some(TimeControl {
+            initial_ms: initial.parse().ok()?,
+            increment_ms: increment.parse().ok()?,
+        })
+    }
 }
 
 /// One piece on the board, flattened for the frontend — just enough to
@@ -164,4 +158,8 @@ pub struct GameSummary {
     /// analysed/not-analysed marker in the history card, nothing more. The
     /// actual analysis numbers are fetched separately when a game is opened.
     pub has_analysis: bool,
+    /// An import whose movetext stopped part way — the move list is a
+    /// prefix. The history card flags it so a partial game isn't mistaken
+    /// for a complete one.
+    pub partial_import: bool,
 }

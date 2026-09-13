@@ -127,9 +127,10 @@ impl Game {
         let move_history = self.move_list.iter().map(|m| m.san.clone()).collect();
 
         let last_move = self.move_list.last().and_then(|mv| {
-            self.board
-                .decode_uci_move(&mv.uci)
-                .map(|(from, to, _)| LastMove { from, to })
+            self.board.decode_uci_move(&mv.uci).map(|mv| LastMove {
+                from: mv.from,
+                to: mv.to,
+            })
         });
 
         let opening_name = self.opening.as_ref().map(|o| o.opening_name.clone());

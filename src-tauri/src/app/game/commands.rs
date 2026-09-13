@@ -9,7 +9,9 @@ use crate::app::rating::{self, stockfish_elo_for, GameScore};
 use crate::db::{
     self,
     services::{
-        analysis::AnalysisService, game::GameService, opening::OpeningService,
+        analysis::AnalysisService,
+        game::{GameService, SaveMeta},
+        opening::OpeningService,
         player_rating::PlayerRatingService,
     },
 };
@@ -50,6 +52,7 @@ fn game_summary_from(
         source: game.source.clone(),
         human_color: game.human_color.clone(),
         has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32),
+        partial_import: game.partial_import,
     }
 }
 
@@ -100,16 +103,6 @@ fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
     ) {
         eprintln!("rating: could not record change for game {game_id}: {e}");
     }
-}
-
-/// `games.time_control` is stored as `"<initial_ms>+<increment_ms>"` (see
-/// `GameService::save_game`) — parse it back.
-fn parse_time_control(raw: Option<&str>) -> Option<TimeControl> {
-    let (initial, increment) = raw?.split_once('+')?;
-    Some(TimeControl {
-        initial_ms: initial.parse().ok()?,
-        increment_ms: increment.parse().ok()?,
-    })
 }
 
 #[tauri::command]
@@ -200,7 +193,7 @@ pub async fn end_game(
     game.result = result;
     // Saved regardless of ANALYSIS_ENABLED — that flag only decides whether
     // analysis *runs*, not whether the game itself is worth keeping.
-    let game_id = GameService::new(&db.lock().unwrap()).save(&game);
+    let game_id = GameService::new(&db.lock().unwrap()).save(&game, &SaveMeta::koch());
     if let Some(game_id) = game_id {
         record_rating_for_finished_game(&db, &game, game_id);
         if ANALYSIS_ENABLED {
@@ -237,7 +230,7 @@ pub async fn make_move(
 
     if game_ended {
         let response = game.state_view();
-        let game_id = GameService::new(&db.lock().unwrap()).save(&game);
+        let game_id = GameService::new(&db.lock().unwrap()).save(&game, &SaveMeta::koch());
         if let Some(game_id) = game_id {
             record_rating_for_finished_game(&db, &game, game_id);
             analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
@@ -292,29 +285,53 @@ pub fn delete_game(db: tauri::State<'_, db::Db>, game_id: u32) -> Result<(), Str
 /// Re-runs analysis for an already-saved game — the History card's
 /// "Analyze" action. Rebuilds an [`AnalysisJob`] from the stored
 /// `game_moves` / `games` rows and hands it to the queue; returns as soon
-/// as it's enqueued, not when the pass finishes.
+/// as it's enqueued, not when the pass finishes. `human_color` picks the
+/// side to grade for a game that has none stored yet (an import); it's
+/// then written back so the card and any later pass agree.
 #[tauri::command]
 pub fn analyze_game(
     db: tauri::State<'_, db::Db>,
     app: tauri::AppHandle,
     game_id: u32,
+    human_color: Option<PieceColor>,
 ) -> Result<(), String> {
     let job = {
         let conn = db.lock().map_err(|e| e.to_string())?;
         let service = GameService::new(&conn);
 
-        let game = service
-            .find_game(game_id)
+        let (human_color, time_control) = match service
+            .find_imported_game(game_id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("no game with id {game_id}"))?;
-
-        let human_color = match game.human_color.as_deref() {
-            Some("white") => PieceColor::White,
-            Some("black") => PieceColor::Black,
-            _ => return Err("game has no human side to analyse".into()),
+        {
+            // Imports: the side comes from the popup (or a previous pick),
+            // and the clock may just not be there.
+            Some(imported) => {
+                let side = human_color
+                    .or(imported.human_color)
+                    .ok_or("pick which side you played to analyse this game")?;
+                if imported.human_color != Some(side) {
+                    service
+                        .set_human_color(game_id, &side.to_string().to_lowercase())
+                        .map_err(|e| e.to_string())?;
+                }
+                (side, imported.time_control)
+            }
+            // Koch-played games always carry both.
+            None => {
+                let game = service
+                    .find_game(game_id)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| format!("no game with id {game_id}"))?;
+                let side = match game.human_color.as_deref() {
+                    Some("white") => PieceColor::White,
+                    Some("black") => PieceColor::Black,
+                    _ => return Err("this game has no recorded side to analyse".into()),
+                };
+                let time_control =
+                    TimeControl::from_ms_pair(game.time_control.as_deref().unwrap_or_default());
+                (side, time_control)
+            }
         };
-        let time_control = parse_time_control(game.time_control.as_deref())
-            .ok_or("game has no usable time control")?;
 
         let moves = service.game_moves(game_id).map_err(|e| e.to_string())?;
         if moves.is_empty() {
@@ -336,9 +353,9 @@ pub fn analyze_game(
         AnalysisJob {
             game_id,
             human_color,
-            move_list,
-            move_times_ms,
             time_control,
+            move_times_ms,
+            move_list,
         }
     };
 

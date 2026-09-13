@@ -41,6 +41,7 @@ pub fn run() {
             app::game::commands::get_games,
             app::game::commands::delete_game,
             app::game::commands::analyze_game,
+            app::game::import::import_pgn,
             app::settings::get_app_settings,
             app::settings::get_analyzer_engine_settings,
             app::settings::get_player_engine_settings,

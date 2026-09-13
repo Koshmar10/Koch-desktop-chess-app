@@ -72,7 +72,7 @@ const MonthSelect = () => {
   );
 };
 
-const HistoryToolbar = () => {
+const HistoryToolbar = ({ onImported }: { onImported?: () => void }) => {
   const [importOpen, setImportOpen] = useState(false);
 
   return (
@@ -85,7 +85,11 @@ const HistoryToolbar = () => {
         tooltip={"Import PGN"}
         onClick={() => setImportOpen(true)}
       />
-      <ImportPgnPopup open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportPgnPopup
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={onImported}
+      />
     </div>
   );
 };

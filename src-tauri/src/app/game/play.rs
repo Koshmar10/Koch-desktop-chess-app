@@ -2,7 +2,7 @@
 //! applying an already-legal move (clocks, game-over check), re-resolving
 //! the opening, and running the engine's own move in the background.
 
-use koch_engine::{MoveStruct, PieceColor};
+use koch_engine::{MoveStruct, PieceColor, PieceMove};
 use koch_uci::{Engine, GoLimits, SearchEvent, UciError};
 use tauri::{Emitter, Manager};
 
@@ -10,7 +10,10 @@ use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
 use crate::db::{
     self,
-    services::{game::GameService, opening::OpeningService},
+    services::{
+        game::{GameService, SaveMeta},
+        opening::OpeningService,
+    },
 };
 
 use super::live::{restore_active_game, Game};
@@ -101,7 +104,7 @@ pub(super) fn analysis_job_for(game_id: u32, game: &Game) -> AnalysisJob {
         human_color: game.human_color,
         move_list: game.move_list.clone(),
         move_times_ms: game.move_times_ms.clone(),
-        time_control: game.time_control,
+        time_control: Some(game.time_control),
     }
 }
 
@@ -126,7 +129,12 @@ pub(super) fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
             }
         };
 
-        let Some((from, to, promotion)) = game.board.decode_uci_move(&best_move) else {
+        let Some(PieceMove {
+            from,
+            to,
+            promotion,
+        }) = game.board.decode_uci_move(&best_move)
+        else {
             eprintln!("engine returned an undecodable move: {best_move}");
             restore_active_game(&app.state::<AppState>(), game);
             return;
@@ -146,7 +154,8 @@ pub(super) fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
 
         if game_ended {
             let response = game.state_view();
-            let game_id = GameService::new(&app.state::<db::Db>().lock().unwrap()).save(&game);
+            let game_id = GameService::new(&app.state::<db::Db>().lock().unwrap())
+                .save(&game, &SaveMeta::koch());
             if let Some(game_id) = game_id {
                 analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
             }

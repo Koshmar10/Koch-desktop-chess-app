@@ -1,4 +1,4 @@
-use crate::board::{Board, BOARD_SIZE};
+use crate::board::{Board, PieceMove, BOARD_SIZE};
 use crate::piece::PieceType;
 use crate::square::Square;
 
@@ -46,7 +46,7 @@ impl Board {
     /// Decodes a UCI move string ("e2e4", "e7e8q", "e7e8=q") into board
     /// squares and an optional promotion. Doesn't mutate the board or check
     /// legality — the caller applies the move.
-    pub fn decode_uci_move(&self, uci_move: &str) -> Option<(Square, Square, Option<PieceType>)> {
+    pub fn decode_uci_move(&self, uci_move: &str) -> Option<PieceMove> {
         if uci_move.len() < 4 {
             return None;
         }
@@ -69,7 +69,11 @@ impl Board {
             .and_then(promotion_char_to_kind)
             .or_else(|| self.implicit_promotion(from, to));
 
-        Some((from, to, promotion))
+        Some(PieceMove {
+            from,
+            to,
+            promotion,
+        })
     }
 
     /// Encodes a move as a UCI string ("e2e4", or "a7a8q" for a promotion —
@@ -123,7 +127,11 @@ mod tests {
     #[test]
     fn decode_simple_move() {
         let board = Board::default();
-        let (from, to, promotion) = board.decode_uci_move("e2e4").unwrap();
+        let PieceMove {
+            from,
+            to,
+            promotion,
+        } = board.decode_uci_move("e2e4").unwrap();
 
         assert_eq!(from, Square::new(6, 4));
         assert_eq!(to, Square::new(4, 4));
@@ -135,11 +143,11 @@ mod tests {
         let board = board_from("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
 
         assert_eq!(
-            board.decode_uci_move("e7e8q").unwrap().2,
+            board.decode_uci_move("e7e8q").unwrap().promotion,
             Some(PieceType::Queen)
         );
         assert_eq!(
-            board.decode_uci_move("e7e8=r").unwrap().2,
+            board.decode_uci_move("e7e8=r").unwrap().promotion,
             Some(PieceType::Rook)
         );
     }
@@ -148,7 +156,7 @@ mod tests {
     fn decode_infers_queen_promotion_when_omitted() {
         let board = board_from("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
 
-        let (_, _, promotion) = board.decode_uci_move("e7e8").unwrap();
+        let PieceMove { promotion, .. } = board.decode_uci_move("e7e8").unwrap();
 
         assert_eq!(promotion, Some(PieceType::Queen));
     }

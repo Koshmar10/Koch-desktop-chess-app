@@ -2001,6 +2001,7 @@ dependencies = [
 name = "koch-engine"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "serde",
  "ts-rs",
 ]

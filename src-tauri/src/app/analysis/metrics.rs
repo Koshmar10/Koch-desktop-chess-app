@@ -84,10 +84,15 @@ impl TimeStats {
     pub(super) fn from_move_times(
         human_color: PieceColor,
         move_times_ms: &[u32],
-        time_control: TimeControl,
+        time_control: Option<TimeControl>,
     ) -> Self {
-        let mut white_remaining = time_control.initial_ms;
-        let mut black_remaining = time_control.initial_ms;
+        // No clock data (an import without `[%clk]`): start both sides at
+        // "infinite" so the reconstruction runs but never trips the
+        // time-trouble threshold.
+        let initial_ms = time_control.map_or(u32::MAX, |tc| tc.initial_ms);
+        let increment_ms = time_control.map_or(0, |tc| tc.increment_ms);
+        let mut white_remaining = initial_ms;
+        let mut black_remaining = initial_ms;
         let mut human_move_times_ms = Vec::new();
         let mut time_trouble_moves = 0;
         let mut longest_think_ms = 0;
@@ -118,7 +123,7 @@ impl TimeStats {
 
             let updated = remaining_before
                 .saturating_sub(time_ms)
-                .saturating_add(time_control.increment_ms);
+                .saturating_add(increment_ms);
             match mover {
                 PieceColor::White => white_remaining = updated,
                 PieceColor::Black => black_remaining = updated,
@@ -141,5 +146,38 @@ impl TimeStats {
             total_duration_ms,
             human_move_times_ms,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_time_control_means_no_time_trouble_but_still_sums_move_times() {
+        // Human is White; every move is well over the 30s threshold, which
+        // would flag time trouble if the clock started anywhere finite.
+        let move_times_ms = [90_000, 5_000, 90_000, 5_000];
+        let stats = TimeStats::from_move_times(PieceColor::White, &move_times_ms, None);
+
+        assert_eq!(stats.time_trouble_moves, 0);
+        assert_eq!(stats.total_duration_ms, 190_000);
+        assert_eq!(stats.human_move_times_ms, vec![90_000, 90_000]);
+        assert_eq!(stats.longest_think_ply, Some(1));
+    }
+
+    #[test]
+    fn a_real_time_control_still_flags_time_trouble() {
+        // 60s base: White's 1st move burns 35s, so the 2nd starts at 25s —
+        // under the 30s threshold, unlike the 1st.
+        let stats = TimeStats::from_move_times(
+            PieceColor::White,
+            &[35_000, 100, 100, 100],
+            Some(TimeControl {
+                initial_ms: 60_000,
+                increment_ms: 0,
+            }),
+        );
+        assert_eq!(stats.time_trouble_moves, 1);
     }
 }

@@ -22,6 +22,7 @@ import {
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameResultCard from "./GameResultCard";
+import SharePgnCard from "./SharePgnCard";
 import { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
 
 const PLACEHOLDER_BLACK: PlayerInfo = { name: "Black", elo: 0 };
@@ -58,6 +59,7 @@ const Play = () => {
     game,
     gameReceivedAt,
     isResultDismissed,
+    isSharingPgn,
     humanColor,
     selectedMode,
     isStartingGame,
@@ -146,6 +148,11 @@ const Play = () => {
             {showResultCard && (
               <BoardOverlay>
                 <GameResultCard />
+              </BoardOverlay>
+            )}
+            {isSharingPgn && (
+              <BoardOverlay>
+                <SharePgnCard />
               </BoardOverlay>
             )}
           </Chessboard>
