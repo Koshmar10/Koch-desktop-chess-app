@@ -11,7 +11,7 @@ pub enum MoveError {
     NoAvailableMoves,
 }
 
-fn in_bounds(rank: i8, file: i8) -> bool {
+pub fn in_bounds(rank: i8, file: i8) -> bool {
     let size = BOARD_SIZE as i8;
     (0..size).contains(&rank) && (0..size).contains(&file)
 }

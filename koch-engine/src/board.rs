@@ -92,6 +92,15 @@ impl Board {
         self.turn = self.turn.opposite();
     }
 
+    pub fn piece_by_id(&self, id: u32) -> Option<ChessPiece> {
+        self.squares
+            .iter()
+            .flatten()
+            .flatten()
+            .find(|piece| piece.id == id)
+            .copied()
+    }
+
     pub fn material_value(kind: PieceType) -> u32 {
         match kind {
             PieceType::Bishop => 3,
