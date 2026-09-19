@@ -1,3 +1,4 @@
+pub mod analyzer;
 pub mod board;
 pub mod capture;
 pub mod castling;

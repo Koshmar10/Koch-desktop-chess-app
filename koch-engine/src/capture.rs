@@ -7,8 +7,9 @@ impl Board {
     /// capture: for a pawn, a diagonal step onto an enemy piece or an empty
     /// square (a possible en passant, confirmed later by
     /// `legalize_capture_moves`); for every other piece, any square occupied
-    /// by an enemy. A friendly-occupied square never reaches here at all —
-    /// `get_sliding_moves`/`get_knight_moves` already exclude those.
+    /// by an enemy. `get_sliding_moves`/`get_knight_moves` include
+    /// friendly-occupied squares too (needed for attack/defense analysis),
+    /// so the color check here is load-bearing, not redundant.
     pub fn filter_capture_moves(&self, piece: &ChessPiece, moves: &[Square]) -> Vec<Square> {
         moves
             .iter()

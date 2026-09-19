@@ -11,4 +11,12 @@ impl Square {
     pub fn new(rank: usize, file: usize) -> Self {
         Self { rank, file }
     }
+
+    pub fn index(&self) -> usize {
+        self.rank * 8 + self.file
+    }
+
+    pub fn from_index(index: usize) -> Self {
+        Self::new(index / 8, index % 8)
+    }
 }

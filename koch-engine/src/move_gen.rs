@@ -18,10 +18,14 @@ fn in_bounds(rank: i8, file: i8) -> bool {
 
 impl Board {
     /// Walks from `piece`'s square in `direction`, up to `depth` steps,
-    /// stopping at the board edge, a friendly piece (excluded), or an enemy
-    /// piece (included, then stopped). Shared by every sliding piece — bishop,
-    /// rook, queen, and king (at depth 1) all just pick which directions and
-    /// how far.
+    /// stopping at the board edge or the first occupied square — included
+    /// either way, friendly or enemy. This is a raw attack ray, not a legal
+    /// move list: whether a friendly-occupied square is a usable move is for
+    /// the caller to decide (quiet/capture filtering already re-checks
+    /// occupancy and color independently), while attack/defense analysis
+    /// needs that square included to see the defender standing on it. Shared
+    /// by every sliding piece — bishop, rook, queen, and king (at depth 1)
+    /// all just pick which directions and how far.
     pub fn get_sliding_moves(
         &self,
         piece: &ChessPiece,
@@ -38,13 +42,10 @@ impl Board {
             }
 
             let square = Square::new(rank as usize, file as usize);
-            match self.squares[square.rank][square.file] {
-                Some(occupant) if occupant.color == piece.color => break,
-                Some(_) => {
-                    squares.push(square);
-                    break;
-                }
-                None => squares.push(square),
+            let occupied = self.squares[square.rank][square.file].is_some();
+            squares.push(square);
+            if occupied {
+                break;
             }
         }
         squares

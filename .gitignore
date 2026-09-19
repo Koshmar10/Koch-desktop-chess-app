@@ -27,6 +27,9 @@ coverage
 # Rust — cargo build output (workspace root; crates also carry their own)
 target/
 
+# Generated ticket board — rebuild with scripts/tickets_board.py
+tickets/board.html
+
 # Secrets — never commit keys; use the OS keychain or env vars instead
 .env
 .env.*
