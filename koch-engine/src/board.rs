@@ -36,7 +36,7 @@ impl Default for Board {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PieceMoves {
     pub quiet_moves: Vec<Square>,
     pub capture_moves: Vec<Square>,
