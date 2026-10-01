@@ -1,9 +1,8 @@
 import { useChessboardContext } from "../ChessboardContext";
 import { flipCoords } from "../lib/orientation";
+import { FILES } from "../lib/squareName";
+import { DARK_SQUARE_COLOR, LIGHT_SQUARE_COLOR } from "../lib/constants";
 
-const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-const DARK_SQUARE_COLOR = "#a37a58";
-const LIGHT_SQUARE_COLOR = "#f0d9b5";
 const SELECTED_SQUARE_COLOR = "#f6f669";
 
 interface RankProps {

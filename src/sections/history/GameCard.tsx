@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { formatDatePlayed } from "../../api/gameSummary";
 import {
   Flame,
   Zap,
@@ -51,18 +52,6 @@ const modeForTimeControl = (timeControl: string | null): GameMode | null => {
     MODE_ORDER.find((mode) => initialMs <= MODE_TIME_CONTROL[mode].initial_ms) ??
     "Classical"
   );
-};
-
-// SQLite's `datetime('now')` is UTC "YYYY-MM-DD HH:MM:SS" with no zone marker.
-const formatDatePlayed = (datePlayed: string | null): string => {
-  if (!datePlayed) return "";
-  const date = new Date(`${datePlayed.replace(" ", "T")}Z`);
-  if (isNaN(date.getTime())) return datePlayed;
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 };
 
 const PLAYER_DOT_CLASS: Record<PieceColor, string> = {

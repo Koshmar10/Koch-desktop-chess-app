@@ -1,4 +1,5 @@
-use koch_engine::PieceColor;
+use koch_engine::analyzer::PositionFindings;
+use koch_engine::{Board, PieceColor};
 use koch_uci::{Engine, GoLimits, Score, SearchEvent, UciError};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -96,6 +97,11 @@ pub struct GameAnalysis {
     /// Sum of every move's time, both sides — actual wall-clock game
     /// length, not just the human's share of it.
     pub total_duration_ms: u32,
+    /// Deterministic analyzer findings after every ply, same indexing as
+    /// `centipawn_history` (index 0 is the start position) — every position
+    /// gets analyzed, not just the human's moves, so any point in the game
+    /// can be explained later, not only the ones that were scored.
+    pub position_findings: Vec<PositionFindings>,
 }
 
 /// Runs a fixed-depth search on the engine's current position and returns
@@ -138,13 +144,35 @@ pub async fn run_analysis(
     let uci_moves: Vec<String> = move_list.iter().map(|m| m.uci.clone()).collect();
     let total_positions = uci_moves.len() + 1;
 
+    // Mirrors the engine's position exactly, one uci move behind: applied
+    // *before* scoring index i, so it holds the same position the engine
+    // was just asked to evaluate. The engine tracks position via UCI
+    // strings alone and never needed a local `Board` before this - stored
+    // move history is already known-legal (see `analyze_game`'s comment),
+    // so a replay failure here means corrupted history, not a real
+    // possibility to design around.
+    let mut board = Board::default();
+    board.refresh_legal_moves();
+
     // evals[i] = score after i plies, from the perspective of whoever is to
     // move next (UCI convention) — evals[0] is the start position, White to
     // move.
     let mut evals = Vec::with_capacity(total_positions);
+    let mut position_findings = Vec::with_capacity(total_positions);
     for i in 0..=uci_moves.len() {
+        if i > 0 {
+            let uci_move = &uci_moves[i - 1];
+            let mv = board
+                .decode_uci_move(uci_move)
+                .expect("stored move history is already known-legal");
+            board
+                .move_piece(mv.from, mv.to, mv.promotion)
+                .expect("stored move history is already known-legal");
+        }
+
         engine.set_position_startpos(&uci_moves[..i]).await?;
         evals.push(to_centipawns(search_eval(&mut engine).await?));
+        position_findings.push(PositionFindings::from(&board));
 
         let percent = (((i + 1) * 100) / total_positions) as u8;
         // `update-analysis-progress` stays for the play view's progress bar;
@@ -224,5 +252,6 @@ pub async fn run_analysis(
         time_trouble_moves: time_stats.time_trouble_moves,
         human_move_times_ms: time_stats.human_move_times_ms,
         total_duration_ms: time_stats.total_duration_ms,
+        position_findings,
     })
 }

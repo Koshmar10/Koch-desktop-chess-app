@@ -1,4 +1,5 @@
-import { ChessKing, Clock, Loader2 } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
+import { PieceAvatar } from "./PieceAvatar";
 import { PIECE_IMAGES } from "./lib/pieceImages";
 import type { PieceColor, PieceKind } from "./lib/types";
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
@@ -17,10 +18,7 @@ interface PlayerCardProps {
   materialDiff?: number;
 }
 
-const AVATAR_BG_CLASS: Record<PieceColor, string> = {
-  white: "bg-gray-200 text-gray-900",
-  black: "bg-gray-900 text-gray-100",
-};
+const AVATAR_SIZE_PX = 48;
 
 const BADGE_BG_CLASS: Record<PieceColor, string> = {
   white: "bg-white",
@@ -50,23 +48,23 @@ interface PlayerAvatarProps {
 
 const PlayerAvatar = ({ color, isThinking }: PlayerAvatarProps) => {
   return (
-    <div
-      className={`relative flex items-center justify-center w-12 h-12 rounded-md shadow-inner ${AVATAR_BG_CLASS[color]}`}
-    >
-      <ChessKing className="w-8 h-8 opacity-80" />
-      <div
-        className={`absolute -bottom-1 -right-1 rounded-full border-2 border-background flex items-center justify-center transition-all w-4 h-4 ${BADGE_BG_CLASS[color]}`
-        }
-      >
-        {isThinking && (
-          <Loader2
-            size={10}
-            color={SPINNER_COLOR_CLASS[color]}
-            className={`animate-spin`}
-          />
-        )}
-      </div>
-    </div >
+    <PieceAvatar
+      color={color}
+      size={AVATAR_SIZE_PX}
+      badge={
+        <div
+          className={`absolute -bottom-1 -right-1 rounded-full border-2 border-background flex items-center justify-center transition-all w-4 h-4 ${BADGE_BG_CLASS[color]}`}
+        >
+          {isThinking && (
+            <Loader2
+              size={10}
+              color={SPINNER_COLOR_CLASS[color]}
+              className={`animate-spin`}
+            />
+          )}
+        </div>
+      }
+    />
   );
 };
 
@@ -129,8 +127,9 @@ export const PlayerCard = ({
 
   return (
     <div
-      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-secondary/60 shadow-sm transition-all h-20 ${isTurn ? "opacity-100" : "opacity-50"
-        }`}
+      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-secondary/60 shadow-sm transition-all h-20 ${
+        isTurn ? "opacity-100" : "opacity-50"
+      }`}
     >
       <PlayerAvatar color={color} isThinking={isThinking} />
 

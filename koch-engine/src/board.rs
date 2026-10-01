@@ -92,13 +92,27 @@ impl Board {
         self.turn = self.turn.opposite();
     }
 
+    /// Every piece on the board, in row-major square order. The whole engine
+    /// walks the board this way; going through here keeps the double-flatten
+    /// out of every caller.
+    pub fn pieces(&self) -> impl Iterator<Item = &ChessPiece> + '_ {
+        self.squares.iter().flatten().flatten()
+    }
+
+    pub fn pawns_of(&self, color: PieceColor) -> impl Iterator<Item = &ChessPiece> + '_ {
+        self.pieces()
+            .filter(move |piece| piece.kind == PieceType::Pawn && piece.color == color)
+    }
+
+    /// `file` plus whichever of its neighbours exist — the three-file window
+    /// a pawn's support, a passed pawn's blockers and a king's shield are all
+    /// judged over, clamped at the a- and h-files.
+    pub fn file_window(file: usize) -> std::ops::RangeInclusive<usize> {
+        file.saturating_sub(1)..=(file + 1).min(BOARD_SIZE - 1)
+    }
+
     pub fn piece_by_id(&self, id: u32) -> Option<ChessPiece> {
-        self.squares
-            .iter()
-            .flatten()
-            .flatten()
-            .find(|piece| piece.id == id)
-            .copied()
+        self.pieces().find(|piece| piece.id == id).copied()
     }
 
     pub fn material_value(kind: PieceType) -> u32 {
@@ -146,9 +160,8 @@ impl Board {
         // One pass over every piece on the board, tallying all three figures
         // at once instead of scanning three separate times.
         let (material_sum, white_backrank_count, black_backrank_count) =
-            self.squares.iter().flatten().flatten().fold(
-                (0u32, 0u32, 0u32),
-                |(material, white, black), piece| {
+            self.pieces()
+                .fold((0u32, 0u32, 0u32), |(material, white, black), piece| {
                     let material = material + Self::material_value(piece.kind);
 
                     if !backrank_targets.contains(&piece.kind) {
@@ -159,8 +172,7 @@ impl Board {
                         (PieceColor::Black, BLACK_BACK_RANK) => (material, white, black + 1),
                         _ => (material, white, black),
                     }
-                },
-            );
+                });
 
         let classify_backrank = |count: u32| {
             if count > 3 {

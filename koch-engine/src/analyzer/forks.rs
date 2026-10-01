@@ -1,5 +1,13 @@
 use crate::{Board, ChessPiece, Square};
+use serde::Serialize;
+use ts_rs::TS;
 
+/// Two targets is what makes it a fork - one attacked piece is just an
+/// attack, and the opponent can only save one piece per turn.
+const MIN_FORKED_PIECES: usize = 2;
+
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub struct Fork {
     pub forker_id: u32,
     pub forked_ids: Vec<u32>,
@@ -51,38 +59,24 @@ impl Board {
     }
 
     pub fn get_fork(&self, piece: &ChessPiece, hanging_squares: &[Square]) -> Option<Fork> {
-        let forker_id = piece.id;
         let (_, capture_moves) = self.get_legal_moves(piece);
-
-        let is_fork = capture_moves.len() >= 2;
-        if !is_fork {
+        if capture_moves.len() < MIN_FORKED_PIECES {
             return None;
         }
-        let forked_ids = capture_moves
-            .iter()
-            .map(|square| {
-                let piece = self.squares[square.rank][square.file].unwrap();
-                piece.id
-            })
-            .collect::<Vec<u32>>();
 
         let fork = Fork {
-            forker_id,
-            forked_ids,
+            forker_id: piece.id,
+            forked_ids: capture_moves
+                .iter()
+                .map(|square| self.squares[square.rank][square.file].unwrap().id)
+                .collect(),
         };
 
-        if !self.is_fork_valid(&fork, hanging_squares) {
-            return None;
-        }
-
-        Some(fork)
+        self.is_fork_valid(&fork, hanging_squares).then_some(fork)
     }
 
     pub fn get_all_forks(&self, hanging_squares: &[Square]) -> Vec<Fork> {
-        self.squares
-            .iter()
-            .flatten()
-            .flatten()
+        self.pieces()
             .filter_map(|piece| self.get_fork(piece, hanging_squares))
             .collect()
     }
@@ -91,7 +85,7 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::BoardAnalysis;
+    use crate::analyzer::position_findings::hanging_squares;
     use crate::fen::FenString;
 
     fn board_from(fen: &str) -> Board {
@@ -108,8 +102,8 @@ mod tests {
         let rook = board.squares[1][3].unwrap();
         let queen = board.squares[1][5].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        let fork = board.get_fork(&knight, &analysis.hanging_squares).unwrap();
+        let hanging_squares = hanging_squares(&board);
+        let fork = board.get_fork(&knight, &hanging_squares).unwrap();
 
         assert_eq!(fork.forker_id, knight.id);
         assert_eq!(fork.forked_ids.len(), 2);
@@ -119,7 +113,7 @@ mod tests {
         // Best target is the queen (9) - the rook (5) gets left behind.
         // 9 - knight (3) = 6. Neither target is hanging here (each defends
         // the other along rank 7), so no boost applies either way.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 6);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 6);
     }
 
     #[test]
@@ -135,15 +129,15 @@ mod tests {
         let rook = board.squares[1][3].unwrap();
         let bishop_c4 = board.squares[4][2].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        assert!(!analysis.hanging_squares.contains(&rook.position));
-        assert!(analysis.hanging_squares.contains(&bishop_c4.position));
+        let hanging_squares = hanging_squares(&board);
+        assert!(!hanging_squares.contains(&rook.position));
+        assert!(hanging_squares.contains(&bishop_c4.position));
 
-        let fork = board.get_fork(&knight, &analysis.hanging_squares).unwrap();
+        let fork = board.get_fork(&knight, &hanging_squares).unwrap();
 
         // Best target: bishop (3 + knight's 3 = 6, hanging) beats the
         // defended rook (5). 6 - knight (3) = 3.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 3);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
     }
 
     #[test]
@@ -157,8 +151,8 @@ mod tests {
         let rook_c7 = board.squares[1][2].unwrap();
         let rook_g7 = board.squares[1][6].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        let fork = board.get_fork(&bishop, &analysis.hanging_squares).unwrap();
+        let hanging_squares = hanging_squares(&board);
+        let fork = board.get_fork(&bishop, &hanging_squares).unwrap();
 
         assert_eq!(fork.forker_id, bishop.id);
         assert_eq!(fork.forked_ids.len(), 2);
@@ -167,7 +161,7 @@ mod tests {
 
         // Best target: either rook, both worth 5 (neither hanging - they
         // defend each other along rank 7). 5 - bishop (3) = 2.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 2);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 2);
     }
 
     #[test]
@@ -183,13 +177,13 @@ mod tests {
         let knight = board.squares[3][3].unwrap();
         let rook = board.squares[3][5].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
+        let hanging_squares = hanging_squares(&board);
         // Rook defends the knight along rank 5; the knight can't defend
         // back the same way, so the rook is left hanging.
-        assert!(!analysis.hanging_squares.contains(&knight.position));
-        assert!(analysis.hanging_squares.contains(&rook.position));
+        assert!(!hanging_squares.contains(&knight.position));
+        assert!(hanging_squares.contains(&rook.position));
 
-        let fork = board.get_fork(&pawn, &analysis.hanging_squares).unwrap();
+        let fork = board.get_fork(&pawn, &hanging_squares).unwrap();
 
         assert_eq!(fork.forker_id, pawn.id);
         assert_eq!(fork.forked_ids.len(), 2);
@@ -198,7 +192,7 @@ mod tests {
 
         // Best target: rook (5 + pawn's 0, hanging) beats the defended
         // knight (3). 5 - pawn (0) = 5.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 5);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 5);
     }
 
     #[test]
@@ -212,13 +206,13 @@ mod tests {
         let knight = board.squares[3][4].unwrap();
         let bishop = board.squares[7][0].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
+        let hanging_squares = hanging_squares(&board);
         // The bishop defends the knight diagonally; the knight can't
         // defend back, so the bishop is left hanging.
-        assert!(!analysis.hanging_squares.contains(&knight.position));
-        assert!(analysis.hanging_squares.contains(&bishop.position));
+        assert!(!hanging_squares.contains(&knight.position));
+        assert!(hanging_squares.contains(&bishop.position));
 
-        let fork = board.get_fork(&rook, &analysis.hanging_squares).unwrap();
+        let fork = board.get_fork(&rook, &hanging_squares).unwrap();
 
         assert_eq!(fork.forker_id, rook.id);
         assert_eq!(fork.forked_ids.len(), 2);
@@ -227,7 +221,7 @@ mod tests {
 
         // Best target: bishop (3 + rook's 5, hanging) beats the defended
         // knight (3). 8 - rook (5) = 3.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 3);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
     }
 
     #[test]
@@ -240,13 +234,13 @@ mod tests {
         let pawn = board.squares[0][3].unwrap();
         let knight = board.squares[1][0].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
+        let hanging_squares = hanging_squares(&board);
         // Nothing else is on the board to defend either target - both are
         // hanging.
-        assert!(analysis.hanging_squares.contains(&knight.position));
-        assert!(analysis.hanging_squares.contains(&pawn.position));
+        assert!(hanging_squares.contains(&knight.position));
+        assert!(hanging_squares.contains(&pawn.position));
 
-        let fork = board.get_fork(&queen, &analysis.hanging_squares).unwrap();
+        let fork = board.get_fork(&queen, &hanging_squares).unwrap();
 
         assert_eq!(fork.forker_id, queen.id);
         assert_eq!(fork.forked_ids.len(), 2);
@@ -255,6 +249,6 @@ mod tests {
 
         // Best target: knight (3 + queen's 9, hanging) beats the pawn
         // (0 + queen's 9, hanging). 12 - queen (9) = 3.
-        assert_eq!(fork.fork_value(&board, &analysis.hanging_squares), 3);
+        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
     }
 }

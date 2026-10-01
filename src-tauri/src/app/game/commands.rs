@@ -5,7 +5,7 @@ use koch_engine::{MoveStruct, PieceColor, PieceType, Square};
 
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
-use crate::app::rating::{self, stockfish_elo_for, GameScore};
+use crate::app::rating::{self, stockfish_elo_for};
 use crate::db::{
     self,
     services::{
@@ -17,7 +17,10 @@ use crate::db::{
 };
 
 use super::live::{restore_active_game, take_active_game, Game};
-use super::play::{analysis_job_for, apply_move, spawn_engine_reply, update_opening};
+use super::play::{
+    analysis_job_for, apply_move, record_rating_for_finished_game, spawn_engine_reply,
+    update_opening,
+};
 use super::view::{
     GameCreateResponse, GameResult, GameStateView, GameSummary, PlayerInfo, TerminationReason,
     TimeControl,
@@ -53,55 +56,6 @@ fn game_summary_from(
         human_color: game.human_color.clone(),
         has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32),
         partial_import: game.partial_import,
-    }
-}
-
-/// Applies the human's Elo change for a game that was just persisted for
-/// the first time (`GameService::save` returns `None` on a re-save, so
-/// this can't double-count). Best-effort: a rating write failing must not
-/// fail the move / end-game command, so errors are only logged.
-fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
-    let (human_elo, opponent_elo) = match game.human_color {
-        PieceColor::White => (game.white_player.elo, game.black_player.elo),
-        PieceColor::Black => (game.black_player.elo, game.white_player.elo),
-    };
-
-    let (score, reason) =
-        match (game.result, game.human_color) {
-            (GameResult::WhiteWin, PieceColor::White)
-            | (GameResult::BlackWin, PieceColor::Black) => (GameScore::Win, "game_win"),
-            (GameResult::WhiteWin, PieceColor::Black)
-            | (GameResult::BlackWin, PieceColor::White) => (GameScore::Loss, "game_loss"),
-            (GameResult::Draw, _) => (GameScore::Draw, "game_draw"),
-            // `save` only persists finished games, so this arm never runs.
-            (GameResult::Unfinished, _) => return,
-        };
-
-    let delta = rating::elo_delta(human_elo, opponent_elo, score);
-
-    let conn = match db.lock() {
-        Ok(conn) => conn,
-        Err(e) => {
-            eprintln!("rating: db lock poisoned, skipping update: {e}");
-            return;
-        }
-    };
-    let service = PlayerRatingService::new(&conn);
-    let current = match service.current_rating(i64::from(rating::DEFAULT_RATING)) {
-        Ok(current) => current,
-        Err(e) => {
-            eprintln!("rating: could not read current rating: {e}");
-            return;
-        }
-    };
-    let new_rating = (current + i64::from(delta)).max(0);
-    if let Err(e) = service.record(
-        new_rating,
-        i64::from(delta),
-        reason,
-        Some(i64::from(game_id)),
-    ) {
-        eprintln!("rating: could not record change for game {game_id}: {e}");
     }
 }
 

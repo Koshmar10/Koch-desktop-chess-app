@@ -1,5 +1,10 @@
+use crate::board::BOARD_SIZE;
 use crate::{Board, ChessPiece, PieceColor, PieceType};
+use serde::Serialize;
+use ts_rs::TS;
 
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub struct PawnStructure {
     pub color: PieceColor,
     pub pawn_islands: Vec<Vec<u32>>,
@@ -7,11 +12,11 @@ pub struct PawnStructure {
     pub passed_pawn_ids: Vec<u32>,
     pub isolated_pawn_ids: Vec<u32>,
     pub doubled_pawn_ids: Vec<u32>,
-    /// 1 per file where this color has no pawn, 0 where it does. Only
-    /// reflects this color's own pawns - a 1 here can mean the file is
-    /// fully open or that the opponent still holds it, and telling those
-    /// apart needs [`Board::file_states`], which looks at both colors.
-    pub unoccupied_files: [u8; 8],
+    /// True per file where this color has no pawn. Only reflects this
+    /// color's own pawns - a `true` here can mean the file is fully open or
+    /// that the opponent still holds it, and telling those apart needs
+    /// [`Board::file_states`], which looks at both colors.
+    pub unoccupied_files: [bool; BOARD_SIZE],
 }
 
 /// The three states a file can be in once both colors' pawns are counted.
@@ -27,13 +32,7 @@ pub enum FileState {
 
 impl Board {
     pub fn get_pawn_structure(&self, color: PieceColor) -> PawnStructure {
-        let mut pawns: Vec<&ChessPiece> = self
-            .squares
-            .iter()
-            .flatten()
-            .flatten()
-            .filter(|piece| piece.kind == PieceType::Pawn && piece.color == color)
-            .collect();
+        let mut pawns: Vec<&ChessPiece> = self.pawns_of(color).collect();
         pawns.sort_by_key(|pawn| pawn.position.file);
 
         let islands: Vec<&[&ChessPiece]> = pawns
@@ -59,34 +58,30 @@ impl Board {
             .flat_map(|island| island.iter().map(|pawn| pawn.id))
             .collect();
 
-        let backward_pawn_ids: Vec<u32> = {
-            let mut tmp = Vec::new();
-            for pawn in &pawns {
-                let pawn_file = pawn.position.file;
-                let left_file = pawn_file.checked_sub(1);
-                let right_file = (pawn_file < 7).then(|| pawn_file + 1);
-
+        let backward_pawn_ids: Vec<u32> = pawns
+            .iter()
+            .filter(|pawn| {
+                // A neighbour at this pawn's own rank or further back can
+                // still advance to support it; one already further forward
+                // can't. "Further back" is a higher rank index for White,
+                // a lower one for Black.
                 let is_supportable = |p: &&ChessPiece| match color {
                     PieceColor::White => p.position.rank >= pawn.position.rank,
                     PieceColor::Black => p.position.rank <= pawn.position.rank,
                 };
-                let has_left_adj_pawn = left_file.is_some_and(|lf| {
-                    pawns
-                        .iter()
-                        .any(|p| p.position.file == lf && is_supportable(p))
-                });
-                let has_right_adj_pawn = right_file.is_some_and(|rf| {
-                    pawns
-                        .iter()
-                        .any(|p| p.position.file == rf && is_supportable(p))
-                });
-                if !has_left_adj_pawn && !has_right_adj_pawn && !isolated_pawn_ids.contains(&pawn.id) {
-                    tmp.push(pawn.id)
-                }
-            }
-            tmp
-        };
-        
+                let has_adjacent_support = Board::file_window(pawn.position.file)
+                    .filter(|&file| file != pawn.position.file)
+                    .any(|file| {
+                        pawns
+                            .iter()
+                            .any(|p| p.position.file == file && is_supportable(p))
+                    });
+
+                !has_adjacent_support && !isolated_pawn_ids.contains(&pawn.id)
+            })
+            .map(|pawn| pawn.id)
+            .collect();
+
         let doubled_pawn_ids: Vec<u32> = pawns
             .chunk_by(|a, b| a.position.file == b.position.file)
             .filter(|stack| stack.len() >= 2)
@@ -94,13 +89,7 @@ impl Board {
             .collect();
 
         let passed_pawn_ids: Vec<u32> = {
-            let enemy_pawns: Vec<&ChessPiece> = self
-                .squares
-                .iter()
-                .flatten()
-                .flatten()
-                .filter(|piece| piece.kind == PieceType::Pawn && piece.color != color)
-                .collect();
+            let enemy_pawns: Vec<&ChessPiece> = self.pawns_of(color.opposite()).collect();
 
             // An enemy pawn blocks promotion if it sits between the
             // candidate and the far rank - i.e. it isn't more advanced
@@ -115,10 +104,8 @@ impl Board {
             pawns
                 .iter()
                 .filter(|pawn| {
-                    let left = pawn.position.file.saturating_sub(1);
-                    let right = (pawn.position.file + 1).min(7);
                     !enemy_pawns.iter().any(|enemy| {
-                        (left..=right).contains(&enemy.position.file)
+                        Board::file_window(pawn.position.file).contains(&enemy.position.file)
                             && blocks_promotion(pawn, enemy)
                     })
                 })
@@ -126,9 +113,8 @@ impl Board {
                 .collect()
         };
 
-        let unoccupied_files: [u8; 8] = std::array::from_fn(|file| {
-            u8::from(!pawns.iter().any(|pawn| pawn.position.file == file))
-        });
+        let unoccupied_files: [bool; BOARD_SIZE] =
+            std::array::from_fn(|file| !pawns.iter().any(|pawn| pawn.position.file == file));
 
         PawnStructure {
             color,
@@ -141,12 +127,9 @@ impl Board {
         }
     }
 
-    pub fn file_states(&self) -> [FileState; 8] {
+    pub fn file_states(&self) -> [FileState; BOARD_SIZE] {
         let pawns: Vec<&ChessPiece> = self
-            .squares
-            .iter()
-            .flatten()
-            .flatten()
+            .pieces()
             .filter(|piece| piece.kind == PieceType::Pawn)
             .collect();
 

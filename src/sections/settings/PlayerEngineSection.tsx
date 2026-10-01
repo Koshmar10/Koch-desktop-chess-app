@@ -1,17 +1,17 @@
-import { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings"
-import { Section, SettingRow } from "./Section"
-import { NumberSetting, ToggleSetting } from "./controls"
-import { MAX_THREADS } from "./constants"
-import { isDirty, useDraft, type SectionState } from "./draft"
+import { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
+import { Section, SettingRow } from "./Section";
+import { NumberSetting, ToggleSetting } from "../../components/controls";
+import { MAX_THREADS } from "../../api/settings";
+import { isDirty, useDraft, type SectionState } from "./draft";
 
 export const PlayerEngineSection = ({
   saved,
   onSaved,
 }: SectionState<PlayerEngineSettings>) => {
-  const [draft, setDraft] = useDraft(saved)
+  const [draft, setDraft] = useDraft(saved);
 
   const patch = (next: Partial<PlayerEngineSettings>) =>
-    setDraft((current) => ({ ...current, ...next }))
+    setDraft((current) => ({ ...current, ...next }));
 
   return (
     <Section
@@ -66,5 +66,5 @@ export const PlayerEngineSection = ({
         />
       </SettingRow>
     </Section>
-  )
-}
+  );
+};

@@ -1,20 +1,20 @@
-import { Moon, Sun } from "lucide-react"
-import { useAppContext } from "../../app/AppContext"
-import { AppSettings } from "../../api/bindings/AppSettings"
-import { Section, SettingRow } from "./Section"
-import { SecretInput } from "./controls"
-import { TEXT_INPUT_CLASS } from "./constants"
-import { isDirty, useDraft, type SectionState } from "./draft"
+import { Moon, Sun } from "lucide-react";
+import { useAppContext } from "../../app/AppContext";
+import { AppSettings } from "../../api/bindings/AppSettings";
+import { Section, SettingRow } from "./Section";
+import { SecretInput } from "../../components/controls";
+import { TEXT_INPUT_CLASS } from "../../components/controlStyles";
+import { isDirty, useDraft, type SectionState } from "./draft";
 
 export const AppSettingsSection = ({
   saved,
   onSaved,
 }: SectionState<AppSettings>) => {
-  const { theme, toggleTheme } = useAppContext()
-  const [draft, setDraft] = useDraft(saved)
+  const { theme, toggleTheme } = useAppContext();
+  const [draft, setDraft] = useDraft(saved);
 
   const patch = (next: Partial<AppSettings>) =>
-    setDraft((current) => ({ ...current, ...next }))
+    setDraft((current) => ({ ...current, ...next }));
 
   return (
     <Section
@@ -80,5 +80,5 @@ export const AppSettingsSection = ({
         />
       </SettingRow>
     </Section>
-  )
-}
+  );
+};

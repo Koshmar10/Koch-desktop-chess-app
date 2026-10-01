@@ -1,7 +1,11 @@
 use crate::board::Board;
 use crate::direction::pawn_forward;
+use crate::game_result::GameResult;
 use crate::piece::{ChessPiece, PieceColor, PieceType};
 use crate::square::Square;
+
+/// Half-moves without a capture or pawn move after which the game is drawn.
+const FIFTY_MOVE_RULE_HALFMOVES: u32 = 100;
 
 impl Board {
     fn find_king(&self, color: PieceColor) -> Option<Square> {
@@ -60,11 +64,34 @@ impl Board {
     }
 
     /// True on checkmate, stalemate, or the 50-move rule (100 half-moves).
+    ///
+    /// Says only *that* the game ended, not how — checkmate counts too, so
+    /// this must never be what decides the result. Use [`Board::result`].
     pub fn is_game_over(&self) -> bool {
-        const FIFTY_MOVE_RULE_HALFMOVES: u32 = 100;
-        self.is_checkmate()
-            || self.is_stalemate()
-            || self.halfmove_clock >= FIFTY_MOVE_RULE_HALFMOVES
+        self.result() != GameResult::Unfinished
+    }
+
+    /// How the game stands in this position: won, drawn, or still going.
+    ///
+    /// Checkmate is decided first and returns before any draw condition is
+    /// looked at. Callers used to ask `is_checkmate()` and then
+    /// `is_game_over()` and assign a result for each — but a mate is also
+    /// "game over", so the second check overwrote every win with a draw.
+    /// One function with one answer per position is the fix. It also gets
+    /// the edge case right: a mate delivered on the hundredth half-move
+    /// still wins rather than being drawn by the fifty-move rule.
+    pub fn result(&self) -> GameResult {
+        if self.is_checkmate() {
+            // The side to move is the side that's been mated.
+            return match self.turn {
+                PieceColor::White => GameResult::BlackWin,
+                PieceColor::Black => GameResult::WhiteWin,
+            };
+        }
+        if self.is_stalemate() || self.halfmove_clock >= FIFTY_MOVE_RULE_HALFMOVES {
+            return GameResult::Draw;
+        }
+        GameResult::Unfinished
     }
 
     /// True if moving `piece` to `new_pos` would leave `piece`'s own king
@@ -171,5 +198,55 @@ mod tests {
         let board = Board::default();
 
         assert!(!board.is_game_over());
+    }
+
+    // --- result() ----------------------------------------------------
+    //
+    // The regression these guard: a checkmate is also "game over", and the
+    // live game used to set a win on mate and then overwrite it with a
+    // draw on game-over. Every mate in the app was recorded as 1/2-1/2.
+
+    #[test]
+    fn checkmate_is_a_win_not_a_draw() {
+        // Back-rank mate: White is to move and mated, so Black has won.
+        let board = board_from("8/8/8/8/8/8/5PPP/r5K1 w - - 0 1");
+
+        assert_eq!(board.result(), GameResult::BlackWin);
+    }
+
+    #[test]
+    fn checkmate_awards_the_side_that_is_not_to_move() {
+        // The mirror of the back-rank mate: Black is to move and mated.
+        let board = board_from("R5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1");
+
+        assert_eq!(board.result(), GameResult::WhiteWin);
+    }
+
+    #[test]
+    fn checkmate_on_the_hundredth_half_move_still_wins() {
+        // Same mate with the fifty-move counter already at its limit: the
+        // mate decides the game, the fifty-move rule doesn't get a say.
+        let board = board_from("8/8/8/8/8/8/5PPP/r5K1 w - - 100 80");
+
+        assert_eq!(board.result(), GameResult::BlackWin);
+    }
+
+    #[test]
+    fn stalemate_is_a_draw() {
+        let board = board_from("k7/2Q5/2K5/8/8/8/8/8 b - - 0 1");
+
+        assert_eq!(board.result(), GameResult::Draw);
+    }
+
+    #[test]
+    fn fifty_move_rule_is_a_draw() {
+        let board = board_from("8/8/8/8/8/8/8/4K2k w - - 100 60");
+
+        assert_eq!(board.result(), GameResult::Draw);
+    }
+
+    #[test]
+    fn ongoing_position_is_unfinished() {
+        assert_eq!(Board::default().result(), GameResult::Unfinished);
     }
 }

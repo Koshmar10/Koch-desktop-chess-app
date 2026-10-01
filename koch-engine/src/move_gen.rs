@@ -173,7 +173,7 @@ impl Board {
     /// this is the board-wide snapshot consumers like the frontend render
     /// from, not something `move_piece` needs internally per move.
     pub fn refresh_legal_moves(&mut self) {
-        let pieces: Vec<ChessPiece> = self.squares.iter().flatten().flatten().copied().collect();
+        let pieces: Vec<ChessPiece> = self.pieces().copied().collect();
 
         for piece in pieces {
             let (quiet_moves, capture_moves) = self.get_legal_moves(&piece);
@@ -266,7 +266,7 @@ mod tests {
 
         board.refresh_legal_moves();
 
-        let piece_count = board.squares.iter().flatten().flatten().count();
+        let piece_count = board.pieces().count();
         assert_eq!(board.legal_moves.len(), piece_count);
     }
 }

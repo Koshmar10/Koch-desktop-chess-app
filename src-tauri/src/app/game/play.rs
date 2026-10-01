@@ -8,11 +8,13 @@ use tauri::{Emitter, Manager};
 
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
+use crate::app::rating::{self, GameScore};
 use crate::db::{
     self,
     services::{
         game::{GameService, SaveMeta},
         opening::OpeningService,
+        player_rating::PlayerRatingService,
     },
 };
 
@@ -25,10 +27,10 @@ use super::view::GameResult;
 const ENGINE_MOVETIME_MS: u64 = 1000;
 
 /// Records an already-legal move and its bookkeeping — clock deduction,
-/// checkmate/game-over check — shared between the human's move
-/// (`make_move`) and the engine's own reply (`spawn_engine_reply`), which
-/// both need exactly the same treatment once a move has been applied to
-/// the board. Returns whether this move ended the game.
+/// the game's result — shared between the human's move (`make_move`) and
+/// the engine's own reply (`spawn_engine_reply`), which both need exactly
+/// the same treatment once a move has been applied to the board. Returns
+/// whether this move ended the game.
 pub(super) fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> bool {
     game.move_list.push(mv);
 
@@ -50,20 +52,65 @@ pub(super) fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> 
     }
     game.turn_started_at = std::time::Instant::now();
 
-    let is_checkmate = game.board.is_checkmate();
-    let is_game_over = game.board.is_game_over();
+    // One call, one answer. This used to set a win on checkmate and then a
+    // draw on `is_game_over()` — which is also true on checkmate, so the
+    // draw always overwrote the win and every mate was saved as 1/2-1/2.
+    game.result = game.board.result();
+    game.result != GameResult::Unfinished
+}
 
-    if is_checkmate {
-        game.result = match game.board.turn {
-            PieceColor::White => GameResult::BlackWin,
-            PieceColor::Black => GameResult::WhiteWin,
+/// Applies the human's Elo change for a game that was just persisted for
+/// the first time (`GameService::save` returns `None` on a re-save, so
+/// this can't double-count). Best-effort: a rating write failing must not
+/// fail the move / end-game command, so errors are only logged.
+///
+/// Lives here with the other end-of-game mechanics because all three ways
+/// a game ends call it — `end_game`, the human's final move, and the
+/// engine's final move. The engine's path used to skip it, so a game the
+/// engine finished never changed the rating.
+pub(super) fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
+    let (human_elo, opponent_elo) = match game.human_color {
+        PieceColor::White => (game.white_player.elo, game.black_player.elo),
+        PieceColor::Black => (game.black_player.elo, game.white_player.elo),
+    };
+
+    let (score, reason) =
+        match (game.result, game.human_color) {
+            (GameResult::WhiteWin, PieceColor::White)
+            | (GameResult::BlackWin, PieceColor::Black) => (GameScore::Win, "game_win"),
+            (GameResult::WhiteWin, PieceColor::Black)
+            | (GameResult::BlackWin, PieceColor::White) => (GameScore::Loss, "game_loss"),
+            (GameResult::Draw, _) => (GameScore::Draw, "game_draw"),
+            // `save` only persists finished games, so this arm never runs.
+            (GameResult::Unfinished, _) => return,
         };
-    }
-    if is_game_over {
-        game.result = GameResult::Draw;
-    }
 
-    is_checkmate || is_game_over
+    let delta = rating::elo_delta(human_elo, opponent_elo, score);
+
+    let conn = match db.lock() {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("rating: db lock poisoned, skipping update: {e}");
+            return;
+        }
+    };
+    let service = PlayerRatingService::new(&conn);
+    let current = match service.current_rating(i64::from(rating::DEFAULT_RATING)) {
+        Ok(current) => current,
+        Err(e) => {
+            eprintln!("rating: could not read current rating: {e}");
+            return;
+        }
+    };
+    let new_rating = (current + i64::from(delta)).max(0);
+    if let Err(e) = service.record(
+        new_rating,
+        i64::from(delta),
+        reason,
+        Some(i64::from(game_id)),
+    ) {
+        eprintln!("rating: could not record change for game {game_id}: {e}");
+    }
 }
 
 /// Re-resolves `game.opening` against the moves played so far. Separate
@@ -157,6 +204,7 @@ pub(super) fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
             let game_id = GameService::new(&app.state::<db::Db>().lock().unwrap())
                 .save(&game, &SaveMeta::koch());
             if let Some(game_id) = game_id {
+                record_rating_for_finished_game(&app.state::<db::Db>(), &game, game_id);
                 analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
             }
             let _ = game.engine.quit().await;

@@ -1,7 +1,11 @@
 use crate::{
     board::BOARD_SIZE, move_gen::in_bounds, Board, ChessPiece, Direction, PieceType, Square,
 };
+use serde::Serialize;
+use ts_rs::TS;
 
+#[derive(Clone, Serialize, TS)]
+#[ts(export)]
 pub struct Pin {
     pub pin_target_id: u32,
     pub pinned_piece_id: u32,
@@ -124,10 +128,7 @@ impl Board {
     }
 
     pub fn get_all_pins(&self, hanging_squares: &[Square]) -> Vec<Pin> {
-        self.squares
-            .iter()
-            .flatten()
-            .flatten()
+        self.pieces()
             .flat_map(|piece| self.get_pins(piece, hanging_squares))
             .collect()
     }
@@ -136,7 +137,7 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::BoardAnalysis;
+    use crate::analyzer::position_findings::hanging_squares;
     use crate::fen::FenString;
 
     fn board_from(fen: &str) -> Board {
@@ -153,8 +154,8 @@ mod tests {
         let knight = board.squares[3][3].unwrap();
         let king = board.squares[3][0].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        let pins = board.get_pins(&rook, &analysis.hanging_squares);
+        let hanging_squares = hanging_squares(&board);
+        let pins = board.get_pins(&rook, &hanging_squares);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -173,8 +174,8 @@ mod tests {
         let knight = board.squares[5][5].unwrap();
         let queen = board.squares[6][5].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        let pins = board.get_pins(&rook, &analysis.hanging_squares);
+        let hanging_squares = hanging_squares(&board);
+        let pins = board.get_pins(&rook, &hanging_squares);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -197,8 +198,8 @@ mod tests {
         let queen = board.squares[4][0].unwrap();
         let rook_a8 = board.squares[0][0].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
-        let pins = board.get_pins(&rook_a1, &analysis.hanging_squares);
+        let hanging_squares = hanging_squares(&board);
+        let pins = board.get_pins(&rook_a1, &hanging_squares);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -230,9 +231,9 @@ mod tests {
         let e8_king = board.squares[0][4].unwrap();
         let e5_pawn = board.squares[3][4].unwrap();
 
-        let analysis = BoardAnalysis::from(&board);
+        let hanging_squares = hanging_squares(&board);
 
-        let queen_pins = board.get_pins(&queen, &analysis.hanging_squares);
+        let queen_pins = board.get_pins(&queen, &hanging_squares);
         assert_eq!(queen_pins.len(), 2);
         assert!(queen_pins
             .iter()
@@ -241,7 +242,7 @@ mod tests {
             .iter()
             .any(|pin| pin.pinned_piece_id == e5_pawn.id && pin.pin_target_id == bishop.id));
 
-        let bishop_pins = board.get_pins(&bishop, &analysis.hanging_squares);
+        let bishop_pins = board.get_pins(&bishop, &hanging_squares);
         assert!(bishop_pins.is_empty());
     }
 }

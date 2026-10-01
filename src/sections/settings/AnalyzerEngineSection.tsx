@@ -1,40 +1,18 @@
-import { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings"
-import { SearchLimitMode } from "../../api/bindings/SearchLimitMode"
-import { Section, SettingRow } from "./Section"
-import { NumberSetting, SelectSetting } from "./controls"
-import { MAX_THREADS } from "./constants"
-import { isDirty, useDraft, type SectionState } from "./draft"
+import { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings";
+import { SearchLimitMode } from "../../api/bindings/SearchLimitMode";
+import { Section, SettingRow } from "./Section";
+import { NumberSetting, SelectSetting } from "../../components/controls";
+import { MAX_THREADS } from "../../api/settings";
+import {
+  LABEL_TO_LIMIT_MODE,
+  LIMIT_BOUNDS,
+  LIMIT_DEFAULT_VALUE,
+  LIMIT_MODE_LABEL,
+  LIMIT_MODES,
+  limitValueLabel,
+} from "../../api/searchLimit";
+import { isDirty, useDraft, type SectionState } from "./draft";
 
-const LIMIT_MODES: SearchLimitMode[] = ["Depth", "MoveTime", "Nodes"]
-
-// The binding's variant names ↔ what the select shows.
-const LIMIT_MODE_LABEL: Record<SearchLimitMode, string> = {
-  Depth: "Depth",
-  MoveTime: "Move time",
-  Nodes: "Nodes",
-}
-const LABEL_TO_LIMIT_MODE: Record<string, SearchLimitMode> = {
-  Depth: "Depth",
-  "Move time": "MoveTime",
-  Nodes: "Nodes",
-}
-
-// UI-only bounds/defaults per limit mode: depth in plies, move time in ms,
-// nodes as a raw count — what the number field allows before the value
-// reaches the backend that runs the search.
-const LIMIT_BOUNDS: Record<
-  SearchLimitMode,
-  { min: number; max: number; step: number }
-> = {
-  Depth: { min: 1, max: 60, step: 1 },
-  MoveTime: { min: 100, max: 60_000, step: 100 },
-  Nodes: { min: 10_000, max: 100_000_000, step: 10_000 },
-}
-const LIMIT_DEFAULT_VALUE: Record<SearchLimitMode, number> = {
-  Depth: 20,
-  MoveTime: 2_000,
-  Nodes: 1_000_000,
-}
 const LIMIT_HINT: Record<SearchLimitMode, string> = {
   Depth:
     "Half-moves Stockfish looks ahead at each position. 20 is plenty for reviewing a game; every extra few plies can roughly double the run time for an accuracy gain you won't notice.",
@@ -42,19 +20,19 @@ const LIMIT_HINT: Record<SearchLimitMode, string> = {
     "Milliseconds spent on each position. At 2000 ms a 40-move game takes over a minute to analyse; 10000 ms pushes a single game past six minutes.",
   Nodes:
     "Search-tree positions visited per move. Machine-independent, so a run costs the same effort on any computer — but the wall-clock time still grows with the count.",
-}
+};
 
 export const AnalyzerEngineSection = ({
   saved,
   onSaved,
 }: SectionState<AnalyzerEngineSettings>) => {
-  const [draft, setDraft] = useDraft(saved)
+  const [draft, setDraft] = useDraft(saved);
 
   const patch = (next: Partial<AnalyzerEngineSettings>) =>
-    setDraft((current) => ({ ...current, ...next }))
+    setDraft((current) => ({ ...current, ...next }));
 
-  const mode = draft.search_limit.mode
-  const bounds = LIMIT_BOUNDS[mode]
+  const mode = draft.search_limit.mode;
+  const bounds = LIMIT_BOUNDS[mode];
 
   return (
     <Section
@@ -72,20 +50,17 @@ export const AnalyzerEngineSection = ({
           value={LIMIT_MODE_LABEL[mode]}
           options={LIMIT_MODES.map((m) => LIMIT_MODE_LABEL[m])}
           onChange={(label) => {
-            const nextMode = LABEL_TO_LIMIT_MODE[label]
+            const nextMode = LABEL_TO_LIMIT_MODE[label];
             patch({
               search_limit: {
                 mode: nextMode,
                 value: LIMIT_DEFAULT_VALUE[nextMode],
               },
-            })
+            });
           }}
         />
       </SettingRow>
-      <SettingRow
-        label={mode === "MoveTime" ? "Move time (ms)" : LIMIT_MODE_LABEL[mode]}
-        hint={LIMIT_HINT[mode]}
-      >
+      <SettingRow label={limitValueLabel(mode)} hint={LIMIT_HINT[mode]}>
         <NumberSetting
           value={draft.search_limit.value}
           onChange={(v) => patch({ search_limit: { mode, value: v } })}
@@ -129,5 +104,5 @@ export const AnalyzerEngineSection = ({
         />
       </SettingRow>
     </Section>
-  )
-}
+  );
+};

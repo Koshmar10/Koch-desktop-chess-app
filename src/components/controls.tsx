@@ -1,7 +1,7 @@
-import { useState } from "react"
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react"
-import Dropdown from "../../components/Dropdown"
-import { CONTROL_CLASS, TEXT_INPUT_CLASS } from "./constants"
+import { useState } from "react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import Dropdown from "./Dropdown";
+import { CONTROL_CLASS, TEXT_INPUT_CLASS } from "./controlStyles";
 
 // Masked by default with a reveal toggle — used for the OpenAI key, which
 // is a secret. Note: nothing here persists it yet; per the repo's rules a
@@ -12,11 +12,11 @@ export const SecretInput = ({
   onChange,
   placeholder,
 }: {
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
 }) => {
-  const [revealed, setRevealed] = useState(false)
+  const [revealed, setRevealed] = useState(false);
   return (
     <div className="flex w-full items-center gap-2">
       <input
@@ -37,8 +37,8 @@ export const SecretInput = ({
         {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
     </div>
-  )
-}
+  );
+};
 
 export const NumberSetting = ({
   value,
@@ -47,14 +47,14 @@ export const NumberSetting = ({
   max,
   step = 1,
 }: {
-  value: number
-  onChange: (value: number) => void
-  min?: number
-  max?: number
-  step?: number
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
 }) => {
   const clamped = (n: number) =>
-    Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n))
+    Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
   return (
     <div
       className={`${CONTROL_CLASS} flex w-28 items-stretch overflow-hidden p-0`}
@@ -91,39 +91,41 @@ export const NumberSetting = ({
         </button>
       </div>
     </div>
-  )
-}
+  );
+};
 
 export const ToggleSetting = ({
   checked,
   onChange,
 }: {
-  checked: boolean
-  onChange: (checked: boolean) => void
+  checked: boolean;
+  onChange: (checked: boolean) => void;
 }) => (
   <button
     type="button"
     role="switch"
     aria-checked={checked}
     onClick={() => onChange(!checked)}
-    className={`flex w-10 shrink-0 rounded-full p-0.5 transition-colors ${checked ? "bg-primary" : "bg-border"
-      }`}
+    className={`flex w-10 shrink-0 rounded-full p-0.5 transition-colors ${
+      checked ? "bg-primary" : "bg-border"
+    }`}
   >
     <span
-      className={`h-5 w-5 rounded-full bg-background transition-transform ${checked ? "translate-x-4" : ""
-        }`}
+      className={`h-5 w-5 rounded-full bg-background transition-transform ${
+        checked ? "translate-x-4" : ""
+      }`}
     />
   </button>
-)
+);
 
 export const SelectSetting = ({
   value,
   options,
   onChange,
 }: {
-  value: string
-  options: readonly string[]
-  onChange: (value: string) => void
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
 }) => (
   <Dropdown
     trigger={({ toggle }) => (
@@ -144,8 +146,8 @@ export const SelectSetting = ({
             key={option}
             type="button"
             onClick={() => {
-              onChange(option)
-              close()
+              onChange(option);
+              close();
             }}
             className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-border/60"
           >
@@ -156,4 +158,4 @@ export const SelectSetting = ({
       </div>
     )}
   </Dropdown>
-)
+);

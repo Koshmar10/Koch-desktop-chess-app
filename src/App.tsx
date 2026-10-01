@@ -4,7 +4,7 @@ import Sidebar from "./sections/sidebar/Sidebar";
 import Home from "./sections/home/Home";
 import Play from "./sections/play/Play";
 import { GameProvider } from "./sections/play/GameProvider";
-import Analysis from "./sections/Analysis";
+import Analyzer from "./sections/analyzer/Analyzer";
 import History from "./sections/history/History";
 import Puzzle from "./sections/Puzzle";
 import Settings from "./sections/settings/Settings";
@@ -24,7 +24,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/play" element={<Play />} />
-            <Route path="/analysis" element={<Analysis />} />
+            <Route path="/analysis" element={<Analyzer />} />
             <Route path="/history" element={<History />} />
             <Route path="/puzzle" element={<Puzzle />} />
             <Route path="/settings" element={<Settings />} />
