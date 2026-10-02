@@ -1,6 +1,6 @@
 import type { PositionFindings } from "../../../../api/bindings/PositionFindings";
 import { BOARD_SIZE } from "../../../../components/chessboard/lib/constants";
-import type { SquareTint } from "../../../../components/chessboard/lib/types";
+import type { SquareMark } from "../../../../components/chessboard/lib/types";
 
 export type ControlSide = "white" | "black" | "contested";
 
@@ -56,7 +56,7 @@ const alphaFor = (margin: number): number => {
 };
 
 /** Every covered square, coloured by who holds it and by how much. */
-export const controlTints = (findings: PositionFindings): SquareTint[] =>
+export const controlTints = (findings: PositionFindings): SquareMark[] =>
   findings.square_threats.flatMap((_, index) => {
     const control = controlOf(findings, index);
     if (!control) return [];

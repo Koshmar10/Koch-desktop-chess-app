@@ -30,6 +30,10 @@ const PIECE_ICON: Record<PieceKind, LucideIcon> = {
 // The piece sits inside its tile rather than filling it, so the tile
 // still reads as a piece of board and not as a cropped icon.
 const PIECE_ICON_RATIO = 2 / 3;
+// Lucide's pawn is drawn small inside its own box compared with the other
+// pieces, so at the shared ratio it read as a speck beside a knight. A
+// bigger share of the tile brings it up to the same visual weight.
+const PAWN_ICON_RATIO = 0.84;
 
 interface PieceAvatarProps {
   color: PieceColor;
@@ -55,7 +59,8 @@ export const PieceAvatar = ({
   title,
 }: PieceAvatarProps) => {
   const Icon = PIECE_ICON[kind];
-  const iconSize = size * PIECE_ICON_RATIO;
+  const iconSize =
+    size * (kind === "pawn" ? PAWN_ICON_RATIO : PIECE_ICON_RATIO);
 
   return (
     <div

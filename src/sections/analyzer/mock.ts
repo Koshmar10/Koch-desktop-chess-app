@@ -1,6 +1,8 @@
 import type { PlacedPiece } from "../../components/chessboard/lib/types";
 import type { GameSummary } from "../../api/bindings/GameSummary";
+import type { MoveQuality } from "../../api/bindings/MoveQuality";
 import type { PositionFindings } from "../../api/bindings/PositionFindings";
+import type { SideAccuracy } from "../../api/bindings/SideAccuracy";
 import type { EngineSnapshot } from "./types";
 
 /**
@@ -85,6 +87,40 @@ export const MOCK_MOVES: string[] = [
   "c3",
   "O-O",
 ];
+
+/**
+ * A grade for every move in MOCK_MOVES, both sides — the analysis grades
+ * both now. Illustrative: White's column is chosen to show every colour
+ * once, not a verdict on these moves (10.Re1 is no mistake).
+ */
+export const MOCK_QUALITIES: (MoveQuality | null)[] = [
+  "Brilliant", // e4
+  "Brilliant", // e5
+  "Great", // Nf3
+  "Great", // Nc6
+  "Excellent", // Bb5
+  "Good", // a6
+  "Good", // Ba4
+  "Excellent", // Nf6
+  "Inaccuracy", // O-O
+  "Great", // Be7
+  "Mistake", // Re1
+  "Inaccuracy", // b5
+  "Blunder", // Bb3
+  "Good", // d6
+  "Great", // c3
+  "Excellent", // O-O
+];
+
+/** Each side's accuracy over MOCK_MOVES, in line with the grades above. */
+export const MOCK_WHITE_ACCURACY: SideAccuracy = {
+  accuracy_percent: 78.4,
+  average_centipawn_loss: 41,
+};
+export const MOCK_BLACK_ACCURACY: SideAccuracy = {
+  accuracy_percent: 91.2,
+  average_centipawn_loss: 17,
+};
 
 /**
  * Remaining clock after each ply of MOCK_MOVES, from a 10-minute game.
@@ -275,6 +311,7 @@ export const MOCK_POSITION_FINDINGS: PositionFindings = {
   white_king_safety: {
     color: "white",
     score: 4,
+    danger: "Safe",
     shield_penalty: 0,
     storm_penalty: 4,
     attack_penalty: 0,
@@ -286,6 +323,7 @@ export const MOCK_POSITION_FINDINGS: PositionFindings = {
   black_king_safety: {
     color: "black",
     score: 22,
+    danger: "Uneasy",
     shield_penalty: 0,
     storm_penalty: 8,
     attack_penalty: 14,

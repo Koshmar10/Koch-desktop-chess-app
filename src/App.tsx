@@ -24,7 +24,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/play" element={<Play />} />
-            <Route path="/analysis" element={<Analyzer />} />
+            {/* No id is the sandbox; with one, a saved game to step through. */}
+            <Route path="/analysis/:gameId?" element={<Analyzer />} />
             <Route path="/history" element={<History />} />
             <Route path="/puzzle" element={<Puzzle />} />
             <Route path="/settings" element={<Settings />} />

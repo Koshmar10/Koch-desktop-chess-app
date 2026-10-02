@@ -1,25 +1,28 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
 import Chessboard from "../../components/chessboard/Chessboard";
 import Squares from "../../components/chessboard/layers/Squares";
 import PieceLayer from "../../components/chessboard/layers/PieceLayer";
 import ArrowLayer from "../../components/chessboard/layers/ArrowLayer";
-import HighlightLayer from "../../components/chessboard/layers/HighlightLayer";
+import OverlayLayer from "../../components/chessboard/layers/OverlayLayer";
+import BoardOverlay from "../../components/chessboard/layers/BoardOverlay";
+import { STARTING_POSITION } from "../../components/chessboard/lib/startingPosition";
 import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
-import { TONE_ARROW_COLOR } from "../../components/chessboard/lib/highlightTones";
-import type {
-  ArrowData,
-  HighlightTone,
-  SquareHighlight,
-} from "../../components/chessboard/lib/types";
-import { parseUciMove } from "../../components/chessboard/lib/uci";
 import SidePanel from "./panel/SidePanel";
 import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
 import PanelPlaceholder from "./PanelPlaceholder";
 import TimelinePlaceholder from "./board/TimelinePlaceholder";
 import EvalBar from "./board/EvalBar";
 import { topLineMove, topLineScore } from "./board/evalBar";
-import { controlTints } from "./panel/position/controlTint";
+import {
+  bestMoveMask,
+  ghosted,
+  positionMasks,
+  threatMask,
+} from "./overlays/masks";
+import { useGameReplay } from "./useGameReplay";
 import {
   MOCK_CLOCKS,
   MOCK_ENGINE_SNAPSHOT,
@@ -27,14 +30,16 @@ import {
   MOCK_MOVES,
   MOCK_PIECES,
   MOCK_POSITION_FINDINGS,
+  MOCK_BLACK_ACCURACY,
+  MOCK_QUALITIES,
+  MOCK_WHITE_ACCURACY,
   MOCK_THREAT_MOVE,
 } from "./mock";
 import {
-  NO_OVERLAYS_ACTIVE,
   START_POSITION_PLY,
-  type ActiveOverlays,
   type EngineStatus,
-  type Overlay,
+  type EvalScore,
+  type MaskSelection,
 } from "./types";
 
 const CHAT_PANEL_WIDTH_PX = 320;
@@ -43,82 +48,144 @@ const PLACEHOLDER_ICON_SIZE = 28;
 const clampPly = (ply: number, totalPlies: number): number =>
   Math.min(totalPlies - 1, Math.max(START_POSITION_PLY, ply));
 
-/** A UCI move as a board arrow, or nothing if there isn't a move to draw. */
-const moveArrow = (uci: string | null, tone: HighlightTone): ArrowData[] => {
-  const move = uci ? parseUciMove(uci) : null;
-  if (!move) return [];
-  return [
-    {
-      from: [move.from.rank, move.from.file],
-      to: [move.to.rank, move.to.file],
-      color: TONE_ARROW_COLOR[tone],
-      type: "engine",
-    },
-  ];
-};
+const GameLoadError = ({ message }: { message: string }) => (
+  <div className="max-w-sm rounded-lg border-[1px] border-destructive/50 bg-card p-4 text-sm text-foreground/80">
+    Couldn't load this game: {message}
+  </div>
+);
 
 /**
- * The Analyzer screen's layout, on mock data.
+ * The Analyzer screen, in one of two modes.
  *
- * Nothing here talks to the backend yet: KOCH-10 (the live engine session)
- * doesn't exist, so the lines come from `mock.ts` and the board sits on the
- * starting position. The point of landing the shell first is that KOCH-10
- * then has a concrete contract to satisfy — see `types.ts`.
+ * With a `gameId` it shows a saved game: every position, its findings and
+ * its stored analysis come from one backend replay (`load_game_replay`).
+ * Without one it's the sandbox, still on `mock.ts` until sandbox play
+ * (KOCH-12) exists. The live engine (KOCH-10) doesn't exist in either
+ * mode yet, so for a loaded game the engine panel stays empty rather than
+ * showing the sandbox's start-position lines beside a mid-game board.
  *
  * The local state below is deliberately the *whole* set, and it stays small
  * enough to read in one go. KOCH-11 replaces it with a reducer/context; the
  * thing being avoided is the old Analyzer.tsx, which grew to 27 independent
  * `useState` calls in one component (KOCH-HANDOFF.md §8).
  */
-const Analyzer = () => {
+const Analyzer = ({ gameId }: { gameId: number | null }) => {
+  const { replay, error, isLoading } = useGameReplay(gameId);
+  const isGameMode = gameId !== null;
+
   const [viewedPly, setViewedPly] = useState(START_POSITION_PLY);
   const [isFlipped, setIsFlipped] = useState(false);
-  // Whole-board overlays, as switches: what they draw is derived below on
-  // every render, so the best-move arrow follows the search as it deepens
-  // instead of freezing at whatever it was when you switched it on.
-  const [overlays, setOverlays] = useState<ActiveOverlays>(NO_OVERLAYS_ACTIVE);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("running");
   const [isChatOpen, setIsChatOpen] = useState(true);
-  // Lives here rather than in the panel because the board is the panel's
-  // sibling, not its child — the Position tab decides what to light up,
-  // the board draws it.
-  const [highlights, setHighlights] = useState<SquareHighlight[]>([]);
+  // What's on the board, by mask id. Lives here rather than in the panel
+  // because the board is the panel's sibling, not its child — the panel
+  // decides what to light up, the board draws it.
+  const [shownMasks, setShownMasks] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [previewMaskId, setPreviewMaskId] = useState<string | null>(null);
+
+  // ---- What's on screen: the loaded game's position, or the sandbox ----
+  // `positions[0]` is the start position, so the viewed ply is offset by
+  // one — ply -1 (before any move) is index 0.
+  const position = replay?.positions[viewedPly + 1] ?? null;
+  const moves = isGameMode
+    ? (replay?.positions.slice(1).map((p) => p.san ?? "") ?? [])
+    : MOCK_MOVES;
+  // While a game loads, an empty start position rather than the sandbox's
+  // mock — nothing on screen should claim to be the game before it is.
+  const pieces = isGameMode
+    ? (position?.pieces ?? STARTING_POSITION)
+    : MOCK_PIECES;
+  const findings = isGameMode
+    ? (position?.findings ?? null)
+    : MOCK_POSITION_FINDINGS;
+  const game = isGameMode ? (replay?.summary ?? null) : MOCK_GAME;
+  // Nothing stores remaining clocks per move yet, only each move's time.
+  const clocks = isGameMode ? undefined : MOCK_CLOCKS;
+  const qualities = isGameMode
+    ? replay?.positions.slice(1).map((p) => p.quality)
+    : MOCK_QUALITIES;
+  const whiteAccuracy = isGameMode
+    ? (replay?.white_accuracy ?? null)
+    : MOCK_WHITE_ACCURACY;
+  const blackAccuracy = isGameMode
+    ? (replay?.black_accuracy ?? null)
+    : MOCK_BLACK_ACCURACY;
 
   // Stopping the engine clears the lines rather than leaving stale ones on
-  // screen attributed to a search that's no longer happening.
-  const snapshot = engineStatus === "stopped" ? null : MOCK_ENGINE_SNAPSHOT;
-  // The threat comes from a second search (KOCH-14's flipped-turn probe),
-  // so it stops with the engine for the same reason.
-  const threatMove = engineStatus === "stopped" ? null : MOCK_THREAT_MOVE;
+  // screen attributed to a search that's no longer happening. The threat
+  // comes from a second search (KOCH-14's flipped-turn probe), so it stops
+  // with the engine for the same reason.
+  const isEngineShowing = !isGameMode && engineStatus !== "stopped";
+  const snapshot = isEngineShowing ? MOCK_ENGINE_SNAPSHOT : null;
+  const threatMove = isEngineShowing ? MOCK_THREAT_MOVE : null;
   const bestMove = topLineMove(snapshot?.lines);
 
-  const arrows = [
-    ...highlights.flatMap((highlight) => highlight.arrows ?? []),
-    ...(overlays.bestMove ? moveArrow(bestMove, "good") : []),
-    ...(overlays.threat ? moveArrow(threatMove, "danger") : []),
-  ];
-  const tints = overlays.control ? controlTints(MOCK_POSITION_FINDINGS) : [];
+  // A loaded game has a real eval for every analysed ply already — the
+  // one the analysis pass stored — so the bar shows that rather than
+  // waiting on a live engine. Null for the start position and for a game
+  // that hasn't been analysed.
+  const storedEval = position?.eval_cp ?? null;
+  const evalScore: EvalScore | null = isGameMode
+    ? storedEval === null
+      ? null
+      : { kind: "cp", centipawns: storedEval }
+    : topLineScore(snapshot?.lines);
 
-  // Anything drawn at all, for the toolbar's clear button.
-  const hasOverlays =
-    highlights.length > 0 || Object.values(overlays).some(Boolean);
+  // ---- What's drawn: everything switched on, plus the preview ----
+  // Every mask this ply could draw, rebuilt each render — so an id that's
+  // switched on follows the game, drawn on whichever plies its finding
+  // exists on. A preview of something already switched on adds nothing;
+  // anything else previewed is drawn ghosted, so "I'm looking at this"
+  // stays visibly different from "I left this on".
+  const drawnMasks = [
+    ...positionMasks(findings, pieces),
+    bestMoveMask(bestMove),
+    threatMask(threatMove),
+  ].flatMap((mask) => {
+    if (shownMasks.has(mask.id)) return [mask];
+    return mask.id === previewMaskId ? [ghosted(mask)] : [];
+  });
 
-  const goToPly = (ply: number) =>
-    setViewedPly(clampPly(ply, MOCK_MOVES.length));
+  // Anything switched on, for the toolbar's clear button — including ids
+  // with nothing to draw on this ply, which would otherwise be "on" with
+  // no way to clear them from here.
+  const hasOverlays = shownMasks.size > 0;
 
-  const toggleHighlight = (highlight: SquareHighlight) =>
-    setHighlights((shown) =>
-      shown.some((h) => h.id === highlight.id)
-        ? shown.filter((h) => h.id !== highlight.id)
-        : [...shown, highlight],
+  const goToPly = (ply: number) => {
+    const next = clampPly(ply, moves.length);
+    if (next === viewedPly) return;
+    setViewedPly(next);
+    // What's switched on stays on: it's ids, and the masks are rebuilt
+    // for the new ply. The preview goes, though — the row it came from
+    // may not exist on the new ply, and a row that unmounts under the
+    // pointer never gets its pointer-leave to clear it.
+    setPreviewMaskId(null);
+  };
+
+  // A click ends the preview it happened over: switching something on
+  // makes the preview redundant, and switching it off has to take it off
+  // the board now — not once the pointer happens to leave the row.
+  const toggleMask = (id: string) => {
+    setShownMasks((shown) =>
+      shown.has(id)
+        ? new Set([...shown].filter((shownId) => shownId !== id))
+        : new Set([...shown, id]),
     );
-
-  const toggleOverlay = (overlay: Overlay) =>
-    setOverlays((prev) => ({ ...prev, [overlay]: !prev[overlay] }));
+    setPreviewMaskId(null);
+  };
 
   const clearOverlays = () => {
-    setHighlights([]);
-    setOverlays(NO_OVERLAYS_ACTIVE);
+    setShownMasks(new Set());
+    setPreviewMaskId(null);
+  };
+
+  const maskSelection: MaskSelection = {
+    shown: shownMasks,
+    previewId: previewMaskId,
+    onToggle: toggleMask,
+    onPreview: setPreviewMaskId,
   };
 
   return (
@@ -139,7 +206,7 @@ const Analyzer = () => {
           >
             <AnalyzerToolbar
               viewedPly={viewedPly}
-              totalPlies={MOCK_MOVES.length}
+              totalPlies={moves.length}
               onGoToPly={goToPly}
               isFlipped={isFlipped}
               onFlip={() => setIsFlipped((flipped) => !flipped)}
@@ -150,48 +217,52 @@ const Analyzer = () => {
             />
 
             <div className="col-start-1 row-start-2">
-              <EvalBar
-                score={topLineScore(snapshot?.lines)}
-                isFlipped={isFlipped}
-              />
+              <EvalBar score={evalScore} isFlipped={isFlipped} />
             </div>
 
-            {/* The position MOCK_MOVES reaches, so the board, the move
-                count and the findings all describe the same chess. No
-                `onMove`, so it's read-only: sandbox play needs both colors
-                draggable, which `PieceLayer` gates on a single
+            {/* No `onMove`, so it's read-only: sandbox play needs both
+                colors draggable, which `PieceLayer` gates on a single
                 `humanColor` — that's KOCH-12's problem. */}
             <div className="col-start-2 row-start-2">
-              <Chessboard pieces={MOCK_PIECES} flipped={isFlipped}>
+              <Chessboard
+                pieces={pieces}
+                flipped={isFlipped}
+                lastMove={position?.last_move ?? null}
+              >
                 <Squares />
-                {/* Arrows are derived from whatever's lit rather than
-                    held separately: a finding switched off has to take
-                    its arrow with it, and two lists to keep in step is
-                    one more than is needed. */}
-                <HighlightLayer
-                  highlights={highlights}
-                  arrows={arrows}
-                  tints={tints}
-                />
+                <OverlayLayer masks={drawnMasks} />
                 <PieceLayer />
                 <ArrowLayer />
+                {isLoading && (
+                  <BoardOverlay>
+                    <LoadingSpinner message="Loading game…" />
+                  </BoardOverlay>
+                )}
+                {error && (
+                  <BoardOverlay>
+                    <GameLoadError message={error} />
+                  </BoardOverlay>
+                )}
               </Chessboard>
             </div>
 
             <div className="col-start-3 row-start-2">
               <SidePanel
-                game={MOCK_GAME}
-                moves={MOCK_MOVES}
-                clocks={MOCK_CLOCKS}
+                // A loaded game opens on its Game tab even though the
+                // summary hasn't arrived yet on the first render.
+                initialTab={isGameMode ? "game" : undefined}
+                game={game}
+                moves={moves}
+                clocks={clocks}
+                qualities={qualities}
+                whiteAccuracy={whiteAccuracy}
+                blackAccuracy={blackAccuracy}
                 viewedPly={viewedPly}
                 onSelectPly={goToPly}
                 snapshot={snapshot}
-                findings={MOCK_POSITION_FINDINGS}
-                pieces={MOCK_PIECES}
-                highlights={highlights}
-                onToggleHighlight={toggleHighlight}
-                overlays={overlays}
-                onToggleOverlay={toggleOverlay}
+                findings={findings}
+                pieces={pieces}
+                maskSelection={maskSelection}
                 bestMove={bestMove}
                 threatMove={threatMove}
                 engineStatus={engineStatus}
@@ -223,4 +294,17 @@ const Analyzer = () => {
   );
 };
 
-export default Analyzer;
+/**
+ * `/analysis` is the sandbox, `/analysis/:gameId` a saved game. Keyed by
+ * game, so opening a different one starts clean — back at the first ply,
+ * nothing left lit from the last game — instead of each piece of state
+ * needing its own reset.
+ */
+const AnalyzerRoute = () => {
+  const { gameId } = useParams();
+  const parsed = gameId === undefined ? null : Number(gameId);
+  const id = parsed !== null && Number.isInteger(parsed) ? parsed : null;
+  return <Analyzer key={id ?? "sandbox"} gameId={id} />;
+};
+
+export default AnalyzerRoute;

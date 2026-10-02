@@ -47,7 +47,18 @@ interface StatSection {
   stats: StatEntry[];
 }
 
-const buildAccuracySection = (analysis: GameAnalysis): StatSection => {
+// The analysis grades every move, both sides. This card is about your
+// game, so it reads only your moves — otherwise the opponent's blunders
+// would be counted as yours.
+const yourMoveQualities = (
+  analysis: GameAnalysis,
+  humanColor: PieceColor | null,
+) => analysis.move_qualities.filter((entry) => entry.mover === humanColor);
+
+const buildAccuracySection = (
+  analysis: GameAnalysis,
+  humanColor: PieceColor | null,
+): StatSection => {
   const counts: Record<MoveQuality, number> = {
     Brilliant: 0,
     Great: 0,
@@ -57,7 +68,7 @@ const buildAccuracySection = (analysis: GameAnalysis): StatSection => {
     Mistake: 0,
     Blunder: 0,
   };
-  for (const { quality } of analysis.move_qualities) {
+  for (const { quality } of yourMoveQualities(analysis, humanColor)) {
     counts[quality] += 1;
   }
 
@@ -104,7 +115,7 @@ const buildSummarySection = (
   moveHistory: string[],
   humanColor: PieceColor | null,
 ): StatSection => {
-  const worstMove = analysis.move_qualities.reduce<
+  const worstMove = yourMoveQualities(analysis, humanColor).reduce<
     (typeof analysis.move_qualities)[number] | null
   >(
     (worst, entry) =>
@@ -153,7 +164,7 @@ const PostGameStats = ({
   humanColor,
 }: PostGameStatsProps) => {
   const statSections = [
-    buildAccuracySection(analysis),
+    buildAccuracySection(analysis, humanColor),
     buildTimeSection(analysis),
     buildSummarySection(analysis, moveHistory, humanColor),
   ];

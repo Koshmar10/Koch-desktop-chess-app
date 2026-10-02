@@ -1,6 +1,8 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Target } from "lucide-react";
 import type { GameSummary } from "../../../../api/bindings/GameSummary";
+import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
 import type { PieceColor } from "../../../../api/bindings/PieceColor";
+import type { SideAccuracy } from "../../../../api/bindings/SideAccuracy";
 import { formatDatePlayed } from "../../../../api/gameSummary";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
 import PanelSection from "../PanelSection";
@@ -19,9 +21,13 @@ interface PlayerRowProps {
   // recorded side, or a game the engine played against itself — in which
   // case neither row gets marked rather than one being guessed.
   isHuman: boolean;
+  // This player's accuracy over the game. Null until it's analysed — or,
+  // for an analysis made before both sides were graded, until it's
+  // analysed again — in which case the row just doesn't show one.
+  accuracy: SideAccuracy | null;
 }
 
-const PlayerRow = ({ color, name, elo, isHuman }: PlayerRowProps) => (
+const PlayerRow = ({ color, name, elo, isHuman, accuracy }: PlayerRowProps) => (
   <div className="flex items-center gap-2">
     <PieceAvatar color={color} size={AVATAR_SIZE_PX} />
     <span className="truncate text-sm text-foreground/85">{name}</span>
@@ -33,6 +39,15 @@ const PlayerRow = ({ color, name, elo, isHuman }: PlayerRowProps) => (
     <span className="ml-auto shrink-0 text-sm tabular-nums text-foreground/50">
       {elo}
     </span>
+    {accuracy && (
+      <span
+        title={`Accuracy — average centipawn loss ${accuracy.average_centipawn_loss}`}
+        className="flex shrink-0 items-center gap-1 text-sm font-semibold tabular-nums text-foreground/85"
+      >
+        <Target size={13} className="text-primary" />
+        {accuracy.accuracy_percent.toFixed(1)}%
+      </span>
+    )}
   </div>
 );
 
@@ -47,8 +62,7 @@ const NoGame = () => (
   <div className="flex flex-1 flex-col items-center justify-center gap-2 px-2 text-center">
     <span className="text-sm text-foreground/50">No game loaded</span>
     <span className="text-xs text-foreground/35">
-      Sandbox analysis only. Opening a saved game from History arrives with
-      KOCH-12.
+      Open a saved game from History to step through it here.
     </span>
   </div>
 );
@@ -57,6 +71,9 @@ interface GamePanelProps {
   game: GameSummary | null;
   moves: string[];
   clocks?: (string | null)[];
+  qualities?: (MoveQuality | null)[];
+  whiteAccuracy: SideAccuracy | null;
+  blackAccuracy: SideAccuracy | null;
   viewedPly: number;
   onSelectPly: (ply: number) => void;
 }
@@ -72,6 +89,9 @@ const GamePanel = ({
   game,
   moves,
   clocks,
+  qualities,
+  whiteAccuracy,
+  blackAccuracy,
   viewedPly,
   onSelectPly,
 }: GamePanelProps) => {
@@ -88,12 +108,14 @@ const GamePanel = ({
           name={game.white_player}
           elo={game.white_elo}
           isHuman={game.human_color === "white"}
+          accuracy={whiteAccuracy}
         />
         <PlayerRow
           color="black"
           name={game.black_player}
           elo={game.black_elo}
           isHuman={game.human_color === "black"}
+          accuracy={blackAccuracy}
         />
       </PanelSection>
 
@@ -122,6 +144,7 @@ const GamePanel = ({
         <MoveTimeline
           moves={moves}
           clocks={clocks}
+          qualities={qualities}
           viewedPly={viewedPly}
           onSelectPly={onSelectPly}
         />

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use koch_engine::{PieceColor, PieceType, Square};
+use koch_engine::{ChessPiece, PieceColor, PieceType, Square};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -77,6 +77,17 @@ pub struct PieceView {
     pub kind: PieceType,
     pub color: PieceColor,
     pub square: Square,
+}
+
+impl From<&ChessPiece> for PieceView {
+    fn from(piece: &ChessPiece) -> Self {
+        PieceView {
+            id: piece.id,
+            kind: piece.kind,
+            color: piece.color,
+            square: piece.position,
+        }
+    }
 }
 
 /// The two squares of the most recently played move — for highlighting it

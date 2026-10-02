@@ -2,10 +2,17 @@ import { Flame, Lightbulb, MoveRight, type LucideIcon } from "lucide-react";
 import type { Square } from "../../../../api/bindings/Square";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import { parseUciMove } from "../../../../components/chessboard/lib/uci";
-import type { ActiveOverlays, Overlay } from "../../types";
-import EyeToggle from "../EyeToggle";
+import { maskId } from "../../overlays/masks";
+import type { MaskSelection } from "../../types";
+import EyeIndicator from "../EyeIndicator";
+import InteractiveRow from "../InteractiveRow";
 import PanelSection from "../PanelSection";
 import { IconLabel, PieceChip, TileChip } from "../chips";
+import {
+  HOVER_ROW_CLASS,
+  maskControls,
+  type RowControls,
+} from "../rowControls";
 
 interface MoveRowProps {
   icon: LucideIcon;
@@ -13,8 +20,7 @@ interface MoveRowProps {
   // UCI, e.g. "c6a5". Null until the engine has said anything.
   move: string | null;
   pieces: PlacedPiece[];
-  shown: boolean;
-  onToggle: () => void;
+  controls: RowControls;
 }
 
 /**
@@ -22,14 +28,7 @@ interface MoveRowProps {
  * arrow, and the square it lands on — then the eye that puts it on the
  * board.
  */
-const MoveRow = ({
-  icon,
-  title,
-  move,
-  pieces,
-  shown,
-  onToggle,
-}: MoveRowProps) => {
+const MoveRow = ({ icon, title, move, pieces, controls }: MoveRowProps) => {
   const squares = move ? parseUciMove(move) : null;
   const pieceAt = (square: Square) =>
     pieces.find(
@@ -39,7 +38,10 @@ const MoveRow = ({
 
   return (
     // Bottom padding is room for the square names hanging under the tiles.
-    <div className="flex items-center gap-2 pb-3.5">
+    <InteractiveRow
+      controls={controls}
+      className={`flex items-center gap-2 pt-1 pb-4 ${HOVER_ROW_CLASS}`}
+    >
       <IconLabel icon={icon} title={title} />
       {squares && mover ? (
         <>
@@ -50,21 +52,17 @@ const MoveRow = ({
           <TileChip square={squares.to} piece={pieceAt(squares.to)} />
         </>
       ) : (
-        // Toggling still works with nothing to show: the arrow appears
-        // as soon as the engine reports one, rather than the switch
+        // Switching it on still works with nothing to show: the arrow
+        // appears as soon as the engine reports one, rather than the row
         // refusing until then.
         <span className="text-xs text-foreground/35 italic">
           waiting for the engine
         </span>
       )}
       <span className="ml-auto">
-        <EyeToggle
-          shown={shown}
-          onToggle={onToggle}
-          label={title.toLowerCase()}
-        />
+        <EyeIndicator state={controls.state} />
       </span>
-    </div>
+    </InteractiveRow>
   );
 };
 
@@ -72,8 +70,7 @@ interface EngineOverlaysProps {
   bestMove: string | null;
   threatMove: string | null;
   pieces: PlacedPiece[];
-  overlays: ActiveOverlays;
-  onToggleOverlay: (overlay: Overlay) => void;
+  maskSelection: MaskSelection;
 }
 
 /**
@@ -86,8 +83,7 @@ const EngineOverlays = ({
   bestMove,
   threatMove,
   pieces,
-  overlays,
-  onToggleOverlay,
+  maskSelection,
 }: EngineOverlaysProps) => (
   <PanelSection title="Show on board" divided>
     <MoveRow
@@ -95,16 +91,14 @@ const EngineOverlays = ({
       title="Best move"
       move={bestMove}
       pieces={pieces}
-      shown={overlays.bestMove}
-      onToggle={() => onToggleOverlay("bestMove")}
+      controls={maskControls(maskId.bestMove, "the best move", maskSelection)}
     />
     <MoveRow
       icon={Flame}
       title="Main threat"
       move={threatMove}
       pieces={pieces}
-      shown={overlays.threat}
-      onToggle={() => onToggleOverlay("threat")}
+      controls={maskControls(maskId.threat, "the main threat", maskSelection)}
     />
   </PanelSection>
 );

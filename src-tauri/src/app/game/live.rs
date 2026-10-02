@@ -101,12 +101,7 @@ impl Game {
             .iter()
             .flatten()
             .flatten()
-            .map(|piece| PieceView {
-                id: piece.id,
-                kind: piece.kind,
-                color: piece.color,
-                square: piece.position,
-            })
+            .map(PieceView::from)
             .collect();
 
         let legal_moves = self

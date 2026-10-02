@@ -85,6 +85,37 @@ fn king_zone(king: Square) -> Vec<Square> {
         .collect()
 }
 
+// Danger bands, in the score's own units rather than picked numbers, so
+// retuning a penalty moves the bands with it. One shield hole on a
+// half-open file is where a king stops being simply safe; one on an open
+// file is where it's exposed; two of those is critical.
+const UNEASY_FROM: i32 = SHIELD_MISSING_PENALTY;
+const EXPOSED_FROM: i32 = SHIELD_MISSING_PENALTY * OPEN_FILE_SHIELD_MULTIPLIER;
+const CRITICAL_FROM: i32 = 2 * EXPOSED_FROM;
+
+/// How much trouble a king is in, as a band rather than a number. The raw
+/// score is an open-ended sum of three penalties, so "22" on its own says
+/// nothing to anyone who doesn't know the formula — "uneasy" does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub enum KingDanger {
+    Safe,
+    Uneasy,
+    Exposed,
+    Critical,
+}
+
+impl KingDanger {
+    fn from_score(score: i32) -> Self {
+        match score {
+            s if s >= CRITICAL_FROM => KingDanger::Critical,
+            s if s >= EXPOSED_FROM => KingDanger::Exposed,
+            s if s >= UNEASY_FROM => KingDanger::Uneasy,
+            _ => KingDanger::Safe,
+        }
+    }
+}
+
 /// Deterministic king-safety heuristic for one color's king. `score` is a
 /// danger magnitude - always >= 0, higher means less safe - not a signed
 /// eval contribution, so it needs no color-relative sign flip when reading
@@ -94,6 +125,9 @@ fn king_zone(king: Square) -> Vec<Square> {
 pub struct KingSafety {
     pub color: PieceColor,
     pub score: i32,
+    /// `score` read as a band — what to show, with the score itself as
+    /// the detail behind it.
+    pub danger: KingDanger,
     pub shield_penalty: i32,
     /// Capped at `STORM_PENALTY_CAP`, so once several pawns are bearing down
     /// this total is less than the sum of what each pawn in
@@ -181,9 +215,11 @@ impl Board {
         }
         let attack_penalty = ATTACK_UNIT_PENALTY[attack_units.min(ATTACK_UNIT_PENALTY.len() - 1)];
 
+        let score = shield_penalty + storm_penalty + attack_penalty;
         KingSafety {
             color,
-            score: shield_penalty + storm_penalty + attack_penalty,
+            score,
+            danger: KingDanger::from_score(score),
             shield_penalty,
             storm_penalty,
             attack_penalty,
@@ -338,5 +374,27 @@ mod tests {
 
         assert_eq!(white_safety.shield_penalty, 0);
         assert!(black_safety.shield_penalty > 0);
+    }
+
+    #[test]
+    fn danger_bands_follow_the_shield_penalty_units() {
+        // Each boundary is a shield hole's worth of score: below one hole is
+        // safe, one half-open hole is uneasy, one open-file hole exposed,
+        // two of those critical.
+        assert_eq!(KingDanger::from_score(0), KingDanger::Safe);
+        assert_eq!(KingDanger::from_score(UNEASY_FROM - 1), KingDanger::Safe);
+        assert_eq!(KingDanger::from_score(UNEASY_FROM), KingDanger::Uneasy);
+        assert_eq!(KingDanger::from_score(EXPOSED_FROM), KingDanger::Exposed);
+        assert_eq!(KingDanger::from_score(CRITICAL_FROM), KingDanger::Critical);
+        assert_eq!(KingDanger::from_score(500), KingDanger::Critical);
+    }
+
+    #[test]
+    fn a_king_with_its_shield_intact_is_safe() {
+        let board = board_from("6k1/5ppp/8/8/8/8/5PPP/6K1 w - - 0 1");
+        assert_eq!(
+            board.get_king_safety(PieceColor::White).danger,
+            KingDanger::Safe
+        );
     }
 }

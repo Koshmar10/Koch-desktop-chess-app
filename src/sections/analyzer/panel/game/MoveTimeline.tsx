@@ -1,16 +1,47 @@
+import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
+import { MOVE_QUALITY_COLOR } from "../../moveQuality";
 import { START_POSITION_PLY } from "../../types";
 
 const ROW_HEIGHT_CLASS = "h-7";
 
+/**
+ * A move's grade as a coloured dot. Ungraded moves — the opponent's, or
+ * any move of a game that hasn't been analysed — get an empty slot of the
+ * same width rather than nothing, so the move names stay in one straight
+ * line down each column.
+ */
+const QualityDot = ({ quality }: { quality: MoveQuality | null }) =>
+  quality === null ? (
+    <span className="h-2 w-2 shrink-0" />
+  ) : (
+    <span
+      role="img"
+      aria-label={quality}
+      title={quality}
+      className="h-2 w-2 shrink-0 rounded-full"
+      style={{ backgroundColor: MOVE_QUALITY_COLOR[quality] }}
+    />
+  );
+
 interface MoveCellProps {
   san: string | undefined;
   clock: string | null | undefined;
+  // Undefined when the list shows no grades at all; null for a move that
+  // simply has none.
+  quality: MoveQuality | null | undefined;
   ply: number;
   isViewed: boolean;
   onSelect: (ply: number) => void;
 }
 
-const MoveCell = ({ san, clock, ply, isViewed, onSelect }: MoveCellProps) => {
+const MoveCell = ({
+  san,
+  clock,
+  quality,
+  ply,
+  isViewed,
+  onSelect,
+}: MoveCellProps) => {
   // Black's column is short by one on an odd-length game. An empty cell
   // rather than nothing at all, so the two columns stay in step and the
   // numbers beside them keep lining up.
@@ -28,7 +59,10 @@ const MoveCell = ({ san, clock, ply, isViewed, onSelect }: MoveCellProps) => {
           : "text-foreground/80 hover:bg-primary/15"
       }`}
     >
-      <span>{san}</span>
+      <span className="flex items-center gap-1.5">
+        {quality !== undefined && <QualityDot quality={quality} />}
+        <span>{san}</span>
+      </span>
       {clock && (
         <span className="text-xs tabular-nums text-foreground/35">{clock}</span>
       )}
@@ -45,6 +79,12 @@ interface MoveTimelineProps {
    * the current backend carries them yet — the column simply disappears.
    */
   clocks?: (string | null)[];
+  /**
+   * Each move's grade, same indexing as `moves`. Optional, and mostly
+   * null even when present: only the human's moves of an analysed game
+   * are graded.
+   */
+  qualities?: (MoveQuality | null)[];
   viewedPly: number;
   onSelectPly: (ply: number) => void;
 }
@@ -58,12 +98,17 @@ interface MoveTimelineProps {
 const MoveTimeline = ({
   moves,
   clocks,
+  qualities,
   viewedPly,
   onSelectPly,
 }: MoveTimelineProps) => {
   if (moves.length === 0) {
     return <p className="text-xs text-foreground/40 italic">No moves yet</p>;
   }
+
+  // Grade slots only appear once there's at least one grade to show — an
+  // unanalysed game shouldn't carry a column of empty space for them.
+  const showsQualities = qualities?.some((q) => q !== null) ?? false;
 
   const moveNumbers = Array.from(
     { length: Math.ceil(moves.length / 2) },
@@ -92,6 +137,9 @@ const MoveTimeline = ({
                 key={ply}
                 san={moves[ply]}
                 clock={clocks?.[ply]}
+                quality={
+                  showsQualities ? (qualities?.[ply] ?? null) : undefined
+                }
                 ply={ply}
                 isViewed={viewedPly === ply && viewedPly !== START_POSITION_PLY}
                 onSelect={onSelectPly}

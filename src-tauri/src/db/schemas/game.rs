@@ -46,14 +46,19 @@ impl TryFrom<&Row<'_>> for Game {
     }
 }
 
-/// One `game_moves` row — only the fields known at save time (the
-/// analysis-derived `eval_cp` / `quality` / `centipawn_loss` are left
-/// out). Enough to replay a saved game through the analyzer.
+/// One `game_moves` row: the move itself, plus the two analysis-derived
+/// columns the analyzer shows per ply. Both stay `None` until the game has
+/// been analysed, and `quality` stays `None` for the engine's own moves
+/// even then — only the human's moves are graded.
 pub struct GameMoveRow {
     pub ply_number: u32,
     pub san: String,
     pub uci: String,
     pub time_ms: u32,
+    /// White-relative eval of the position after this move.
+    pub eval_cp: Option<i32>,
+    /// `MoveQuality`'s `Display` form, e.g. "blunder".
+    pub quality: Option<String>,
 }
 
 impl TryFrom<&Row<'_>> for GameMoveRow {
@@ -65,6 +70,8 @@ impl TryFrom<&Row<'_>> for GameMoveRow {
             san: row.get("san")?,
             uci: row.get("uci")?,
             time_ms: row.get("time_ms")?,
+            eval_cp: row.get("eval_cp")?,
+            quality: row.get("quality")?,
         })
     }
 }

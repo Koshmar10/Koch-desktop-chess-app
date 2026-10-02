@@ -3,17 +3,13 @@ import { Cpu, Search, Swords } from "lucide-react";
 import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
 import type { PlacedPiece } from "../../../components/chessboard/lib/types";
 import type { GameSummary } from "../../../api/bindings/GameSummary";
+import type { MoveQuality } from "../../../api/bindings/MoveQuality";
 import type { PositionFindings } from "../../../api/bindings/PositionFindings";
-import type { SquareHighlight } from "../../../components/chessboard/lib/types";
+import type { SideAccuracy } from "../../../api/bindings/SideAccuracy";
 import EngineTab from "./engine/EngineTab";
 import GamePanel from "./game/GamePanel";
 import PositionPanel from "./position/PositionPanel";
-import type {
-  ActiveOverlays,
-  EngineSnapshot,
-  EngineStatus,
-  Overlay,
-} from "../types";
+import type { EngineSnapshot, EngineStatus, MaskSelection } from "../types";
 
 const TAB_ICON_SIZE = 14;
 // Wider than the board's other neighbours because the Position tab holds
@@ -30,7 +26,7 @@ const PANEL_WIDTH_PX = 320;
  * the viewed ply changes. Interleaving those in one scroll means half the
  * panel is always flickering under the half you're reading.
  */
-type PanelTab = "game" | "position" | "engine";
+export type PanelTab = "game" | "position" | "engine";
 
 const TAB_OPTIONS: { tab: PanelTab; label: string; icon: React.ReactNode }[] = [
   { tab: "game", label: "Game", icon: <Swords size={TAB_ICON_SIZE} /> },
@@ -39,28 +35,38 @@ const TAB_OPTIONS: { tab: PanelTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 interface SidePanelProps {
+  // Which tab to open on. Left out, it's Game when there's a game and
+  // Engine when there isn't — but a game that's still loading has no
+  // summary yet, so the caller says so explicitly.
+  initialTab?: PanelTab;
   game: GameSummary | null;
   moves: string[];
   clocks?: (string | null)[];
+  qualities?: (MoveQuality | null)[];
+  whiteAccuracy: SideAccuracy | null;
+  blackAccuracy: SideAccuracy | null;
   viewedPly: number;
   onSelectPly: (ply: number) => void;
   snapshot: EngineSnapshot | null;
   engineStatus: EngineStatus;
   onToggleEngine: () => void;
-  findings: PositionFindings;
+  // Null while a game is still loading, or if it failed to.
+  findings: PositionFindings | null;
   pieces: PlacedPiece[];
-  highlights: SquareHighlight[];
-  onToggleHighlight: (highlight: SquareHighlight) => void;
-  overlays: ActiveOverlays;
-  onToggleOverlay: (overlay: Overlay) => void;
+  // What's on the board, shared by the Position and Engine tabs' rows.
+  maskSelection: MaskSelection;
   bestMove: string | null;
   threatMove: string | null;
 }
 
 const SidePanel = ({
+  initialTab,
   game,
   moves,
   clocks,
+  qualities,
+  whiteAccuracy,
+  blackAccuracy,
   viewedPly,
   onSelectPly,
   snapshot,
@@ -68,10 +74,7 @@ const SidePanel = ({
   onToggleEngine,
   findings,
   pieces,
-  highlights,
-  onToggleHighlight,
-  overlays,
-  onToggleOverlay,
+  maskSelection,
   bestMove,
   threatMove,
 }: SidePanelProps) => {
@@ -81,7 +84,9 @@ const SidePanel = ({
   //
   // Opens on Game when there's a game to show and Engine otherwise, so
   // sandbox mode never lands you on the one tab that has nothing in it.
-  const [tab, setTab] = useState<PanelTab>(game === null ? "engine" : "game");
+  const [tab, setTab] = useState<PanelTab>(
+    initialTab ?? (game === null ? "engine" : "game"),
+  );
 
   return (
     <div
@@ -124,6 +129,9 @@ const SidePanel = ({
             game={game}
             moves={moves}
             clocks={clocks}
+            qualities={qualities}
+            whiteAccuracy={whiteAccuracy}
+            blackAccuracy={blackAccuracy}
             viewedPly={viewedPly}
             onSelectPly={onSelectPly}
           />
@@ -132,10 +140,7 @@ const SidePanel = ({
           <PositionPanel
             findings={findings}
             pieces={pieces}
-            highlights={highlights}
-            onToggleHighlight={onToggleHighlight}
-            showControl={overlays.control}
-            onToggleControl={() => onToggleOverlay("control")}
+            maskSelection={maskSelection}
           />
         )}
         {tab === "engine" && (
@@ -146,8 +151,7 @@ const SidePanel = ({
             bestMove={bestMove}
             threatMove={threatMove}
             pieces={pieces}
-            overlays={overlays}
-            onToggleOverlay={onToggleOverlay}
+            maskSelection={maskSelection}
           />
         )}
       </div>

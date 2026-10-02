@@ -48,6 +48,24 @@ impl MoveQuality {
     }
 }
 
+impl MoveQuality {
+    /// The inverse of `Display` — how a quality stored in `game_moves`
+    /// comes back out. `None` for anything else rather than a default, so
+    /// a corrupted value shows as ungraded instead of as a wrong grade.
+    pub fn parse(stored: &str) -> Option<MoveQuality> {
+        match stored {
+            "brilliant" => Some(MoveQuality::Brilliant),
+            "great" => Some(MoveQuality::Great),
+            "excellent" => Some(MoveQuality::Excellent),
+            "good" => Some(MoveQuality::Good),
+            "inaccuracy" => Some(MoveQuality::Inaccuracy),
+            "mistake" => Some(MoveQuality::Mistake),
+            "blunder" => Some(MoveQuality::Blunder),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for MoveQuality {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -67,8 +85,107 @@ impl std::fmt::Display for MoveQuality {
 #[ts(export)]
 pub struct MoveQualityEntry {
     pub ply_number: u32,
+    /// Whose move this was. Every move is graded now, so anything about
+    /// one player — "your blunders", "your worst move" — has to filter on
+    /// this rather than assume the list is theirs.
+    pub mover: PieceColor,
     pub quality: MoveQuality,
     pub centipawn_loss: u32,
+}
+
+/// One side's accuracy over a game.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct SideAccuracy {
+    /// Win%-based accuracy, averaged per move — see `GameAnalysis`.
+    pub accuracy_percent: f32,
+    pub average_centipawn_loss: u32,
+}
+
+/// Every move graded from the evals around it, with each side's totals.
+struct GradedMoves {
+    entries: Vec<MoveQualityEntry>,
+    white: SideAccuracy,
+    black: SideAccuracy,
+}
+
+/// Accumulates one side's per-move figures into its `SideAccuracy`.
+#[derive(Default)]
+struct SideTotals {
+    accuracy_sum: f64,
+    loss_sum: u64,
+    moves: u32,
+}
+
+impl SideTotals {
+    fn add(&mut self, accuracy: f64, loss: i32) {
+        self.accuracy_sum += accuracy;
+        self.loss_sum += loss as u64;
+        self.moves += 1;
+    }
+
+    /// A side that made no moves (a game that ended before its first) is
+    /// reported as perfect rather than zero, as before.
+    fn finish(&self) -> SideAccuracy {
+        if self.moves == 0 {
+            return SideAccuracy {
+                accuracy_percent: 100.0,
+                average_centipawn_loss: 0,
+            };
+        }
+        SideAccuracy {
+            accuracy_percent: (self.accuracy_sum / f64::from(self.moves)) as f32,
+            average_centipawn_loss: (self.loss_sum / u64::from(self.moves)) as u32,
+        }
+    }
+}
+
+/// Grades every move of a game from the evals before and after it.
+///
+/// `evals[i]` is the eval after `i` plies from the point of view of the
+/// side to move then (UCI's convention), so `evals[0]` is the start
+/// position with White to move. Both sides are graded: a game between two
+/// people has no "engine side" to skip, and the opponent's moves are
+/// worth reading even when it was the engine.
+fn grade_moves(evals: &[i32]) -> GradedMoves {
+    let mut entries = Vec::with_capacity(evals.len().saturating_sub(1));
+    let mut white = SideTotals::default();
+    let mut black = SideTotals::default();
+
+    for (idx, pair) in evals.windows(2).enumerate() {
+        let ply_number = (idx + 1) as u32;
+        let mover = if ply_number % 2 == 1 {
+            PieceColor::White
+        } else {
+            PieceColor::Black
+        };
+
+        // `before` is already from the mover's perspective (their turn to
+        // move); `after` needs negating since the next eval is from the
+        // opponent's perspective (their turn now).
+        let before = pair[0];
+        let after = -pair[1];
+        let loss = (before - after).max(0);
+        let accuracy =
+            move_accuracy_percent(expected_win_percent(before), expected_win_percent(after));
+
+        match mover {
+            PieceColor::White => white.add(accuracy, loss),
+            PieceColor::Black => black.add(accuracy, loss),
+        }
+        entries.push(MoveQualityEntry {
+            ply_number,
+            mover,
+            quality: MoveQuality::from_centipawn_loss(loss),
+            centipawn_loss: loss as u32,
+        });
+    }
+
+    GradedMoves {
+        entries,
+        white: white.finish(),
+        black: black.finish(),
+    }
 }
 
 #[derive(Clone, Serialize, TS)]
@@ -77,9 +194,16 @@ pub struct GameAnalysis {
     /// Win%-based accuracy, averaged per move — the same curve Lichess's
     /// accuracy model uses. A move that costs no win% scores ~100, a
     /// game-losing blunder approaches 0.
+    ///
+    /// These two are the human's side only — the same numbers as `white`
+    /// or `black` for that colour — because they feed what's about *you*:
+    /// the post-game card and your average accuracy across games.
     pub accuracy_percent: f32,
     pub average_centipawn_loss: u32,
-    /// Only the human's moves — grading the engine's own moves isn't useful.
+    /// Each side's own accuracy, for comparing the two players.
+    pub white: SideAccuracy,
+    pub black: SideAccuracy,
+    /// Every move, both sides; `mover` on each entry says whose.
     pub move_qualities: Vec<MoveQualityEntry>,
     /// Eval after every ply (index 0 is the start position), always from
     /// White's perspective so the frontend can plot it directly without
@@ -194,38 +318,11 @@ pub async fn run_analysis(
         .map(|(i, &cp)| if i % 2 == 0 { cp } else { -cp })
         .collect();
 
-    let mut move_qualities = Vec::new();
-    let mut total_loss: u64 = 0;
-    let mut total_accuracy = 0.0_f64;
-    let mut scored_moves: u32 = 0;
-
-    for idx in 0..move_list.len() {
-        let ply_number = (idx + 1) as u32;
-        let mover = if ply_number % 2 == 1 {
-            PieceColor::White
-        } else {
-            PieceColor::Black
-        };
-
-        if mover == analysis_job.human_color {
-            // `before` is already from the mover's perspective (their turn
-            // to move); `after` needs negating since evals[idx + 1] is from
-            // the opponent's perspective (their turn now).
-            let before = evals[idx];
-            let after = -evals[idx + 1];
-            let loss = (before - after).max(0);
-
-            total_loss += loss as u64;
-            total_accuracy +=
-                move_accuracy_percent(expected_win_percent(before), expected_win_percent(after));
-            scored_moves += 1;
-            move_qualities.push(MoveQualityEntry {
-                ply_number,
-                quality: MoveQuality::from_centipawn_loss(loss),
-                centipawn_loss: loss as u32,
-            });
-        }
-    }
+    let graded = grade_moves(&evals);
+    let human = match analysis_job.human_color {
+        PieceColor::White => graded.white,
+        PieceColor::Black => graded.black,
+    };
 
     let time_stats = TimeStats::from_move_times(
         analysis_job.human_color,
@@ -234,17 +331,11 @@ pub async fn run_analysis(
     );
 
     Ok(GameAnalysis {
-        accuracy_percent: if scored_moves > 0 {
-            (total_accuracy / scored_moves as f64) as f32
-        } else {
-            100.0
-        },
-        average_centipawn_loss: if scored_moves > 0 {
-            (total_loss / scored_moves as u64) as u32
-        } else {
-            0
-        },
-        move_qualities,
+        accuracy_percent: human.accuracy_percent,
+        average_centipawn_loss: human.average_centipawn_loss,
+        white: graded.white,
+        black: graded.black,
+        move_qualities: graded.entries,
         centipawn_history,
         average_move_time_ms: time_stats.average_move_time_ms,
         longest_think_ms: time_stats.longest_think_ms,
@@ -254,4 +345,81 @@ pub async fn run_analysis(
         total_duration_ms: time_stats.total_duration_ms,
         position_findings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `Display` writes a quality into `game_moves`, `parse` reads it back.
+    // If one is renamed without the other, every stored grade silently
+    // loads as ungraded — this keeps the two in step.
+    #[test]
+    fn every_quality_round_trips_through_its_stored_form() {
+        let all = [
+            MoveQuality::Brilliant,
+            MoveQuality::Great,
+            MoveQuality::Excellent,
+            MoveQuality::Good,
+            MoveQuality::Inaccuracy,
+            MoveQuality::Mistake,
+            MoveQuality::Blunder,
+        ];
+        for quality in all {
+            let stored = quality.to_string();
+            let parsed = MoveQuality::parse(&stored).map(|q| q.to_string());
+            assert_eq!(parsed.as_deref(), Some(stored.as_str()));
+        }
+    }
+
+    #[test]
+    fn both_sides_moves_are_graded_and_attributed() {
+        // evals after 0..=4 plies, each from the side to move's view.
+        let graded = grade_moves(&[20, -20, 30, -30, 40]);
+
+        let movers: Vec<PieceColor> = graded.entries.iter().map(|e| e.mover).collect();
+        assert_eq!(
+            movers,
+            vec![
+                PieceColor::White,
+                PieceColor::Black,
+                PieceColor::White,
+                PieceColor::Black
+            ]
+        );
+    }
+
+    #[test]
+    fn a_blunder_counts_against_only_the_side_that_made_it() {
+        // White keeps a steady +0.20. Black's second move drops Black from
+        // -0.20 to -3.00 (an eval of +300 for White, who's to move after).
+        let graded = grade_moves(&[20, -20, 20, -20, 300]);
+
+        let black_blunder = &graded.entries[3];
+        assert_eq!(black_blunder.mover, PieceColor::Black);
+        assert_eq!(black_blunder.centipawn_loss, 280);
+        assert_eq!(black_blunder.quality.to_string(), "blunder");
+
+        // White never lost anything, so Black's mistake doesn't drag
+        // White's accuracy down with it.
+        assert_eq!(graded.white.average_centipawn_loss, 0);
+        assert!(graded.black.average_centipawn_loss > 0);
+        assert!(graded.white.accuracy_percent > graded.black.accuracy_percent);
+    }
+
+    #[test]
+    fn a_side_with_no_moves_reads_as_perfect() {
+        // Only the start position: nobody has moved.
+        let graded = grade_moves(&[20]);
+
+        assert!(graded.entries.is_empty());
+        assert_eq!(graded.white.average_centipawn_loss, 0);
+        assert_eq!(graded.white.accuracy_percent, 100.0);
+    }
+
+    #[test]
+    fn unknown_stored_quality_is_ungraded() {
+        assert!(MoveQuality::parse("superb").is_none());
+        assert!(MoveQuality::parse("").is_none());
+    }
 }

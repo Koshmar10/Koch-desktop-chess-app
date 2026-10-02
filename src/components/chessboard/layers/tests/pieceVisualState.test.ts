@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { getPieceVisualState } from "../pieceVisualState";
+import {
+  BOARD_OVERLAY_Z_INDEX,
+  DRAGGED_PIECE_Z_INDEX,
+  LEGAL_MOVE_MARKER_Z_INDEX,
+  OVERLAY_ARROWS_Z_INDEX,
+} from "../../lib/zIndex";
 
 const SQUARE_SIZE = 72;
 
@@ -34,6 +40,7 @@ describe("getPieceVisualState", () => {
 
     expect(className).toContain("pointer-events-none");
     expect(style).toMatchObject({
+      zIndex: DRAGGED_PIECE_Z_INDEX,
       left: dragPosition.x - SQUARE_SIZE / 2,
       top: dragPosition.y - SQUARE_SIZE / 2,
       width: SQUARE_SIZE * 1.1,
@@ -48,5 +55,16 @@ describe("getPieceVisualState", () => {
       gridRowStart: 4,
       gridColumnStart: 6,
     });
+  });
+});
+
+describe("board stacking order", () => {
+  // The constants only mean something relative to each other. Retuning one
+  // number without the others is exactly how a dragged piece ends up
+  // passing under an arrow, so the order itself is what's pinned here.
+  it("raises each layer above the one it's meant to cover", () => {
+    expect(OVERLAY_ARROWS_Z_INDEX).toBeGreaterThan(LEGAL_MOVE_MARKER_Z_INDEX);
+    expect(DRAGGED_PIECE_Z_INDEX).toBeGreaterThan(OVERLAY_ARROWS_Z_INDEX);
+    expect(BOARD_OVERLAY_Z_INDEX).toBeGreaterThan(DRAGGED_PIECE_Z_INDEX);
   });
 });

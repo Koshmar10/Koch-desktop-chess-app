@@ -1,4 +1,4 @@
-use crate::{Board, ChessPiece, Square};
+use crate::{Board, ChessPiece, PieceType};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -10,74 +10,92 @@ const MIN_FORKED_PIECES: usize = 2;
 #[ts(export)]
 pub struct Fork {
     pub forker_id: u32,
+    /// Only the targets the fork actually threatens: the king if it's in
+    /// check, plus every piece the forker's side would win material by
+    /// capturing. A protected piece that would cost more than it gains
+    /// isn't forked, however many pieces attack it.
     pub forked_ids: Vec<u32>,
 }
 
 impl Fork {
-    /// Net material the fork can realistically win: the opponent saves
-    /// whichever forked piece is worth most and lets the rest go, so this
-    /// is the single best target's value minus the forker's, not the sum
-    /// of everything forked. A forked piece that's already hanging counts
-    /// for its material value plus the forker's - it's not just a good
-    /// trade, it's closer to a guaranteed free capture, so a hanging piece
-    /// can outweigh a defended one worth more on paper.
-    pub fn fork_value(&self, board: &Board, hanging_squares: &[Square]) -> i32 {
-        let forker = board.piece_by_id(self.forker_id).unwrap();
-        let forker_value = Board::material_value(forker.kind) as i32;
-
-        let best_target_value = self
+    /// Net material the fork wins, in pawns.
+    ///
+    /// The opponent answers a fork by saving the piece that matters most,
+    /// so the fork wins the *second*-best target, not the best. A check is
+    /// different: it has to be answered by the king, so the best piece
+    /// alongside it is the one that falls.
+    ///
+    /// Each target's gain is judged in the position as it stands, so this
+    /// is a floor — if saving one target also leaves the other undefended,
+    /// the fork wins more than this.
+    pub fn fork_value(&self, board: &Board) -> i32 {
+        let Some(forker) = board.piece_by_id(self.forker_id) else {
+            return 0;
+        };
+        let targets: Vec<ChessPiece> = self
             .forked_ids
             .iter()
-            .map(|&id| {
-                let piece = board.piece_by_id(id).unwrap();
-                let value = Board::material_value(piece.kind) as i32;
+            .filter_map(|&id| board.piece_by_id(id))
+            .collect();
 
-                if hanging_squares.contains(&piece.position) {
-                    value + forker_value
-                } else {
-                    value
-                }
-            })
-            .max()
-            .unwrap_or(0);
+        let gives_check = targets.iter().any(|t| t.kind == PieceType::King);
+        let mut gains: Vec<i32> = targets
+            .iter()
+            .filter(|t| t.kind != PieceType::King)
+            .map(|t| board.see(t.position, forker.color))
+            .collect();
+        gains.sort_unstable_by(|a, b| b.cmp(a));
 
-        best_target_value - forker_value
+        let won_index = if gives_check { 0 } else { 1 };
+        gains.get(won_index).copied().unwrap_or(0)
     }
 }
 
 impl Board {
-    pub fn is_fork_valid(&self, fork: &Fork, hanging_squares: &[Square]) -> bool {
-        // If the forker itself is hanging, the opponent just takes it for
-        // free and the "fork" never actually costs them anything.
-        let forker = self.piece_by_id(fork.forker_id).unwrap();
-        if hanging_squares.contains(&forker.position) {
-            return false;
-        }
-
-        // A fork that doesn't net any material isn't worth flagging.
-        fork.fork_value(self, hanging_squares) > 0
+    /// The pieces `forker` genuinely threatens: the enemy king if it's
+    /// attacking it, and every other enemy piece it could legally capture
+    /// at a profit for its side.
+    fn fork_targets(&self, forker: &ChessPiece) -> Vec<ChessPiece> {
+        self.get_attack_squares(forker)
+            .into_iter()
+            .filter_map(|square| self.squares[square.rank][square.file])
+            .filter(|target| target.color != forker.color)
+            .filter(|target| {
+                if target.kind == PieceType::King {
+                    return true;
+                }
+                // A capture the forker can't legally make (it's pinned)
+                // isn't a threat, and neither is one that loses material.
+                self.is_move_safe(forker, target.position)
+                    && self.see(target.position, forker.color) > 0
+            })
+            .collect()
     }
 
-    pub fn get_fork(&self, piece: &ChessPiece, hanging_squares: &[Square]) -> Option<Fork> {
-        let (_, capture_moves) = self.get_legal_moves(piece);
-        if capture_moves.len() < MIN_FORKED_PIECES {
+    pub fn get_fork(&self, forker: &ChessPiece) -> Option<Fork> {
+        // A forker the opponent can simply win doesn't get to collect on
+        // either threat — they take it instead of answering the fork.
+        if self.see(forker.position, forker.color.opposite()) > 0 {
             return None;
         }
 
-        let fork = Fork {
-            forker_id: piece.id,
-            forked_ids: capture_moves
-                .iter()
-                .map(|square| self.squares[square.rank][square.file].unwrap().id)
-                .collect(),
-        };
+        let targets = self.fork_targets(forker);
+        let gives_check = targets.iter().any(|t| t.kind == PieceType::King);
+        let winnable = targets.iter().filter(|t| t.kind != PieceType::King).count();
 
-        self.is_fork_valid(&fork, hanging_squares).then_some(fork)
+        // A check plus one winnable piece is a fork (the king must move,
+        // the piece falls); otherwise it takes two winnable pieces.
+        let is_fork = winnable >= MIN_FORKED_PIECES || (gives_check && winnable >= 1);
+        is_fork.then(|| Fork {
+            forker_id: forker.id,
+            forked_ids: targets.iter().map(|t| t.id).collect(),
+        })
     }
 
-    pub fn get_all_forks(&self, hanging_squares: &[Square]) -> Vec<Fork> {
+    /// Every fork on the board, for both sides.
+    pub fn get_all_forks(&self) -> Vec<Fork> {
         self.pieces()
-            .filter_map(|piece| self.get_fork(piece, hanging_squares))
+            .filter_map(|piece| self.get_fork(piece))
             .collect()
     }
 }
@@ -85,7 +103,6 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::position_findings::hanging_squares;
     use crate::fen::FenString;
 
     fn board_from(fen: &str) -> Board {
@@ -94,161 +111,156 @@ mod tests {
 
     #[test]
     fn knight_forks_queen_and_rook() {
-        // White knight e5 simultaneously attacks the rook on d7 and the
-        // queen on f7 - both are legal knight-move captures, so this is a
-        // fork.
-        let board = board_from("8/3r1q2/8/4N3/8/8/8/8 w - - 0 1");
+        // White knight e5 hits the rook d7 and the queen f7, which defend
+        // each other along rank 7. Each is still worth taking with a knight
+        // (queen: 9 - 3 = 6, rook: 5 - 3 = 2), so it's a fork.
+        let board = board_from("8/3r1q2/8/4N3/8/8/8/8 b - - 0 1");
         let knight = board.squares[3][4].unwrap();
         let rook = board.squares[1][3].unwrap();
         let queen = board.squares[1][5].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        let fork = board.get_fork(&knight, &hanging_squares).unwrap();
+        let fork = board.get_fork(&knight).unwrap();
 
         assert_eq!(fork.forker_id, knight.id);
         assert_eq!(fork.forked_ids.len(), 2);
         assert!(fork.forked_ids.contains(&rook.id));
         assert!(fork.forked_ids.contains(&queen.id));
 
-        // Best target is the queen (9) - the rook (5) gets left behind.
-        // 9 - knight (3) = 6. Neither target is hanging here (each defends
-        // the other along rank 7), so no boost applies either way.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 6);
+        // Black saves the queen; the knight takes the defended rook for 2.
+        assert_eq!(fork.fork_value(&board), 2);
     }
 
     #[test]
-    fn hanging_forked_piece_can_outweigh_a_defended_one_of_higher_raw_value() {
-        // White knight e5 forks the rook on d7 (defended by the bishop on
-        // c8, raw value 5) and the bishop on c4 (undefended, raw value 3).
-        // Since fork_value only credits the single best target - not both -
-        // this checks that the hanging bishop's boosted value
-        // (3 + knight's 3 = 6) can outrank the defended rook's higher raw
-        // value (5), not just add on top of it.
-        let board = board_from("2b5/3r4/8/4N3/2b5/8/8/8 w - - 0 1");
+    fn a_defended_target_still_counts_when_worth_more_than_the_forker() {
+        // Knight e5 hits the rook d7 (defended by the c8 bishop) and the
+        // undefended bishop c4. Taking the rook still nets 5 - 3 = 2.
+        let board = board_from("2b5/3r4/8/4N3/2b5/8/8/8 b - - 0 1");
         let knight = board.squares[3][4].unwrap();
-        let rook = board.squares[1][3].unwrap();
-        let bishop_c4 = board.squares[4][2].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        assert!(!hanging_squares.contains(&rook.position));
-        assert!(hanging_squares.contains(&bishop_c4.position));
+        let fork = board.get_fork(&knight).unwrap();
 
-        let fork = board.get_fork(&knight, &hanging_squares).unwrap();
+        assert_eq!(fork.forked_ids.len(), 2);
+        // Black saves the bishop (worth 3 to White); the rook nets 2.
+        assert_eq!(fork.fork_value(&board), 2);
+    }
 
-        // Best target: bishop (3 + knight's 3 = 6, hanging) beats the
-        // defended rook (5). 6 - knight (3) = 3.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
+    #[test]
+    fn protected_targets_of_equal_value_are_not_forked() {
+        // Knight d5 attacks the bishops c7 and e7, both defended by the king
+        // d8. Knight for bishop is an even trade either way, so nothing is
+        // threatened — this used to come back as a fork.
+        let board = board_from("3k4/2b1b3/8/3N4/8/8/8/8 b - - 0 1");
+        let knight = board.squares[3][3].unwrap();
+
+        assert!(board.get_fork(&knight).is_none());
+    }
+
+    #[test]
+    fn one_protected_and_one_loose_target_is_not_a_fork() {
+        // Rook e1 attacks the knight e5 (defended by the a1 bishop) and the
+        // bishop a1 itself. Rook-for-knight loses material, so only the
+        // bishop is threatened — that's a hanging piece, not a fork.
+        let board = board_from("8/8/8/4n3/8/8/8/b3R3 b - - 0 1");
+        let rook = board.squares[7][4].unwrap();
+
+        assert!(board.get_fork(&rook).is_none());
+    }
+
+    #[test]
+    fn rook_forks_along_rank_and_file() {
+        // Rook e1 attacks the knight e5 up the file and the bishop b1 along
+        // the rank; neither is defended.
+        let board = board_from("8/8/8/4n3/8/8/8/1b2R3 b - - 0 1");
+        let rook = board.squares[7][4].unwrap();
+
+        let fork = board.get_fork(&rook).unwrap();
+
+        assert_eq!(fork.forked_ids.len(), 2);
+        assert_eq!(fork.fork_value(&board), 3);
     }
 
     #[test]
     fn bishop_forks_two_rooks_on_diagonals() {
-        // White bishop e5 simultaneously attacks the rook on c7 (NorthWest
-        // diagonal) and the rook on g7 (NorthEast diagonal). Forks aren't
-        // knight-only - get_fork works for any piece since it's built on
-        // get_legal_moves rather than knight-specific logic.
-        let board = board_from("8/2r3r1/8/4B3/8/8/8/8 w - - 0 1");
+        // Bishop e5 attacks the rooks c7 and g7, which defend each other
+        // along rank 7. Bishop for rook still nets 5 - 3 = 2 on each.
+        let board = board_from("8/2r3r1/8/4B3/8/8/8/8 b - - 0 1");
         let bishop = board.squares[3][4].unwrap();
-        let rook_c7 = board.squares[1][2].unwrap();
-        let rook_g7 = board.squares[1][6].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        let fork = board.get_fork(&bishop, &hanging_squares).unwrap();
+        let fork = board.get_fork(&bishop).unwrap();
 
-        assert_eq!(fork.forker_id, bishop.id);
         assert_eq!(fork.forked_ids.len(), 2);
-        assert!(fork.forked_ids.contains(&rook_c7.id));
-        assert!(fork.forked_ids.contains(&rook_g7.id));
-
-        // Best target: either rook, both worth 5 (neither hanging - they
-        // defend each other along rank 7). 5 - bishop (3) = 2.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 2);
+        assert_eq!(fork.fork_value(&board), 2);
     }
 
     #[test]
     fn pawn_forks_knight_and_rook_diagonally() {
-        // White pawn e4 attacks both diagonals in front of it: the knight
-        // on d5 and the rook on f5. Pawns go through a completely different
-        // code path than sliding pieces (diagonal-only captures via
-        // could_be_capture's pawn branch), so this is the one piece type
-        // that genuinely needed its own proof, not just an inference from
-        // the bishop test.
-        let board = board_from("8/8/8/3n1r2/4P3/8/8/8 w - - 0 1");
+        // Pawn e4 attacks the knight d5 and the rook f5. Pawns capture
+        // through their own code path, so this one needs its own proof.
+        // The rook defends the knight, but a pawn for a knight still nets 2.
+        let board = board_from("8/8/8/3n1r2/4P3/8/8/8 b - - 0 1");
         let pawn = board.squares[4][4].unwrap();
         let knight = board.squares[3][3].unwrap();
         let rook = board.squares[3][5].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        // Rook defends the knight along rank 5; the knight can't defend
-        // back the same way, so the rook is left hanging.
-        assert!(!hanging_squares.contains(&knight.position));
-        assert!(hanging_squares.contains(&rook.position));
+        let fork = board.get_fork(&pawn).unwrap();
 
-        let fork = board.get_fork(&pawn, &hanging_squares).unwrap();
-
-        assert_eq!(fork.forker_id, pawn.id);
-        assert_eq!(fork.forked_ids.len(), 2);
         assert!(fork.forked_ids.contains(&knight.id));
         assert!(fork.forked_ids.contains(&rook.id));
-
-        // Best target: rook (5 + pawn's 0, hanging) beats the defended
-        // knight (3). 5 - pawn (0) = 5.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 5);
-    }
-
-    #[test]
-    fn rook_forks_knight_and_bishop_along_rank_and_file() {
-        // White rook e1 attacks the knight on e5 (up the file) and the
-        // bishop on a1 (along the rank) at the same time - a rook fork
-        // doesn't need two pieces on the same line, just two different
-        // lines through the rook's own square.
-        let board = board_from("8/8/8/4n3/8/8/8/b3R3 w - - 0 1");
-        let rook = board.squares[7][4].unwrap();
-        let knight = board.squares[3][4].unwrap();
-        let bishop = board.squares[7][0].unwrap();
-
-        let hanging_squares = hanging_squares(&board);
-        // The bishop defends the knight diagonally; the knight can't
-        // defend back, so the bishop is left hanging.
-        assert!(!hanging_squares.contains(&knight.position));
-        assert!(hanging_squares.contains(&bishop.position));
-
-        let fork = board.get_fork(&rook, &hanging_squares).unwrap();
-
-        assert_eq!(fork.forker_id, rook.id);
-        assert_eq!(fork.forked_ids.len(), 2);
-        assert!(fork.forked_ids.contains(&knight.id));
-        assert!(fork.forked_ids.contains(&bishop.id));
-
-        // Best target: bishop (3 + rook's 5, hanging) beats the defended
-        // knight (3). 8 - rook (5) = 3.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
+        // Black saves the rook; the pawn takes the knight and loses itself
+        // to the rook's recapture: 3 - 1 = 2.
+        assert_eq!(fork.fork_value(&board), 2);
     }
 
     #[test]
     fn queen_forks_knight_and_pawn_on_different_lines() {
-        // White queen d4 attacks the knight on a7 (diagonally) and the pawn
-        // on d8 (up the file) - a queen fork can mix a rook-line target
-        // with a bishop-line target since it moves both ways.
-        let board = board_from("3p4/n7/8/8/3Q4/8/8/8 w - - 0 1");
+        // Queen d4 attacks the knight a7 diagonally and the pawn d8 up the
+        // file, both undefended.
+        let board = board_from("3p4/n7/8/8/3Q4/8/8/8 b - - 0 1");
         let queen = board.squares[4][3].unwrap();
-        let pawn = board.squares[0][3].unwrap();
-        let knight = board.squares[1][0].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        // Nothing else is on the board to defend either target - both are
-        // hanging.
-        assert!(hanging_squares.contains(&knight.position));
-        assert!(hanging_squares.contains(&pawn.position));
+        let fork = board.get_fork(&queen).unwrap();
 
-        let fork = board.get_fork(&queen, &hanging_squares).unwrap();
-
-        assert_eq!(fork.forker_id, queen.id);
         assert_eq!(fork.forked_ids.len(), 2);
-        assert!(fork.forked_ids.contains(&pawn.id));
-        assert!(fork.forked_ids.contains(&knight.id));
+        // Black saves the knight; the queen takes the pawn.
+        assert_eq!(fork.fork_value(&board), 1);
+    }
 
-        // Best target: knight (3 + queen's 9, hanging) beats the pawn
-        // (0 + queen's 9, hanging). 12 - queen (9) = 3.
-        assert_eq!(fork.fork_value(&board, &hanging_squares), 3);
+    #[test]
+    fn a_forker_that_can_simply_be_taken_forks_nothing() {
+        // Same queen-and-rook fork as above, but a black pawn d6 attacks the
+        // knight: Black takes it instead of answering either threat.
+        let board = board_from("8/3r1q2/3p4/4N3/8/8/8/8 b - - 0 1");
+        let knight = board.squares[3][4].unwrap();
+
+        assert!(board.get_fork(&knight).is_none());
+    }
+
+    #[test]
+    fn check_plus_one_loose_piece_is_a_royal_fork() {
+        // Knight c7 checks the king e8 and attacks the bishop a8. The king
+        // has to move, so the bishop falls. Scored before as 3 - 3 = 0 and
+        // thrown away, because the king counted for nothing.
+        let board = board_from("b3k3/2N5/8/8/8/8/8/8 b - - 0 1");
+        let knight = board.squares[1][2].unwrap();
+        let king = board.squares[0][4].unwrap();
+        let bishop = board.squares[0][0].unwrap();
+
+        let fork = board.get_fork(&knight).unwrap();
+
+        assert!(fork.forked_ids.contains(&king.id));
+        assert!(fork.forked_ids.contains(&bishop.id));
+        assert_eq!(fork.fork_value(&board), 3);
+    }
+
+    #[test]
+    fn forks_are_found_for_both_sides() {
+        // A white knight fork and a black knight fork in one position, with
+        // White to move: neither side's fork is dropped for being on (or
+        // off) move.
+        let board = board_from("8/3r1q2/8/4N3/4n3/8/3R1Q2/8 w - - 0 1");
+
+        let forks = board.get_all_forks();
+
+        assert_eq!(forks.len(), 2);
     }
 }

@@ -51,25 +51,27 @@ export interface EngineSnapshot {
  */
 export type EngineStatus = "running" | "stopped" | "loading";
 
-/** The board overlays the user can toggle on. */
-/**
- * Board overlays that are switched on or off as a whole, rather than per
- * finding. Each is *derived* from current data on every render rather
- * than stored: the best move changes as the search deepens, so storing
- * the arrow would freeze it at whatever it was when you clicked.
- *
- * Per-finding highlights (one pin, one fork) are `SquareHighlight`s and
- * live separately — these are the three with nothing to hang a row on.
- */
-export type Overlay = "bestMove" | "threat" | "control";
-
-export type ActiveOverlays = Record<Overlay, boolean>;
-
-export const NO_OVERLAYS_ACTIVE: ActiveOverlays = {
-  bestMove: false,
-  threat: false,
-  control: false,
-};
-
 /** Viewed-ply value for "before any move was played". */
 export const START_POSITION_PLY = -1;
+
+/**
+ * Which overlay masks are on the board, by id, and the way to change
+ * that — bundled so it travels down through the panels as one prop
+ * rather than four.
+ *
+ * Ids only, never the masks themselves: a mask's squares belong to one
+ * ply, its id to the reason it's drawn. The masks are rebuilt from the
+ * viewed ply on every render, so whatever's switched on follows you
+ * through the game (see `overlays/masks.ts`).
+ */
+export interface MaskSelection {
+  shown: ReadonlySet<string>;
+  /**
+   * The row the pointer is resting on. Separate from `shown` and
+   * transient by design: it never changes what's switched on, so moving
+   * the pointer away always puts the board back as the clicks left it.
+   */
+  previewId: string | null;
+  onToggle: (id: string) => void;
+  onPreview: (id: string | null) => void;
+}

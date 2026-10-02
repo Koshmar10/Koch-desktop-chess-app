@@ -3,12 +3,7 @@ import EngineLines from "./EngineLines";
 import EngineOverlays from "./EngineOverlays";
 import EngineSettings from "./EngineSettings";
 import { useAnalyzerEngineSettings } from "./useAnalyzerEngineSettings";
-import type {
-  ActiveOverlays,
-  EngineSnapshot,
-  EngineStatus,
-  Overlay,
-} from "../../types";
+import type { EngineSnapshot, EngineStatus, MaskSelection } from "../../types";
 
 interface EngineTabProps {
   snapshot: EngineSnapshot | null;
@@ -17,8 +12,7 @@ interface EngineTabProps {
   bestMove: string | null;
   threatMove: string | null;
   pieces: PlacedPiece[];
-  overlays: ActiveOverlays;
-  onToggleOverlay: (overlay: Overlay) => void;
+  maskSelection: MaskSelection;
 }
 
 // Settings and the board switches first at their natural height, then the
@@ -32,8 +26,7 @@ const EngineTab = ({
   bestMove,
   threatMove,
   pieces,
-  overlays,
-  onToggleOverlay,
+  maskSelection,
 }: EngineTabProps) => {
   const [settings, setSettings] = useAnalyzerEngineSettings();
 
@@ -44,8 +37,7 @@ const EngineTab = ({
         bestMove={bestMove}
         threatMove={threatMove}
         pieces={pieces}
-        overlays={overlays}
-        onToggleOverlay={onToggleOverlay}
+        maskSelection={maskSelection}
       />
       <EngineLines
         snapshot={snapshot}

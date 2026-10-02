@@ -2,6 +2,7 @@ import { useChessboardContext } from "../ChessboardContext";
 import { flipCoords } from "../lib/orientation";
 import { FILES } from "../lib/squareName";
 import { DARK_SQUARE_COLOR, LIGHT_SQUARE_COLOR } from "../lib/constants";
+import { LEGAL_MOVE_MARKER_Z_INDEX } from "../lib/zIndex";
 
 const SELECTED_SQUARE_COLOR = "#f6f669";
 
@@ -141,7 +142,10 @@ const Squares: React.FC = () => {
         <Rank rankLabel={rankLabel} labelColor={labelColor} />
         <File fileLabel={fileLabel} labelColor={labelColor} />
         {isLegalDestination && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-2">
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ zIndex: LEGAL_MOVE_MARKER_Z_INDEX }}
+          >
             {isCapture ? <LegalMoveRing /> : <LegalMoveDot />}
           </div>
         )}

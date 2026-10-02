@@ -1,3 +1,5 @@
+import { DRAGGED_PIECE_Z_INDEX } from "../lib/zIndex";
+
 export interface PieceVisualState {
   className: string;
   style: React.CSSProperties;
@@ -13,8 +15,9 @@ export const getPieceVisualState = (
   if (isBeingDragged && dragPosition) {
     return {
       className:
-        "fixed p-2 box-border select-none pointer-events-none z-50 transition-[width,height] duration-100 ease-out transition-[left, top] duration-200 ease-in",
+        "fixed p-2 box-border select-none pointer-events-none transition-[width,height] duration-100 ease-out transition-[left, top] duration-200 ease-in",
       style: {
+        zIndex: DRAGGED_PIECE_Z_INDEX,
         left: dragPosition.x - squareSize / 2,
         top: dragPosition.y - squareSize / 2,
         width: squareSize * 1.1,

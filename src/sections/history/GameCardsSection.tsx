@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { getGames, deleteGame, analyzeGame } from "../../api/game"
 import { GameSummary } from "../../api/bindings/GameSummary"
 import { PieceColor } from "../../api/bindings/PieceColor"
@@ -14,6 +15,7 @@ const MissingGames = () => (
 const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
   const [gameData, setGameData] = useState<GameSummary[] | null>(null)
   const [sideNeeded, setSideNeeded] = useState<GameSummary | null>(null)
+  const navigate = useNavigate()
   useEffect(() => {
     getGames().then(setGameData).catch(console.error)
   }, [reloadKey])
@@ -39,6 +41,12 @@ const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
     analyzeGame(game.game_id).catch(console.error)
   }
 
+  // Steps through the game in the analyzer — works whether or not it's
+  // been analysed; an unanalysed game just has no evals or move grades.
+  const handleOpen = (game: GameSummary) => {
+    navigate(`/analysis/${game.game_id}`)
+  }
+
   const handlePickSide = (color: PieceColor) => {
     if (sideNeeded) analyzeGame(sideNeeded.game_id, color).catch(console.error)
     setSideNeeded(null)
@@ -52,6 +60,7 @@ const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
             <div key={game.game_id} className="w-full max-w-[calc(25%-0.6875rem)]">
               <GameCard
                 gameSummary={game}
+                onOpen={handleOpen}
                 onAnalyze={handleAnalyze}
                 onDelete={handleDelete}
               />

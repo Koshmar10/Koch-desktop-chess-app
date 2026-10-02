@@ -13,5 +13,5 @@ mod status;
 
 pub use job::AnalysisJob;
 pub use queue::{enqueue_analysis, worker, AnalysisQueue};
-pub use scoring::{GameAnalysis, MoveQuality, MoveQualityEntry};
+pub use scoring::{GameAnalysis, MoveQuality, MoveQualityEntry, SideAccuracy};
 pub use status::{AnalysisStage, AnalysisStatus};

@@ -15,7 +15,7 @@ const WHITE_THREAT_SIGN: i32 = -1;
 const BLACK_THREAT_SIGN: i32 = 1;
 
 /// Per-square threat data - who attacks/defends each square, and which
-/// pieces are left hanging by the net of it - in `PositionFindings`'s own
+/// pieces are left hanging - in `PositionFindings`'s own
 /// field order, so `PositionFindings::from` can move this straight in.
 /// An implementation detail: unlike pawn structure or king safety, this
 /// part doesn't need a king on the board at all, which is why it's kept
@@ -44,29 +44,26 @@ fn threat_map(board: &Board) -> ThreatMap {
         }
     }
 
-    // Needs the completed totals above, so this one can't be folded in.
+    // Hanging means the enemy wins material by capturing it, which only an
+    // exchange evaluation can say — a head-count of attackers against
+    // defenders called a queen attacked by a pawn safe. The rosters above
+    // are a cheap pre-check: a piece no enemy covers can't be hanging, and
+    // most pieces in most positions aren't attacked at all.
     for piece in board.pieces() {
-        let threat = square_threats[piece.position.index()];
-        let is_hanging = match piece.color {
-            PieceColor::White => threat > 0,
-            PieceColor::Black => threat < 0,
+        let index = piece.position.index();
+        let enemy_coverers = match piece.color {
+            PieceColor::White => &defenders[index],
+            PieceColor::Black => &attackers[index],
         };
-        if is_hanging {
+        if enemy_coverers.is_empty() {
+            continue;
+        }
+        if board.see(piece.position, piece.color.opposite()) > 0 {
             hanging_squares.push(piece.position);
         }
     }
 
     (square_threats, hanging_squares, attackers, defenders)
-}
-
-/// Which squares hold a piece with more enemy attackers than defenders -
-/// the one piece of [`threat_map`] that `get_pins`/`get_forks` need and the
-/// only thing pins.rs/forks.rs's own kingless test fixtures ask for.
-/// `pub(crate)` rather than exported, and test-only: it's plumbing for
-/// pins.rs/forks.rs's own tests, not part of `koch-engine`'s public API.
-#[cfg(test)]
-pub(crate) fn hanging_squares(board: &Board) -> Vec<Square> {
-    threat_map(board).1
 }
 
 /// A single position's worth of every deterministic analyzer signal, bundled
@@ -103,8 +100,8 @@ pub struct PositionFindings {
 impl From<&Board> for PositionFindings {
     fn from(board: &Board) -> Self {
         let (square_threats, hanging_squares, attackers, defenders) = threat_map(board);
-        let pins = board.get_all_pins(&hanging_squares);
-        let forks = board.get_all_forks(&hanging_squares);
+        let pins = board.get_all_pins();
+        let forks = board.get_all_forks();
 
         Self {
             square_threats,
@@ -211,6 +208,18 @@ mod tests {
 
         assert_eq!(hanging_squares.len(), 1);
         assert!(hanging_squares.contains(&e6));
+    }
+
+    #[test]
+    fn queen_attacked_by_a_pawn_hangs_even_when_defended() {
+        // One attacker, one defender — the old head-count called this safe.
+        // But pawn takes queen, and the d8 rook's recapture only wins a
+        // pawn back. Hanging is about what the capture nets, not who
+        // outnumbers whom.
+        let board: Board = board_from("3r4/8/8/3q4/4P3/8/8/8 w - - 0 1");
+        let (_, hanging_squares, ..) = threat_map(&board);
+
+        assert!(hanging_squares.contains(&Square::new(3, 3)));
     }
 
     #[test]

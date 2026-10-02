@@ -237,8 +237,9 @@ impl<'a> GameService<'a> {
     /// created — `UPDATE`s, never `INSERT`s. `eval_cp` comes from
     /// `centipawn_history` for every ply (index 0 is the start position,
     /// which has no `game_moves` row of its own, so it's skipped);
-    /// `quality`/`centipawn_loss` only exist for `move_qualities`, which is
-    /// human-only, so the engine's own moves keep those two columns NULL.
+    /// `quality`/`centipawn_loss` come from `move_qualities`, which grades
+    /// every move — both sides — so a fresh analysis fills them on every
+    /// row.
     pub fn save_move_analysis(
         &self,
         game_id: u32,
@@ -322,7 +323,7 @@ impl<'a> GameService<'a> {
     /// analyzer.
     pub fn game_moves(&self, game_id: u32) -> rusqlite::Result<Vec<GameMoveRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT ply_number, san, uci, time_ms FROM game_moves
+            "SELECT ply_number, san, uci, time_ms, eval_cp, quality FROM game_moves
              WHERE game_id = ?1 ORDER BY ply_number",
         )?;
         let rows = stmt.query_map(params![game_id], |row| GameMoveRow::try_from(row))?;
@@ -516,6 +517,7 @@ mod tests {
 
             let move_qualities = vec![MoveQualityEntry {
                 ply_number: 1,
+                mover: PieceColor::White,
                 quality: MoveQuality::Good,
                 centipawn_loss: 12,
             }];

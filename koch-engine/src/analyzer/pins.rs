@@ -1,3 +1,4 @@
+use super::exchange::piece_value;
 use crate::{
     board::BOARD_SIZE, move_gen::in_bounds, Board, ChessPiece, Direction, PieceType, Square,
 };
@@ -27,7 +28,7 @@ impl Pin {
             return false;
         }
 
-        Board::material_value(pinned_piece.kind) > Board::material_value(target_piece.kind)
+        piece_value(pinned_piece.kind) > piece_value(target_piece.kind)
     }
 }
 
@@ -74,45 +75,51 @@ impl Board {
         })
     }
 
-    pub fn is_pin_valid(&self, pin: &Pin, hanging_squares: &[Square]) -> bool {
-        let target_piece = self.piece_by_id(pin.pin_target_id).unwrap();
-        let pinned_piece = self.piece_by_id(pin.pinned_piece_id).unwrap();
-        let pinner_piece = self.piece_by_id(pin.pinner_piece_id).unwrap();
+    /// Whether a candidate pin is a real tactic rather than just three
+    /// pieces in a line.
+    ///
+    /// - The pinner must not be winnable itself, or the opponent simply
+    ///   takes it and the pin is gone.
+    /// - A pin to the king always counts: the pinned piece can't legally
+    ///   leave the line, whatever is or isn't defended.
+    /// - A pin to anything else, or a skewer, needs two more things: the
+    ///   front piece must have a move that leaves the line (a pawn that can
+    ///   only advance along it never exposes what's behind), and stepping
+    ///   aside must actually lose the piece behind — judged by playing out
+    ///   the capture on it with the front piece lifted off the board. A
+    ///   target its own side can recapture for free isn't pinned to
+    ///   anything.
+    pub fn is_pin_valid(&self, pin: &Pin) -> bool {
+        let (Some(target), Some(pinned), Some(pinner)) = (
+            self.piece_by_id(pin.pin_target_id),
+            self.piece_by_id(pin.pinned_piece_id),
+            self.piece_by_id(pin.pinner_piece_id),
+        ) else {
+            return false;
+        };
 
-        let is_absolute_pin = target_piece.kind == PieceType::King;
-
-        if !is_absolute_pin {
-            let target_value = Board::material_value(target_piece.kind) as i32;
-            let pinned_value = Board::material_value(pinned_piece.kind) as i32;
-            let value_delta = target_value - pinned_value;
-
-            if value_delta.abs() == 0 {
-                return false;
-            }
+        if self.see(pinner.position, pinner.color.opposite()) > 0 {
+            return false;
         }
-        let (quiet, captures) = self.get_legal_moves(&pinned_piece);
-        let all_moves: Vec<Square> = quiet.into_iter().chain(captures).collect();
-
-        if all_moves.is_empty() {
-            // No legal moves at all - the strongest possible pin, not
-            // something to filter out.
+        if target.kind == PieceType::King {
             return true;
         }
 
-        // A move is a real escape if it leaves the pin line - except for
-        // capturing the pinner itself, which only counts as an escape when
-        // the pinner is hanging. A defended pinner makes that capture a bad
-        // trade, so it doesn't relieve the pin.
-        all_moves.iter().any(|square| {
-            if *square == pinner_piece.position {
-                hanging_squares.contains(square)
-            } else {
-                !pin.squares.contains(square)
-            }
-        })
+        let (quiet, captures) = self.get_legal_moves(&pinned);
+        let can_step_aside = quiet
+            .iter()
+            .chain(captures.iter())
+            .any(|square| *square != pinner.position && !pin.squares.contains(square));
+        if !can_step_aside {
+            return false;
+        }
+
+        self.without_piece(pin.pinned_piece_id)
+            .see(target.position, pinner.color)
+            > 0
     }
 
-    pub fn get_pins(&self, piece: &ChessPiece, hanging_squares: &[Square]) -> Vec<Pin> {
+    pub fn get_pins(&self, piece: &ChessPiece) -> Vec<Pin> {
         let directions: &[Direction] = match piece.kind {
             PieceType::Bishop => &Direction::DIAGONALS,
             PieceType::Rook => &Direction::ORTHOGONALS,
@@ -123,13 +130,13 @@ impl Board {
         directions
             .iter()
             .filter_map(|&direction| self.get_pin(piece, BOARD_SIZE, direction))
-            .filter(|pin| self.is_pin_valid(pin, hanging_squares))
+            .filter(|pin| self.is_pin_valid(pin))
             .collect()
     }
 
-    pub fn get_all_pins(&self, hanging_squares: &[Square]) -> Vec<Pin> {
+    pub fn get_all_pins(&self) -> Vec<Pin> {
         self.pieces()
-            .flat_map(|piece| self.get_pins(piece, hanging_squares))
+            .flat_map(|piece| self.get_pins(piece))
             .collect()
     }
 }
@@ -137,7 +144,6 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::position_findings::hanging_squares;
     use crate::fen::FenString;
 
     fn board_from(fen: &str) -> Board {
@@ -154,8 +160,7 @@ mod tests {
         let knight = board.squares[3][3].unwrap();
         let king = board.squares[3][0].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        let pins = board.get_pins(&rook, &hanging_squares);
+        let pins = board.get_pins(&rook);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -174,8 +179,7 @@ mod tests {
         let knight = board.squares[5][5].unwrap();
         let queen = board.squares[6][5].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        let pins = board.get_pins(&rook, &hanging_squares);
+        let pins = board.get_pins(&rook);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -192,14 +196,16 @@ mod tests {
         // White rook a1, black queen a4, black rook a8. The queen (9) is
         // worth more than the rook behind it (5), so this is a skewer: the
         // queen is the piece actually under threat and forced to move,
-        // exposing the lesser rook behind it.
-        let board = board_from("r7/8/8/8/q7/8/8/R7 w - - 0 1");
+        // exposing the lesser rook behind it. The b2 bishop guards a1 —
+        // without it the queen just takes the rook. (A king on b2 wouldn't
+        // do: once the queen takes on a1, the a8 rook sees down the open
+        // file, so recapturing with the king would be moving into check.)
+        let board = board_from("r7/8/8/8/q7/8/1B6/R7 w - - 0 1");
         let rook_a1 = board.squares[7][0].unwrap();
         let queen = board.squares[4][0].unwrap();
         let rook_a8 = board.squares[0][0].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-        let pins = board.get_pins(&rook_a1, &hanging_squares);
+        let pins = board.get_pins(&rook_a1);
         assert_eq!(pins.len(), 1);
 
         let pin = &pins[0];
@@ -218,10 +224,10 @@ mod tests {
         //   - North: h7 pawn pinned to the h8 rook
         // Black bishop on c5 has one along its own diagonal:
         //   - SouthEast: e3 pawn pinned to the f2 pawn
-        // is_pin_valid should drop the last two: the h7 pawn's only legal
-        // move (h6) stays on the pin line, so nothing is actually gained by
-        // moving it away; the bishop's pin shields a piece of equal value
-        // (pawn behind pawn), so there's no material incentive either.
+        // is_pin_valid should drop the last two. The h7 pawn's only move,
+        // h6, keeps it on the line, so the h8 rook is never exposed. The
+        // f2 pawn behind e3 is guarded by the e1 king: with e3 gone, the
+        // bishop takes f2 and the king takes the bishop, winning nothing.
         let board = board_from("rnbqk1nr/pppp1ppp/8/2b1p2Q/8/4P3/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
 
         let queen = board.squares[3][7].unwrap();
@@ -231,9 +237,7 @@ mod tests {
         let e8_king = board.squares[0][4].unwrap();
         let e5_pawn = board.squares[3][4].unwrap();
 
-        let hanging_squares = hanging_squares(&board);
-
-        let queen_pins = board.get_pins(&queen, &hanging_squares);
+        let queen_pins = board.get_pins(&queen);
         assert_eq!(queen_pins.len(), 2);
         assert!(queen_pins
             .iter()
@@ -242,7 +246,39 @@ mod tests {
             .iter()
             .any(|pin| pin.pinned_piece_id == e5_pawn.id && pin.pin_target_id == bishop.id));
 
-        let bishop_pins = board.get_pins(&bishop, &hanging_squares);
+        let bishop_pins = board.get_pins(&bishop);
         assert!(bishop_pins.is_empty());
+    }
+
+    #[test]
+    fn pin_to_a_protected_piece_is_not_a_pin() {
+        // Rook f5, black knight f3 in front, black knight f2 behind it,
+        // guarded by the black rook f1. If f3 steps aside, the rook takes
+        // f2 and is taken back: 3 - 5, nothing won — so nothing's pinned.
+        let board = board_from("8/8/8/5R2/8/5n2/5n2/5r2 w - - 0 1");
+        let rook = board.squares[3][5].unwrap();
+
+        assert!(board.get_pins(&rook).is_empty());
+    }
+
+    #[test]
+    fn pinner_that_can_be_won_pins_nothing() {
+        // The textbook absolute pin from above, except a black pawn on e6
+        // attacks the f5 rook: Black takes the pinner instead.
+        let board = board_from("8/8/4p3/k2n1R2/8/8/8/8 w - - 0 1");
+        let rook = board.squares[3][5].unwrap();
+
+        assert!(board.get_pins(&rook).is_empty());
+    }
+
+    #[test]
+    fn queen_in_front_of_a_protected_pawn_is_not_a_skewer() {
+        // Rook a1, black queen a4, black pawn a7 guarded by the b8 king.
+        // The values differ, which used to be enough on its own — but when
+        // the queen steps aside, rook takes pawn and king takes rook.
+        let board = board_from("1k6/p7/8/8/q7/8/1K6/R7 w - - 0 1");
+        let rook = board.squares[7][0].unwrap();
+
+        assert!(board.get_pins(&rook).is_empty());
     }
 }

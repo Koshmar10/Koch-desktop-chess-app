@@ -28,7 +28,7 @@ use super::view::{
 
 const ANALYSIS_ENABLED: bool = true;
 
-fn game_summary_from(
+pub(super) fn game_summary_from(
     game: &db::schemas::game::Game,
     db_conn: &rusqlite::Connection,
 ) -> GameSummary {

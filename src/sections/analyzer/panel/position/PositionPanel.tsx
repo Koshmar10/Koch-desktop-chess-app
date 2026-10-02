@@ -4,16 +4,19 @@ import {
   ChevronRight,
   Copy,
   Crosshair,
-  DoorOpen,
   LandPlot,
   MoveRight,
   Scale,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldX,
   Unlink,
   Wind,
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import type { KingDanger } from "../../../../api/bindings/KingDanger";
 import type { KingSafety } from "../../../../api/bindings/KingSafety";
 import type { PawnStructure } from "../../../../api/bindings/PawnStructure";
 import type { PositionFindings } from "../../../../api/bindings/PositionFindings";
@@ -22,56 +25,27 @@ import {
   FILES,
   squareName,
 } from "../../../../components/chessboard/lib/squareName";
-import type { Square } from "../../../../api/bindings/Square";
-import { TONE_ARROW_COLOR } from "../../../../components/chessboard/lib/highlightTones";
-import type {
-  ArrowData,
-  HighlightTone,
-  PlacedPiece,
-  SquareHighlight,
-} from "../../../../components/chessboard/lib/types";
-import EyeToggle from "../EyeToggle";
+import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
+import EyeIndicator from "../EyeIndicator";
+import InteractiveRow from "../InteractiveRow";
 import PanelSection from "../PanelSection";
-import { IconLabel, PIECE_CHIP_SIZE_PX, PieceChip, SquareChip } from "../chips";
+import { PieceChip, SquareChip } from "../chips";
+import {
+  HOVER_ROW_CLASS,
+  maskControls,
+  type RowControls,
+} from "../rowControls";
+import { maskId, type PawnFlagKey } from "../../overlays/masks";
+import type { MaskSelection } from "../../types";
 import { controlColor, controlCounts, type ControlSide } from "./controlTint";
 
 const SIDE_AVATAR_SIZE_PX = 26;
+// The pawn-weakness tiles carry a badge on their corner, so they get a
+// little more room than a plain piece chip for both to read clearly.
+const PAWN_FLAG_SIZE_PX = 32;
 // Wide enough that the pinned piece can sit on the shaft without covering
 // either arrowhead.
 const PIN_ARROW_WIDTH_PX = 76;
-
-const squareOf = (id: number, pieces: PlacedPiece[]): Square | undefined =>
-  pieces.find((p) => p.id === id)?.square;
-
-/**
- * An arrow between two pieces, or nothing if either has left the board —
- * which happens whenever the findings and the rendered position are a
- * ply apart.
- */
-const arrowBetween = (
-  fromId: number,
-  toId: number,
-  pieces: PlacedPiece[],
-  tone: HighlightTone,
-): ArrowData[] => {
-  const from = squareOf(fromId, pieces);
-  const to = squareOf(toId, pieces);
-  if (!from || !to) return [];
-  return [
-    {
-      from: [from.rank, from.file],
-      to: [to.rank, to.file],
-      color: TONE_ARROW_COLOR[tone],
-      type: "finding",
-    },
-  ];
-};
-
-/** Where the named pieces stand, skipping ids this position doesn't hold. */
-const squaresOf = (ids: number[], pieces: PlacedPiece[]): Square[] =>
-  ids
-    .map((id) => pieces.find((p) => p.id === id)?.square)
-    .filter((square): square is Square => square !== undefined);
 
 const Empty = ({ label }: { label: string }) => (
   <p className="text-xs text-foreground/40 italic">{label}</p>
@@ -87,96 +61,161 @@ const Empty = ({ label }: { label: string }) => (
 const PENALTY_PARTS = [
   {
     key: "shield_penalty",
-    title: "Shield damage",
+    title: "Pawn shield: missing files and advanced pawns",
     icon: Shield,
     bar: "bg-primary",
     text: "text-primary",
   },
   {
     key: "storm_penalty",
-    title: "Pawn storm",
+    title: "Pawn storm: enemy pawns advancing on the king",
     icon: Wind,
     bar: "bg-amber-500",
     text: "text-amber-500",
   },
   {
     key: "attack_penalty",
-    title: "Pieces attacking the king",
+    title: "Attackers: pieces aimed at the king's zone",
     icon: Crosshair,
     bar: "bg-destructive",
     text: "text-destructive",
   },
 ] as const;
 
-interface KingSafetyRowProps {
-  safety: KingSafety;
-  // Both colors' gauges are drawn against the same scale, so the
-  // comparison between them is the one your eye makes first.
-  scaleMax: number;
-  pieces: PlacedPiece[];
-  toggle: ReactNode;
-}
+// The gauge fills completely at the score where a king becomes critical —
+// koch-engine's `CRITICAL_FROM` (two open-file shield holes' worth). A
+// fixed scale, so a full bar always means the same thing; it used to be
+// scaled to whichever king was worse off, which drew a near-safe king's
+// score of 6 as a full bar next to a 4.
+const KING_DANGER_FULL_SCALE = 80;
 
-const KingSafetyRow = ({
-  safety,
-  scaleMax,
-  pieces,
-  toggle,
-}: KingSafetyRowProps) => (
-  <div className="flex flex-col gap-1.5">
-    <div className="flex items-center gap-2">
-      <PieceAvatar color={safety.color} size={SIDE_AVATAR_SIZE_PX} />
-      <span className="ml-auto text-sm font-semibold tabular-nums">
-        {safety.score}
-      </span>
-      {toggle}
-    </div>
+const DANGER_BADGE: Record<
+  KingDanger,
+  { icon: LucideIcon; label: string; cls: string }
+> = {
+  Safe: {
+    icon: ShieldCheck,
+    label: "Safe",
+    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  },
+  Uneasy: {
+    icon: Shield,
+    label: "Uneasy",
+    cls: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  },
+  Exposed: {
+    icon: ShieldAlert,
+    label: "Exposed",
+    cls: "border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  },
+  Critical: {
+    icon: ShieldX,
+    label: "Critical",
+    cls: "border-destructive/50 bg-destructive/10 text-destructive",
+  },
+};
 
-    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
-      {PENALTY_PARTS.map(({ key, bar, title }) => (
-        <div
-          key={key}
-          title={title}
-          className={bar}
-          style={{ width: `${(safety[key] / scaleMax) * 100}%` }}
-        />
-      ))}
-    </div>
+/**
+ * The band, not the number. A raw score is an open-ended sum of three
+ * penalties, so "22" means nothing without the formula — "uneasy" does.
+ * The number and its breakdown stay one hover away for anyone who wants
+ * them. The word is kept beside the icon: the four shield icons alone are
+ * too alike to tell apart at a glance.
+ */
+const DangerBadge = ({ safety }: { safety: KingSafety }) => {
+  const { icon: Icon, label, cls } = DANGER_BADGE[safety.danger];
+  return (
+    <span
+      title={`${label} — score ${safety.score} (shield ${safety.shield_penalty}, storm ${safety.storm_penalty}, attackers ${safety.attack_penalty})`}
+      className={`flex items-center gap-1 rounded-md border-[1px] px-1.5 py-0.5 text-xs font-semibold ${cls}`}
+    >
+      <Icon size={13} />
+      {label}
+    </span>
+  );
+};
 
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {PENALTY_PARTS.filter(({ key }) => safety[key] > 0).map(
-        ({ key, title, icon: Icon, text }) => (
-          <span
-            key={key}
-            title={title}
-            className={`flex items-center gap-1 text-xs tabular-nums ${text}`}
-          >
-            <Icon size={13} />
-            {safety[key]}
-          </span>
-        ),
-      )}
-    </div>
-
-    {safety.missing_shield_files.length > 0 && (
-      <div className="flex flex-wrap items-center gap-1">
-        <IconLabel icon={DoorOpen} title="Files with no shield pawn" />
-        {safety.missing_shield_files.map((file) => (
-          <SquareChip key={file} label={FILES[file]} />
-        ))}
-      </div>
-    )}
-
-    {safety.attacking_piece_ids.length > 0 && (
-      <div className="flex flex-wrap items-center gap-1.5">
-        <IconLabel icon={Crosshair} title="Attacking this king" />
-        {safety.attacking_piece_ids.map((id) => (
-          <PieceChip key={id} id={id} pieces={pieces} showSquare={false} />
-        ))}
-      </div>
-    )}
+/** One factor's causes, led by that factor's icon in its gauge colour. */
+const CauseLine = ({
+  part,
+  children,
+}: {
+  part: (typeof PENALTY_PARTS)[number];
+  children: ReactNode;
+}) => (
+  <div className="flex flex-wrap items-center gap-1.5">
+    <span title={part.title} className={`flex shrink-0 ${part.text}`}>
+      <part.icon size={14} />
+    </span>
+    {children}
   </div>
 );
+
+interface KingSafetyRowProps {
+  safety: KingSafety;
+  pieces: PlacedPiece[];
+  controls: RowControls;
+}
+
+const KingSafetyRow = ({ safety, pieces, controls }: KingSafetyRowProps) => {
+  const [shield, storm, attack] = PENALTY_PARTS;
+  // Past the full-scale point the segments shrink to fit rather than spill
+  // out of the bar; the bar being full already says "critical".
+  const scale = Math.max(safety.score, KING_DANGER_FULL_SCALE);
+
+  return (
+    <InteractiveRow
+      controls={controls}
+      className={`flex flex-col gap-1.5 py-1 ${HOVER_ROW_CLASS}`}
+    >
+      <div className="flex items-center gap-2">
+        <PieceAvatar color={safety.color} size={SIDE_AVATAR_SIZE_PX} />
+        <DangerBadge safety={safety} />
+        <span className="ml-auto">
+          <EyeIndicator state={controls.state} />
+        </span>
+      </div>
+
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+        {PENALTY_PARTS.map(({ key, bar, title }) => (
+          <div
+            key={key}
+            title={title}
+            className={bar}
+            style={{ width: `${(safety[key] / scale) * 100}%` }}
+          />
+        ))}
+      </div>
+
+      {/* What's causing each penalty, rather than how many points it is.
+          A factor that isn't contributing doesn't get a line. */}
+      {safety.shield_penalty > 0 && (
+        <CauseLine part={shield}>
+          {safety.missing_shield_files.map((file) => (
+            <SquareChip key={`file-${file}`} label={FILES[file]} />
+          ))}
+          {safety.advanced_shield_pawn_ids.map((id) => (
+            <PieceChip key={id} id={id} pieces={pieces} showSquare={false} />
+          ))}
+        </CauseLine>
+      )}
+      {safety.storm_penalty > 0 && (
+        <CauseLine part={storm}>
+          {safety.storming_pawn_ids.map((id) => (
+            <PieceChip key={id} id={id} pieces={pieces} showSquare={false} />
+          ))}
+        </CauseLine>
+      )}
+      {safety.attack_penalty > 0 && (
+        <CauseLine part={attack}>
+          {safety.attacking_piece_ids.map((id) => (
+            <PieceChip key={id} id={id} pieces={pieces} showSquare={false} />
+          ))}
+        </CauseLine>
+      )}
+    </InteractiveRow>
+  );
+};
 
 // --------------------------------------------------------------- pawns
 
@@ -224,13 +263,13 @@ const PawnFlagTile = ({
   <PieceAvatar
     color={color}
     kind="pawn"
-    size={PIECE_CHIP_SIZE_PX}
+    size={PAWN_FLAG_SIZE_PX}
     title={title}
     badge={
       <span
-        className={`absolute -right-1 -bottom-1 rounded-full bg-background p-[1px] ${tone}`}
+        className={`absolute -right-1.5 -bottom-1.5 rounded-full bg-background p-0.5 ${tone}`}
       >
-        <Overlay size={10} strokeWidth={3} />
+        <Overlay size={13} strokeWidth={3} />
       </span>
     }
   />
@@ -239,14 +278,14 @@ const PawnFlagTile = ({
 const PawnStructureRow = ({
   structure,
   pieces,
-  renderToggle,
+  controlsFor,
 }: {
   structure: PawnStructure;
   pieces: PlacedPiece[];
-  // Built by the panel, which owns which highlights are on — one per
+  // Built by the panel, which knows what's on the board — one per
   // weakness, so you can light up the isolated pawns without the
   // backward ones coming too.
-  renderToggle: (flagKey: string, ids: number[], title: string) => ReactNode;
+  controlsFor: (flag: PawnFlagKey, title: string) => RowControls;
 }) => {
   const flags = PAWN_FLAGS.map((flag) => ({
     ...flag,
@@ -273,21 +312,30 @@ const PawnStructureRow = ({
       {flags.length === 0 ? (
         <span className="text-xs text-foreground/40 italic">nothing weak</span>
       ) : (
-        flags.map(({ key, title, overlay, tone, ids }) => (
-          <div key={key} className="flex flex-wrap items-center gap-1.5">
-            <PawnFlagTile
-              color={structure.color}
-              overlay={overlay}
-              tone={tone}
-              title={title}
-            />
-            {ids.map((id) => {
-              const square = squareOf(id);
-              return square && <SquareChip key={id} label={square} />;
-            })}
-            {renderToggle(key, [...ids], title)}
-          </div>
-        ))
+        flags.map(({ key, title, overlay, tone, ids }) => {
+          const controls = controlsFor(key, title);
+          return (
+            <InteractiveRow
+              key={key}
+              controls={controls}
+              className={`flex flex-wrap items-center gap-1.5 ${HOVER_ROW_CLASS}`}
+            >
+              <PawnFlagTile
+                color={structure.color}
+                overlay={overlay}
+                tone={tone}
+                title={title}
+              />
+              {ids.map((id) => {
+                const square = squareOf(id);
+                return square && <SquareChip key={id} label={square} />;
+              })}
+              <span className="ml-auto">
+                <EyeIndicator state={controls.state} />
+              </span>
+            </InteractiveRow>
+          );
+        })
       )}
     </div>
   );
@@ -295,12 +343,6 @@ const PawnStructureRow = ({
 
 // ------------------------------------------------------- pins & forks
 
-/**
- * The pinner, an arrow to what it's pinning against, and the pinned piece
- * riding the shaft — the geometry of the pin, drawn rather than spelled
- * out. The rider carries no square label so it doesn't outgrow the arrow;
- * its tooltip names it.
- */
 /**
  * An arrow that actually stretches to its width: a line plus a chevron
  * head. A lucide arrow icon can't do this — icons keep their square
@@ -316,18 +358,24 @@ const StretchArrow = ({ width }: { width: number }) => (
   </span>
 );
 
+/**
+ * The pinner, an arrow to what it's pinning against, and the pinned piece
+ * riding the shaft — the geometry of the pin, drawn rather than spelled
+ * out. The rider carries no square label so it doesn't outgrow the arrow;
+ * its tooltip names it.
+ */
 const PinRow = ({
   pinnerId,
   pinnedId,
   targetId,
   pieces,
-  toggle,
+  eye,
 }: {
   pinnerId: number;
   pinnedId: number;
   targetId: number;
   pieces: PlacedPiece[];
-  toggle: ReactNode;
+  eye: ReactNode;
 }) => (
   <div className="flex items-center gap-1">
     <PieceChip id={pinnerId} pieces={pieces} />
@@ -338,7 +386,7 @@ const PinRow = ({
       </span>
     </span>
     <PieceChip id={targetId} pieces={pieces} />
-    <span className="ml-auto">{toggle}</span>
+    <span className="ml-auto">{eye}</span>
   </div>
 );
 
@@ -346,12 +394,12 @@ const ForkRow = ({
   forkerId,
   forkedIds,
   pieces,
-  toggle,
+  eye,
 }: {
   forkerId: number;
   forkedIds: number[];
   pieces: PlacedPiece[];
-  toggle: ReactNode;
+  eye: ReactNode;
 }) => (
   <div className="flex flex-wrap items-center gap-1">
     <PieceChip id={forkerId} pieces={pieces} />
@@ -359,17 +407,65 @@ const ForkRow = ({
     {forkedIds.map((id) => (
       <PieceChip key={id} id={id} pieces={pieces} />
     ))}
-    <span className="ml-auto">{toggle}</span>
+    <span className="ml-auto">{eye}</span>
   </div>
 );
 
 // Extra room at the bottom for the square names that hang below each
 // tile — they're positioned outside the chips' boxes, so the row has to
 // make space for them itself.
-const FindingRow = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-md border-[1px] border-border/60 bg-card/40 px-2 pt-1.5 pb-4">
+const FindingRow = ({
+  controls,
+  children,
+}: {
+  controls: RowControls;
+  children: ReactNode;
+}) => (
+  <InteractiveRow
+    controls={controls}
+    className="rounded-md border-[1px] border-border/60 bg-card/40 px-2 pt-1.5 pb-4 hover:bg-card/80"
+  >
     {children}
-  </div>
+  </InteractiveRow>
+);
+
+const PinFinding = ({
+  pin,
+  pieces,
+  controls,
+}: {
+  pin: PositionFindings["pins"][number];
+  pieces: PlacedPiece[];
+  controls: RowControls;
+}) => (
+  <FindingRow controls={controls}>
+    <PinRow
+      pinnerId={pin.pinner_piece_id}
+      pinnedId={pin.pinned_piece_id}
+      targetId={pin.pin_target_id}
+      pieces={pieces}
+      eye={<EyeIndicator state={controls.state} />}
+    />
+  </FindingRow>
+);
+
+const ForkFinding = ({
+  fork,
+  pieces,
+  controls,
+}: {
+  fork: PositionFindings["forks"][number];
+  pieces: PlacedPiece[];
+  controls: RowControls;
+}) => (
+  <FindingRow controls={controls}>
+    <ForkRow
+      forkerId={fork.forker_id}
+      forkedIds={fork.forked_ids}
+      pieces={pieces}
+      eye={<EyeIndicator state={controls.state} />}
+    />
+  </FindingRow>
 );
 
 // ------------------------------------------------------------- control
@@ -402,18 +498,19 @@ const ControlCount = ({
 
 const ControlSection = ({
   findings,
-  shown,
-  onToggle,
+  controls,
 }: {
   findings: PositionFindings;
-  shown: boolean;
-  onToggle: () => void;
+  controls: RowControls;
 }) => {
   const counts = controlCounts(findings);
 
   return (
     <PanelSection title="Control">
-      <div className="flex items-center gap-4">
+      <InteractiveRow
+        controls={controls}
+        className={`flex items-center gap-4 py-1 ${HOVER_ROW_CLASS}`}
+      >
         <ControlCount
           side="white"
           count={counts.white}
@@ -441,75 +538,38 @@ const ControlSection = ({
           </span>
         </ControlCount>
         <span className="ml-auto">
-          <EyeToggle shown={shown} onToggle={onToggle} label="square control" />
+          <EyeIndicator state={controls.state} />
         </span>
-      </div>
+      </InteractiveRow>
     </PanelSection>
   );
 };
 
 interface PositionPanelProps {
-  findings: PositionFindings;
+  // Null while a game is still loading, or if it failed to.
+  findings: PositionFindings | null;
   // Findings name pieces by id and nothing else, so the panel can't render
   // a single row without the position's pieces to resolve them against.
   pieces: PlacedPiece[];
-  // The highlights currently drawn on the board, owned above this panel
-  // because the board is a sibling of it, not a child.
-  highlights: SquareHighlight[];
-  onToggleHighlight: (highlight: SquareHighlight) => void;
-  // A whole-board overlay rather than a highlight: it has no single
-  // finding to toggle, so it's an on/off owned with the other overlays.
-  showControl: boolean;
-  onToggleControl: () => void;
+  // What's on the board, owned above this panel because the board is a
+  // sibling of it, not a child.
+  maskSelection: MaskSelection;
 }
 
 const PositionPanel = ({
   findings,
   pieces,
-  highlights,
-  onToggleHighlight,
-  showControl,
-  onToggleControl,
+  maskSelection,
 }: PositionPanelProps) => {
-  // Guarded against a position where neither king is in any danger, which
-  // would otherwise divide every gauge segment by zero.
-  const safetyScale = Math.max(
-    findings.white_king_safety.score,
-    findings.black_king_safety.score,
-    1,
-  );
+  if (findings === null) {
+    return <Empty label="No position loaded" />;
+  }
 
-  // Every row's eye is the same control over a different set of squares,
-  // so it's built once here rather than each row knowing how highlights
-  // are stored.
-  const toggleFor = (highlight: SquareHighlight, label: string) => (
-    <EyeToggle
-      shown={highlights.some((shown) => shown.id === highlight.id)}
-      onToggle={() => onToggleHighlight(highlight)}
-      label={label}
-    />
-  );
-
-  const kingHighlight = (safety: PositionFindings["white_king_safety"]) => {
-    const king = pieces.find(
-      (p) => p.kind === "king" && p.color === safety.color,
-    );
-    return {
-      id: `king:${safety.color}`,
-      tone: "warning" as const,
-      squares: [
-        ...(king ? [king.square] : []),
-        ...squaresOf(safety.attacking_piece_ids, pieces),
-      ],
-      // One arrow per attacker, all converging on the king — which is
-      // what "attack_penalty 14" means, drawn.
-      arrows: king
-        ? safety.attacking_piece_ids.flatMap((id) =>
-            arrowBetween(id, king.id, pieces, "warning"),
-          )
-        : [],
-    };
-  };
+  // Every row is the same control over a different mask id. The rows
+  // only name what they toggle — what it draws is built from the same
+  // findings in `overlays/masks.ts`, for the board.
+  const controlsFor = (id: string, label: string) =>
+    maskControls(id, label, maskSelection);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
@@ -517,26 +577,23 @@ const PositionPanel = ({
           the sections about individual pieces. */}
       <ControlSection
         findings={findings}
-        shown={showControl}
-        onToggle={onToggleControl}
+        controls={controlsFor(maskId.control, "square control")}
       />
 
       <PanelSection title="King safety">
         <KingSafetyRow
           safety={findings.white_king_safety}
-          scaleMax={safetyScale}
           pieces={pieces}
-          toggle={toggleFor(
-            kingHighlight(findings.white_king_safety),
+          controls={controlsFor(
+            maskId.king("white"),
             "White's king and its attackers",
           )}
         />
         <KingSafetyRow
           safety={findings.black_king_safety}
-          scaleMax={safetyScale}
           pieces={pieces}
-          toggle={toggleFor(
-            kingHighlight(findings.black_king_safety),
+          controls={controlsFor(
+            maskId.king("black"),
             "Black's king and its attackers",
           )}
         />
@@ -546,13 +603,9 @@ const PositionPanel = ({
         <PawnStructureRow
           structure={findings.white_pawn_structure}
           pieces={pieces}
-          renderToggle={(flagKey, ids, title) =>
-            toggleFor(
-              {
-                id: `pawns:white:${flagKey}`,
-                tone: flagKey === "passed_pawn_ids" ? "good" : "warning",
-                squares: squaresOf(ids, pieces),
-              },
+          controlsFor={(flag, title) =>
+            controlsFor(
+              maskId.pawns("white", flag),
               `White's ${title.toLowerCase()} pawns`,
             )
           }
@@ -560,13 +613,9 @@ const PositionPanel = ({
         <PawnStructureRow
           structure={findings.black_pawn_structure}
           pieces={pieces}
-          renderToggle={(flagKey, ids, title) =>
-            toggleFor(
-              {
-                id: `pawns:black:${flagKey}`,
-                tone: flagKey === "passed_pawn_ids" ? "good" : "warning",
-                squares: squaresOf(ids, pieces),
-              },
+          controlsFor={(flag, title) =>
+            controlsFor(
+              maskId.pawns("black", flag),
               `Black's ${title.toLowerCase()} pawns`,
             )
           }
@@ -578,43 +627,12 @@ const PositionPanel = ({
           <Empty label="No pins" />
         ) : (
           findings.pins.map((pin) => (
-            <FindingRow key={`${pin.pinner_piece_id}-${pin.pinned_piece_id}`}>
-              <PinRow
-                pinnerId={pin.pinner_piece_id}
-                pinnedId={pin.pinned_piece_id}
-                targetId={pin.pin_target_id}
-                pieces={pieces}
-                toggle={toggleFor(
-                  {
-                    id: `pin:${pin.pinner_piece_id}-${pin.pinned_piece_id}`,
-                    tone: "danger",
-                    // The ray the pin runs along, plus the pinner at its
-                    // root — `squares` starts past it.
-                    // Only the three pieces, not `pin.squares` — the
-                    // ray's empty squares are what the arrow already
-                    // traces, and lighting both says the same thing
-                    // twice while burying the pieces that matter.
-                    squares: squaresOf(
-                      [
-                        pin.pinner_piece_id,
-                        pin.pinned_piece_id,
-                        pin.pin_target_id,
-                      ],
-                      pieces,
-                    ),
-                    // Pinner to target, the line the pinned piece can't
-                    // step off — the same geometry the row draws.
-                    arrows: arrowBetween(
-                      pin.pinner_piece_id,
-                      pin.pin_target_id,
-                      pieces,
-                      "danger",
-                    ),
-                  },
-                  "this pin",
-                )}
-              />
-            </FindingRow>
+            <PinFinding
+              key={maskId.pin(pin)}
+              pin={pin}
+              pieces={pieces}
+              controls={controlsFor(maskId.pin(pin), "this pin")}
+            />
           ))
         )}
       </PanelSection>
@@ -624,27 +642,12 @@ const PositionPanel = ({
           <Empty label="No forks" />
         ) : (
           findings.forks.map((fork) => (
-            <FindingRow key={fork.forker_id}>
-              <ForkRow
-                forkerId={fork.forker_id}
-                forkedIds={fork.forked_ids}
-                pieces={pieces}
-                toggle={toggleFor(
-                  {
-                    id: `fork:${fork.forker_id}`,
-                    tone: "danger",
-                    squares: squaresOf(
-                      [fork.forker_id, ...fork.forked_ids],
-                      pieces,
-                    ),
-                    arrows: fork.forked_ids.flatMap((victimId) =>
-                      arrowBetween(fork.forker_id, victimId, pieces, "danger"),
-                    ),
-                  },
-                  "this fork",
-                )}
-              />
-            </FindingRow>
+            <ForkFinding
+              key={maskId.fork(fork)}
+              fork={fork}
+              pieces={pieces}
+              controls={controlsFor(maskId.fork(fork), "this fork")}
+            />
           ))
         )}
       </PanelSection>
