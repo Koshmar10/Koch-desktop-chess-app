@@ -16,9 +16,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import type { Fork } from "../../../../api/bindings/Fork";
 import type { KingDanger } from "../../../../api/bindings/KingDanger";
 import type { KingSafety } from "../../../../api/bindings/KingSafety";
 import type { PawnStructure } from "../../../../api/bindings/PawnStructure";
+import type { PieceColor } from "../../../../api/bindings/PieceColor";
+import type { Pin } from "../../../../api/bindings/Pin";
 import type { PositionFindings } from "../../../../api/bindings/PositionFindings";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
 import {
@@ -26,17 +29,10 @@ import {
   squareName,
 } from "../../../../components/chessboard/lib/squareName";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
-import EyeIndicator from "../EyeIndicator";
-import InteractiveRow from "../InteractiveRow";
+import { CardRow, PlainRow } from "../InteractiveRow";
 import PanelSection from "../PanelSection";
 import { PieceChip, SquareChip } from "../chips";
-import {
-  HOVER_ROW_CLASS,
-  maskControls,
-  type RowControls,
-} from "../rowControls";
-import { maskId, type PawnFlagKey } from "../../overlays/masks";
-import type { MaskSelection } from "../../types";
+import { maskIdFor } from "../../overlays/masks";
 import { controlColor, controlCounts, type ControlSide } from "./controlTint";
 
 const SIDE_AVATAR_SIZE_PX = 26;
@@ -46,6 +42,13 @@ const PAWN_FLAG_SIZE_PX = 32;
 // Wide enough that the pinned piece can sit on the shaft without covering
 // either arrowhead.
 const PIN_ARROW_WIDTH_PX = 76;
+
+// For the rows' accessible names, e.g. "Show White's king and its
+// attackers on the board".
+const SIDE_NAME: Record<PieceColor, string> = {
+  white: "White",
+  black: "Black",
+};
 
 const Empty = ({ label }: { label: string }) => (
   <p className="text-xs text-foreground/40 italic">{label}</p>
@@ -151,44 +154,41 @@ const CauseLine = ({
   </div>
 );
 
-interface KingSafetyRowProps {
-  safety: KingSafety;
-  pieces: PlacedPiece[];
-  controls: RowControls;
-}
-
-const KingSafetyRow = ({ safety, pieces, controls }: KingSafetyRowProps) => {
-  const [shield, storm, attack] = PENALTY_PARTS;
+/** The three penalties as one bar, each segment in its factor's colour. */
+const PenaltyGauge = ({ safety }: { safety: KingSafety }) => {
   // Past the full-scale point the segments shrink to fit rather than spill
   // out of the bar; the bar being full already says "critical".
   const scale = Math.max(safety.score, KING_DANGER_FULL_SCALE);
 
   return (
-    <InteractiveRow
-      controls={controls}
-      className={`flex flex-col gap-1.5 py-1 ${HOVER_ROW_CLASS}`}
-    >
-      <div className="flex items-center gap-2">
-        <PieceAvatar color={safety.color} size={SIDE_AVATAR_SIZE_PX} />
-        <DangerBadge safety={safety} />
-        <span className="ml-auto">
-          <EyeIndicator state={controls.state} />
-        </span>
-      </div>
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+      {PENALTY_PARTS.map(({ key, bar, title }) => (
+        <div
+          key={key}
+          title={title}
+          className={bar}
+          style={{ width: `${(safety[key] / scale) * 100}%` }}
+        />
+      ))}
+    </div>
+  );
+};
 
-      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
-        {PENALTY_PARTS.map(({ key, bar, title }) => (
-          <div
-            key={key}
-            title={title}
-            className={bar}
-            style={{ width: `${(safety[key] / scale) * 100}%` }}
-          />
-        ))}
-      </div>
+/**
+ * What's causing each penalty, rather than how many points it is. A
+ * factor that isn't contributing doesn't get a line.
+ */
+const PenaltyCauses = ({
+  safety,
+  pieces,
+}: {
+  safety: KingSafety;
+  pieces: PlacedPiece[];
+}) => {
+  const [shield, storm, attack] = PENALTY_PARTS;
 
-      {/* What's causing each penalty, rather than how many points it is.
-          A factor that isn't contributing doesn't get a line. */}
+  return (
+    <>
       {safety.shield_penalty > 0 && (
         <CauseLine part={shield}>
           {safety.missing_shield_files.map((file) => (
@@ -213,9 +213,31 @@ const KingSafetyRow = ({ safety, pieces, controls }: KingSafetyRowProps) => {
           ))}
         </CauseLine>
       )}
-    </InteractiveRow>
+    </>
   );
 };
+
+const KingSafetyRow = ({
+  safety,
+  pieces,
+}: {
+  safety: KingSafety;
+  pieces: PlacedPiece[];
+}) => (
+  <PlainRow
+    maskId={maskIdFor.king(safety.color)}
+    maskLabel={`${SIDE_NAME[safety.color]}'s king and its attackers`}
+    details={
+      <>
+        <PenaltyGauge safety={safety} />
+        <PenaltyCauses safety={safety} pieces={pieces} />
+      </>
+    }
+  >
+    <PieceAvatar color={safety.color} size={SIDE_AVATAR_SIZE_PX} />
+    <DangerBadge safety={safety} />
+  </PlainRow>
+);
 
 // --------------------------------------------------------------- pawns
 
@@ -278,14 +300,9 @@ const PawnFlagTile = ({
 const PawnStructureRow = ({
   structure,
   pieces,
-  controlsFor,
 }: {
   structure: PawnStructure;
   pieces: PlacedPiece[];
-  // Built by the panel, which knows what's on the board — one per
-  // weakness, so you can light up the isolated pawns without the
-  // backward ones coming too.
-  controlsFor: (flag: PawnFlagKey, title: string) => RowControls;
 }) => {
   const flags = PAWN_FLAGS.map((flag) => ({
     ...flag,
@@ -299,43 +316,37 @@ const PawnStructureRow = ({
 
   return (
     <div className="flex flex-row gap-1.5">
-      <div className="flex items-center gap-2">
-        <span
-          title="Pawn islands"
-          className="ml-auto flex items-center gap-1 text-xs tabular-nums text-foreground/50"
-        >
-          <LandPlot size={13} className="rotate-90" />
-          {structure.pawn_islands.length}
-        </span>
-      </div>
+      <span
+        title="Pawn islands"
+        className="flex items-center gap-1 text-xs tabular-nums text-foreground/50"
+      >
+        <LandPlot size={13} className="rotate-90" />
+        {structure.pawn_islands.length}
+      </span>
 
       {flags.length === 0 ? (
         <span className="text-xs text-foreground/40 italic">nothing weak</span>
       ) : (
-        flags.map(({ key, title, overlay, tone, ids }) => {
-          const controls = controlsFor(key, title);
-          return (
-            <InteractiveRow
-              key={key}
-              controls={controls}
-              className={`flex flex-wrap items-center gap-1.5 ${HOVER_ROW_CLASS}`}
-            >
-              <PawnFlagTile
-                color={structure.color}
-                overlay={overlay}
-                tone={tone}
-                title={title}
-              />
-              {ids.map((id) => {
-                const square = squareOf(id);
-                return square && <SquareChip key={id} label={square} />;
-              })}
-              <span className="ml-auto">
-                <EyeIndicator state={controls.state} />
-              </span>
-            </InteractiveRow>
-          );
-        })
+        // A row per weakness, so you can light up the isolated pawns
+        // without the backward ones coming too.
+        flags.map(({ key, title, overlay, tone, ids }) => (
+          <PlainRow
+            key={key}
+            maskId={maskIdFor.pawns(structure.color, key)}
+            maskLabel={`${SIDE_NAME[structure.color]}'s ${title.toLowerCase()} pawns`}
+          >
+            <PawnFlagTile
+              color={structure.color}
+              overlay={overlay}
+              tone={tone}
+              title={title}
+            />
+            {ids.map((id) => {
+              const square = squareOf(id);
+              return square && <SquareChip key={id} label={square} />;
+            })}
+          </PlainRow>
+        ))
       )}
     </div>
   );
@@ -348,13 +359,27 @@ const PawnStructureRow = ({
  * head. A lucide arrow icon can't do this — icons keep their square
  * aspect ratio, so widening one just pads a fixed-size arrow with empty
  * space, and the piece riding a pin covered nearly all of what was left.
+ *
+ * `rider` sits on the shaft — a pin's pinned piece, caught between the
+ * pinner and what it's pinned against.
  */
-const StretchArrow = ({ width }: { width: number }) => (
-  <span className="flex items-center text-foreground/25" style={{ width }}>
-    <span className="h-0.5 flex-1 rounded-full bg-current" />
+const StretchArrow = ({
+  width,
+  rider,
+}: {
+  width: number;
+  rider?: ReactNode;
+}) => (
+  <span className="relative flex shrink-0 items-center" style={{ width }}>
+    <span className="h-0.5 flex-1 rounded-full bg-foreground/25" />
     {/* Pulled left over the line's end so the shaft runs into the tip
         rather than stopping short of it. */}
-    <ChevronRight size={16} strokeWidth={2.5} className="-ml-2 shrink-0" />
+    <ChevronRight
+      size={16}
+      strokeWidth={2.5}
+      className="-ml-2 shrink-0 text-foreground/25"
+    />
+    {rider && <span className="absolute bottom-[-6px] left-1/4">{rider}</span>}
   </span>
 );
 
@@ -364,108 +389,31 @@ const StretchArrow = ({ width }: { width: number }) => (
  * out. The rider carries no square label so it doesn't outgrow the arrow;
  * its tooltip names it.
  */
-const PinRow = ({
-  pinnerId,
-  pinnedId,
-  targetId,
-  pieces,
-  eye,
-}: {
-  pinnerId: number;
-  pinnedId: number;
-  targetId: number;
-  pieces: PlacedPiece[];
-  eye: ReactNode;
-}) => (
-  <div className="flex items-center gap-1">
-    <PieceChip id={pinnerId} pieces={pieces} />
-    <span className="relative flex shrink-0 items-start ml-1 relative">
-      <StretchArrow width={PIN_ARROW_WIDTH_PX} />
-      <span className="absolute left-1/4 bottom-[-6px]">
-        <PieceChip id={pinnedId} pieces={pieces} showSquare={false} />
-      </span>
-    </span>
-    <PieceChip id={targetId} pieces={pieces} />
-    <span className="ml-auto">{eye}</span>
-  </div>
+const PinRow = ({ pin, pieces }: { pin: Pin; pieces: PlacedPiece[] }) => (
+  <CardRow maskId={maskIdFor.pin(pin)} maskLabel="this pin" captioned>
+    <PieceChip id={pin.pinner_piece_id} pieces={pieces} />
+    <StretchArrow
+      width={PIN_ARROW_WIDTH_PX}
+      rider={
+        <PieceChip
+          id={pin.pinned_piece_id}
+          pieces={pieces}
+          showSquare={false}
+        />
+      }
+    />
+    <PieceChip id={pin.pin_target_id} pieces={pieces} />
+  </CardRow>
 );
 
-const ForkRow = ({
-  forkerId,
-  forkedIds,
-  pieces,
-  eye,
-}: {
-  forkerId: number;
-  forkedIds: number[];
-  pieces: PlacedPiece[];
-  eye: ReactNode;
-}) => (
-  <div className="flex flex-wrap items-center gap-1">
-    <PieceChip id={forkerId} pieces={pieces} />
+const ForkRow = ({ fork, pieces }: { fork: Fork; pieces: PlacedPiece[] }) => (
+  <CardRow maskId={maskIdFor.fork(fork)} maskLabel="this fork" captioned>
+    <PieceChip id={fork.forker_id} pieces={pieces} />
     <MoveRight size={20} className="shrink-0 text-foreground/25" />
-    {forkedIds.map((id) => (
+    {fork.forked_ids.map((id) => (
       <PieceChip key={id} id={id} pieces={pieces} />
     ))}
-    <span className="ml-auto">{eye}</span>
-  </div>
-);
-
-// Extra room at the bottom for the square names that hang below each
-// tile — they're positioned outside the chips' boxes, so the row has to
-// make space for them itself.
-const FindingRow = ({
-  controls,
-  children,
-}: {
-  controls: RowControls;
-  children: ReactNode;
-}) => (
-  <InteractiveRow
-    controls={controls}
-    className="rounded-md border-[1px] border-border/60 bg-card/40 px-2 pt-1.5 pb-4 hover:bg-card/80"
-  >
-    {children}
-  </InteractiveRow>
-);
-
-const PinFinding = ({
-  pin,
-  pieces,
-  controls,
-}: {
-  pin: PositionFindings["pins"][number];
-  pieces: PlacedPiece[];
-  controls: RowControls;
-}) => (
-  <FindingRow controls={controls}>
-    <PinRow
-      pinnerId={pin.pinner_piece_id}
-      pinnedId={pin.pinned_piece_id}
-      targetId={pin.pin_target_id}
-      pieces={pieces}
-      eye={<EyeIndicator state={controls.state} />}
-    />
-  </FindingRow>
-);
-
-const ForkFinding = ({
-  fork,
-  pieces,
-  controls,
-}: {
-  fork: PositionFindings["forks"][number];
-  pieces: PlacedPiece[];
-  controls: RowControls;
-}) => (
-  <FindingRow controls={controls}>
-    <ForkRow
-      forkerId={fork.forker_id}
-      forkedIds={fork.forked_ids}
-      pieces={pieces}
-      eye={<EyeIndicator state={controls.state} />}
-    />
-  </FindingRow>
+  </CardRow>
 );
 
 // ------------------------------------------------------------- control
@@ -496,52 +444,38 @@ const ControlCount = ({
   </span>
 );
 
-const ControlSection = ({
-  findings,
-  controls,
-}: {
-  findings: PositionFindings;
-  controls: RowControls;
-}) => {
+const ControlRow = ({ findings }: { findings: PositionFindings }) => {
   const counts = controlCounts(findings);
 
   return (
-    <PanelSection title="Control">
-      <InteractiveRow
-        controls={controls}
-        className={`flex items-center gap-4 py-1 ${HOVER_ROW_CLASS}`}
+    <PlainRow maskId={maskIdFor.control} maskLabel="square control" gap="wide">
+      <ControlCount
+        side="white"
+        count={counts.white}
+        title="Squares White controls"
       >
-        <ControlCount
-          side="white"
-          count={counts.white}
-          title="Squares White controls"
+        <PieceAvatar color="white" size={SIDE_AVATAR_SIZE_PX} />
+      </ControlCount>
+      <ControlCount
+        side="black"
+        count={counts.black}
+        title="Squares Black controls"
+      >
+        <PieceAvatar color="black" size={SIDE_AVATAR_SIZE_PX} />
+      </ControlCount>
+      <ControlCount
+        side="contested"
+        count={counts.contested}
+        title="Squares both sides cover equally"
+      >
+        <span
+          className="flex items-center justify-center rounded-md bg-card/60 text-foreground/60"
+          style={{ width: SIDE_AVATAR_SIZE_PX, height: SIDE_AVATAR_SIZE_PX }}
         >
-          <PieceAvatar color="white" size={SIDE_AVATAR_SIZE_PX} />
-        </ControlCount>
-        <ControlCount
-          side="black"
-          count={counts.black}
-          title="Squares Black controls"
-        >
-          <PieceAvatar color="black" size={SIDE_AVATAR_SIZE_PX} />
-        </ControlCount>
-        <ControlCount
-          side="contested"
-          count={counts.contested}
-          title="Squares both sides cover equally"
-        >
-          <span
-            className="flex items-center justify-center rounded-md bg-card/60 text-foreground/60"
-            style={{ width: SIDE_AVATAR_SIZE_PX, height: SIDE_AVATAR_SIZE_PX }}
-          >
-            <Scale size={14} />
-          </span>
-        </ControlCount>
-        <span className="ml-auto">
-          <EyeIndicator state={controls.state} />
+          <Scale size={14} />
         </span>
-      </InteractiveRow>
-    </PanelSection>
+      </ControlCount>
+    </PlainRow>
   );
 };
 
@@ -551,74 +485,38 @@ interface PositionPanelProps {
   // Findings name pieces by id and nothing else, so the panel can't render
   // a single row without the position's pieces to resolve them against.
   pieces: PlacedPiece[];
-  // What's on the board, owned above this panel because the board is a
-  // sibling of it, not a child.
-  maskSelection: MaskSelection;
 }
 
-const PositionPanel = ({
-  findings,
-  pieces,
-  maskSelection,
-}: PositionPanelProps) => {
+/**
+ * Each row names the mask it toggles; what that mask draws is built from
+ * the same findings in `overlays/masks.ts`, for the board.
+ */
+const PositionPanel = ({ findings, pieces }: PositionPanelProps) => {
   if (findings === null) {
     return <Empty label="No position loaded" />;
   }
-
-  // Every row is the same control over a different mask id. The rows
-  // only name what they toggle — what it draws is built from the same
-  // findings in `overlays/masks.ts`, for the board.
-  const controlsFor = (id: string, label: string) =>
-    maskControls(id, label, maskSelection);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
       {/* First because it's the widest view — the whole board — ahead of
           the sections about individual pieces. */}
-      <ControlSection
-        findings={findings}
-        controls={controlsFor(maskId.control, "square control")}
-      />
+      <PanelSection title="Control">
+        <ControlRow findings={findings} />
+      </PanelSection>
 
       <PanelSection title="King safety">
-        <KingSafetyRow
-          safety={findings.white_king_safety}
-          pieces={pieces}
-          controls={controlsFor(
-            maskId.king("white"),
-            "White's king and its attackers",
-          )}
-        />
-        <KingSafetyRow
-          safety={findings.black_king_safety}
-          pieces={pieces}
-          controls={controlsFor(
-            maskId.king("black"),
-            "Black's king and its attackers",
-          )}
-        />
+        <KingSafetyRow safety={findings.white_king_safety} pieces={pieces} />
+        <KingSafetyRow safety={findings.black_king_safety} pieces={pieces} />
       </PanelSection>
 
       <PanelSection title="Pawns">
         <PawnStructureRow
           structure={findings.white_pawn_structure}
           pieces={pieces}
-          controlsFor={(flag, title) =>
-            controlsFor(
-              maskId.pawns("white", flag),
-              `White's ${title.toLowerCase()} pawns`,
-            )
-          }
         />
         <PawnStructureRow
           structure={findings.black_pawn_structure}
           pieces={pieces}
-          controlsFor={(flag, title) =>
-            controlsFor(
-              maskId.pawns("black", flag),
-              `Black's ${title.toLowerCase()} pawns`,
-            )
-          }
         />
       </PanelSection>
 
@@ -627,12 +525,7 @@ const PositionPanel = ({
           <Empty label="No pins" />
         ) : (
           findings.pins.map((pin) => (
-            <PinFinding
-              key={maskId.pin(pin)}
-              pin={pin}
-              pieces={pieces}
-              controls={controlsFor(maskId.pin(pin), "this pin")}
-            />
+            <PinRow key={maskIdFor.pin(pin)} pin={pin} pieces={pieces} />
           ))
         )}
       </PanelSection>
@@ -642,12 +535,7 @@ const PositionPanel = ({
           <Empty label="No forks" />
         ) : (
           findings.forks.map((fork) => (
-            <ForkFinding
-              key={maskId.fork(fork)}
-              fork={fork}
-              pieces={pieces}
-              controls={controlsFor(maskId.fork(fork), "this fork")}
-            />
+            <ForkRow key={maskIdFor.fork(fork)} fork={fork} pieces={pieces} />
           ))
         )}
       </PanelSection>

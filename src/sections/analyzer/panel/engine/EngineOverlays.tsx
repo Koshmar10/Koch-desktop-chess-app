@@ -2,17 +2,10 @@ import { Flame, Lightbulb, MoveRight, type LucideIcon } from "lucide-react";
 import type { Square } from "../../../../api/bindings/Square";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import { parseUciMove } from "../../../../components/chessboard/lib/uci";
-import { maskId } from "../../overlays/masks";
-import type { MaskSelection } from "../../types";
-import EyeIndicator from "../EyeIndicator";
-import InteractiveRow from "../InteractiveRow";
+import { maskIdFor } from "../../overlays/masks";
+import { PlainRow } from "../InteractiveRow";
 import PanelSection from "../PanelSection";
 import { IconLabel, PieceChip, TileChip } from "../chips";
-import {
-  HOVER_ROW_CLASS,
-  maskControls,
-  type RowControls,
-} from "../rowControls";
 
 interface MoveRowProps {
   icon: LucideIcon;
@@ -20,15 +13,24 @@ interface MoveRowProps {
   // UCI, e.g. "c6a5". Null until the engine has said anything.
   move: string | null;
   pieces: PlacedPiece[];
-  controls: RowControls;
+  // Passed in rather than worked out here: the same row draws both the
+  // best move and the threat, which are different masks.
+  maskId: string;
+  maskLabel: string;
 }
 
 /**
  * One engine move, drawn the way a pin is: the piece that moves, an
- * arrow, and the square it lands on — then the eye that puts it on the
- * board.
+ * arrow, and the square it lands on.
  */
-const MoveRow = ({ icon, title, move, pieces, controls }: MoveRowProps) => {
+const MoveRow = ({
+  icon,
+  title,
+  move,
+  pieces,
+  maskId,
+  maskLabel,
+}: MoveRowProps) => {
   const squares = move ? parseUciMove(move) : null;
   const pieceAt = (square: Square) =>
     pieces.find(
@@ -37,11 +39,7 @@ const MoveRow = ({ icon, title, move, pieces, controls }: MoveRowProps) => {
   const mover = squares ? pieceAt(squares.from) : undefined;
 
   return (
-    // Bottom padding is room for the square names hanging under the tiles.
-    <InteractiveRow
-      controls={controls}
-      className={`flex items-center gap-2 pt-1 pb-4 ${HOVER_ROW_CLASS}`}
-    >
+    <PlainRow maskId={maskId} maskLabel={maskLabel} captioned>
       <IconLabel icon={icon} title={title} />
       {squares && mover ? (
         <>
@@ -59,10 +57,7 @@ const MoveRow = ({ icon, title, move, pieces, controls }: MoveRowProps) => {
           waiting for the engine
         </span>
       )}
-      <span className="ml-auto">
-        <EyeIndicator state={controls.state} />
-      </span>
-    </InteractiveRow>
+    </PlainRow>
   );
 };
 
@@ -70,7 +65,6 @@ interface EngineOverlaysProps {
   bestMove: string | null;
   threatMove: string | null;
   pieces: PlacedPiece[];
-  maskSelection: MaskSelection;
 }
 
 /**
@@ -83,7 +77,6 @@ const EngineOverlays = ({
   bestMove,
   threatMove,
   pieces,
-  maskSelection,
 }: EngineOverlaysProps) => (
   <PanelSection title="Show on board" divided>
     <MoveRow
@@ -91,14 +84,16 @@ const EngineOverlays = ({
       title="Best move"
       move={bestMove}
       pieces={pieces}
-      controls={maskControls(maskId.bestMove, "the best move", maskSelection)}
+      maskId={maskIdFor.bestMove}
+      maskLabel="the best move"
     />
     <MoveRow
       icon={Flame}
       title="Main threat"
       move={threatMove}
       pieces={pieces}
-      controls={maskControls(maskId.threat, "the main threat", maskSelection)}
+      maskId={maskIdFor.threat}
+      maskLabel="the main threat"
     />
   </PanelSection>
 );

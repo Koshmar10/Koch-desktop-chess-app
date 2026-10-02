@@ -1,7 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
-import type { EyeState } from "./rowControls";
+import type { MaskVisibility } from "./maskSelection";
 
-const STATE_CLASS: Record<EyeState, string> = {
+const VISIBILITY_CLASS: Record<MaskVisibility, string> = {
   hidden: "text-foreground/25",
   previewing: "text-foreground/60",
   shown: "text-primary",
@@ -16,13 +16,15 @@ const STATE_CLASS: Record<EyeState, string> = {
  * Not a button. The whole row is the control, so this only reports; a
  * second click target inside it would mean two ways to do one thing, and
  * a button nested inside a button.
+ *
+ * Pushes itself to the far end of the row it sits in.
  */
-const EyeIndicator = ({ state }: { state: EyeState }) => (
+const EyeIndicator = ({ visibility }: { visibility: MaskVisibility }) => (
   <span
     aria-hidden
-    className={`flex shrink-0 p-1 transition-colors duration-150 ${STATE_CLASS[state]}`}
+    className={`ml-auto flex shrink-0 p-1 transition-colors duration-150 ${VISIBILITY_CLASS[visibility]}`}
   >
-    {state === "hidden" ? <EyeOff size={15} /> : <Eye size={15} />}
+    {visibility === "hidden" ? <EyeOff size={15} /> : <Eye size={15} />}
   </span>
 );
 

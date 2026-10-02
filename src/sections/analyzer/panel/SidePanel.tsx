@@ -9,7 +9,7 @@ import type { SideAccuracy } from "../../../api/bindings/SideAccuracy";
 import EngineTab from "./engine/EngineTab";
 import GamePanel from "./game/GamePanel";
 import PositionPanel from "./position/PositionPanel";
-import type { EngineSnapshot, EngineStatus, MaskSelection } from "../types";
+import type { EngineSnapshot, EngineStatus } from "../types";
 
 const TAB_ICON_SIZE = 14;
 // Wider than the board's other neighbours because the Position tab holds
@@ -53,8 +53,6 @@ interface SidePanelProps {
   // Null while a game is still loading, or if it failed to.
   findings: PositionFindings | null;
   pieces: PlacedPiece[];
-  // What's on the board, shared by the Position and Engine tabs' rows.
-  maskSelection: MaskSelection;
   bestMove: string | null;
   threatMove: string | null;
 }
@@ -74,7 +72,6 @@ const SidePanel = ({
   onToggleEngine,
   findings,
   pieces,
-  maskSelection,
   bestMove,
   threatMove,
 }: SidePanelProps) => {
@@ -137,11 +134,7 @@ const SidePanel = ({
           />
         )}
         {tab === "position" && (
-          <PositionPanel
-            findings={findings}
-            pieces={pieces}
-            maskSelection={maskSelection}
-          />
+          <PositionPanel findings={findings} pieces={pieces} />
         )}
         {tab === "engine" && (
           <EngineTab
@@ -151,7 +144,6 @@ const SidePanel = ({
             bestMove={bestMove}
             threatMove={threatMove}
             pieces={pieces}
-            maskSelection={maskSelection}
           />
         )}
       </div>

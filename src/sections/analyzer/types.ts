@@ -56,8 +56,8 @@ export const START_POSITION_PLY = -1;
 
 /**
  * Which overlay masks are on the board, by id, and the way to change
- * that — bundled so it travels down through the panels as one prop
- * rather than four.
+ * that — bundled so the panel's rows can read it as one value, from
+ * `MaskSelectionContext` (see `panel/maskSelection.ts`).
  *
  * Ids only, never the masks themselves: a mask's squares belong to one
  * ply, its id to the reason it's drawn. The masks are rebuilt from the

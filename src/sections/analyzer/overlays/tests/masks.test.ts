@@ -14,7 +14,7 @@ import {
   forkMask,
   ghosted,
   kingSafetyMask,
-  maskId,
+  maskIdFor,
   pawnFlagMask,
   pinMask,
   positionMasks,
@@ -48,18 +48,18 @@ const PIN: Pin = {
 };
 const FORK: Fork = { forker_id: 30, forked_ids: [4, 17] };
 
-describe("maskId", () => {
+describe("maskIdFor", () => {
   it("names a fork by its victims, whatever order they're listed in", () => {
-    expect(maskId.fork({ forker_id: 30, forked_ids: [17, 4] })).toBe(
-      maskId.fork(FORK),
+    expect(maskIdFor.fork({ forker_id: 30, forked_ids: [17, 4] })).toBe(
+      maskIdFor.fork(FORK),
     );
   });
 
   // The same knight forking other pieces later is a different fork, and
   // switching one on mustn't light the other.
   it("tells apart two forks by the same piece", () => {
-    expect(maskId.fork({ forker_id: 30, forked_ids: [4, 13] })).not.toBe(
-      maskId.fork(FORK),
+    expect(maskIdFor.fork({ forker_id: 30, forked_ids: [4, 13] })).not.toBe(
+      maskIdFor.fork(FORK),
     );
   });
 });
@@ -117,7 +117,7 @@ describe("kingSafetyMask", () => {
       PIECES,
     );
 
-    expect(mask.id).toBe(maskId.king("black"));
+    expect(mask.id).toBe(maskIdFor.king("black"));
     expect(mask.arrows?.map((arrow) => arrow.to)).toEqual([
       [0, 4],
       [0, 4],

@@ -11,6 +11,7 @@ import BoardOverlay from "../../components/chessboard/layers/BoardOverlay";
 import { STARTING_POSITION } from "../../components/chessboard/lib/startingPosition";
 import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
 import SidePanel from "./panel/SidePanel";
+import { MaskSelectionContext } from "./panel/maskSelection";
 import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
 import PanelPlaceholder from "./PanelPlaceholder";
 import TimelinePlaceholder from "./board/TimelinePlaceholder";
@@ -247,31 +248,32 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
             </div>
 
             <div className="col-start-3 row-start-2">
-              <SidePanel
-                // A loaded game opens on its Game tab even though the
-                // summary hasn't arrived yet on the first render.
-                initialTab={isGameMode ? "game" : undefined}
-                game={game}
-                moves={moves}
-                clocks={clocks}
-                qualities={qualities}
-                whiteAccuracy={whiteAccuracy}
-                blackAccuracy={blackAccuracy}
-                viewedPly={viewedPly}
-                onSelectPly={goToPly}
-                snapshot={snapshot}
-                findings={findings}
-                pieces={pieces}
-                maskSelection={maskSelection}
-                bestMove={bestMove}
-                threatMove={threatMove}
-                engineStatus={engineStatus}
-                onToggleEngine={() =>
-                  setEngineStatus((status) =>
-                    status === "running" ? "stopped" : "running",
-                  )
-                }
-              />
+              <MaskSelectionContext value={maskSelection}>
+                <SidePanel
+                  // A loaded game opens on its Game tab even though the
+                  // summary hasn't arrived yet on the first render.
+                  initialTab={isGameMode ? "game" : undefined}
+                  game={game}
+                  moves={moves}
+                  clocks={clocks}
+                  qualities={qualities}
+                  whiteAccuracy={whiteAccuracy}
+                  blackAccuracy={blackAccuracy}
+                  viewedPly={viewedPly}
+                  onSelectPly={goToPly}
+                  snapshot={snapshot}
+                  findings={findings}
+                  pieces={pieces}
+                  bestMove={bestMove}
+                  threatMove={threatMove}
+                  engineStatus={engineStatus}
+                  onToggleEngine={() =>
+                    setEngineStatus((status) =>
+                      status === "running" ? "stopped" : "running",
+                    )
+                  }
+                />
+              </MaskSelectionContext>
             </div>
 
             <div className="col-start-2 row-start-3">

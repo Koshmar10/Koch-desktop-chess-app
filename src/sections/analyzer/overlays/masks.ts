@@ -44,8 +44,12 @@ export type PawnFlagKey = (typeof PAWN_FLAG_KEYS)[number];
  * panel rows use them to say what they toggle, so the two can't drift
  * apart — a row whose id doesn't match its mask's toggles nothing, and
  * nothing says so.
+ *
+ * Named for how a call reads — `maskIdFor.king("white")`, the mask id for
+ * White's king — and so it doesn't share a name with the rows' `maskId`
+ * prop, which holds one id rather than the ways to make them.
  */
-export const maskId = {
+export const maskIdFor = {
   control: "control",
   bestMove: "engine:best",
   threat: "engine:threat",
@@ -99,7 +103,7 @@ const arrowBetween = (
 };
 
 export const controlMask = (findings: PositionFindings): OverlayMask => ({
-  id: maskId.control,
+  id: maskIdFor.control,
   priority: CONTROL_PRIORITY,
   squares: controlTints(findings),
 });
@@ -112,7 +116,7 @@ export const kingSafetyMask = (
     (p) => p.kind === "king" && p.color === safety.color,
   );
   return {
-    id: maskId.king(safety.color),
+    id: maskIdFor.king(safety.color),
     priority: KING_SAFETY_PRIORITY,
     squares: marksOf(
       [...(king ? [king.id] : []), ...safety.attacking_piece_ids],
@@ -134,7 +138,7 @@ export const pawnFlagMask = (
   flag: PawnFlagKey,
   pieces: PlacedPiece[],
 ): OverlayMask => ({
-  id: maskId.pawns(structure.color, flag),
+  id: maskIdFor.pawns(structure.color, flag),
   priority: PAWN_PRIORITY,
   // A passed pawn is a strength; every other flag is a weakness.
   squares: marksOf(
@@ -145,7 +149,7 @@ export const pawnFlagMask = (
 });
 
 export const pinMask = (pin: Pin, pieces: PlacedPiece[]): OverlayMask => ({
-  id: maskId.pin(pin),
+  id: maskIdFor.pin(pin),
   priority: TACTIC_PRIORITY,
   // Only the three pieces, not `pin.squares` — the ray's empty squares
   // are what the arrow already traces, and lighting both says the same
@@ -166,7 +170,7 @@ export const pinMask = (pin: Pin, pieces: PlacedPiece[]): OverlayMask => ({
 });
 
 export const forkMask = (fork: Fork, pieces: PlacedPiece[]): OverlayMask => ({
-  id: maskId.fork(fork),
+  id: maskIdFor.fork(fork),
   priority: TACTIC_PRIORITY,
   squares: marksOf([fork.forker_id, ...fork.forked_ids], pieces, "danger"),
   arrows: fork.forked_ids.flatMap((victimId) =>
@@ -183,7 +187,7 @@ export const forkMask = (fork: Fork, pieces: PlacedPiece[]): OverlayMask => ({
  * the old `Overlay` type alive beside the mask ids — their own toggle,
  * their own preview handling, their own case in the clear button — which
  * is the two-systems split this file replaces. As masks, the Engine tab's
- * rows use the same `maskControls` as every finding row, and the arrow
+ * rows switch them by `maskIdFor` like every finding row, and the arrow
  * takes its paint order from `ENGINE_MOVE_PRIORITY` like everything else.
  *
  * Rebuilt every render like the rest, so a switched-on best move follows
@@ -220,10 +224,10 @@ const engineMoveMask = (
 // fixes its own id and colour, so no call site can pair the best move with
 // the threat's id, or draw the threat in the best move's green.
 export const bestMoveMask = (uci: string | null): OverlayMask =>
-  engineMoveMask(maskId.bestMove, uci, "good");
+  engineMoveMask(maskIdFor.bestMove, uci, "good");
 
 export const threatMask = (uci: string | null): OverlayMask =>
-  engineMoveMask(maskId.threat, uci, "danger");
+  engineMoveMask(maskIdFor.threat, uci, "danger");
 
 /**
  * Every mask the viewed position's findings can draw.
