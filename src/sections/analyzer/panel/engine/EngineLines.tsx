@@ -1,5 +1,9 @@
-import { LoaderCircle } from "lucide-react";
-import { evalBarWhiteFraction, formatEvalScore } from "../../board/evalBar";
+import { Layers, LoaderCircle } from "lucide-react";
+import {
+  EVAL_UNKNOWN_LABEL,
+  evalBarWhiteFraction,
+  formatEvalScore,
+} from "../../board/evalBar";
 import type { EngineSnapshot, EngineStatus, PvLine } from "../../types";
 
 interface StatusPillProps {
@@ -76,14 +80,19 @@ const EngineLines = ({
   status,
   onToggleStatus,
 }: EngineLinesProps) => {
-  const hasLines = snapshot !== null && snapshot.lines.length > 0;
+  const hasLines = snapshot !== null && snapshot.pv_lines.length > 0;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-2">
       {/* No "Engine" heading — the tab above already says so. */}
       <div className="flex w-full items-center justify-between">
-        <span className="text-sm text-foreground/40 tabular-nums">
-          {snapshot === null ? "" : `depth ${snapshot.depth}`}
+        <span
+          title="Search depth"
+          className="flex items-center gap-1 text-sm text-foreground/50 tabular-nums"
+        >
+          <Layers size={14} />
+          <p>depth=</p>
+          {snapshot?.depth ?? EVAL_UNKNOWN_LABEL}
         </span>
         <StatusPill status={status} onToggle={onToggleStatus} />
       </div>
@@ -93,9 +102,10 @@ const EngineLines = ({
           // Rendered in arrival order. Stockfish ranks multipv lines
           // best-first already and every score is White-relative, so
           // sorting by score here picks the *worst* line whenever Black
-          // is to move — the old app's bug, see KOCH-HANDOFF.md §3.
-          snapshot.lines.map((line) => (
-            <PvLineRow key={line.multipv} line={line} />
+          // is to move — the old app's bug, see KOCH-HANDOFF.md §3. The
+          // position in the list *is* the rank, so it's also the key.
+          snapshot.pv_lines.map((line, rank) => (
+            <PvLineRow key={rank} line={line} />
           ))
         ) : (
           <span className="text-foreground/40 italic">No lines yet</span>

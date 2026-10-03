@@ -10,7 +10,7 @@ import type { PositionFindings } from "./PositionFindings";
  * the move that *produced* this position, so they're all `None` for the
  * start position.
  */
-export type ReplayPosition = { pieces: Array<PieceView>, findings: PositionFindings, last_move: LastMove | null, san: string | null, 
+export type ReplayPosition = { pieces: Array<PieceView>, findings: PositionFindings, last_move: LastMove | null, san: string | null, uci: string | null, 
 /**
  * How long the move took to play.
  */

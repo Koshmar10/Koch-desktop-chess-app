@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
@@ -10,6 +10,7 @@ import OverlayLayer from "../../components/chessboard/layers/OverlayLayer";
 import BoardOverlay from "../../components/chessboard/layers/BoardOverlay";
 import { STARTING_POSITION } from "../../components/chessboard/lib/startingPosition";
 import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
+import { stopLiveEngine, updateLiveEnginePosition } from "../../api/analyzer";
 import SidePanel from "./panel/SidePanel";
 import { MaskSelectionContext } from "./panel/maskSelection";
 import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
@@ -61,9 +62,9 @@ const GameLoadError = ({ message }: { message: string }) => (
  * With a `gameId` it shows a saved game: every position, its findings and
  * its stored analysis come from one backend replay (`load_game_replay`).
  * Without one it's the sandbox, still on `mock.ts` until sandbox play
- * (KOCH-12) exists. The live engine (KOCH-10) doesn't exist in either
- * mode yet, so for a loaded game the engine panel stays empty rather than
- * showing the sandbox's start-position lines beside a mid-game board.
+ * (KOCH-12) exists. A loaded game is searched by the live engine
+ * (KOCH-10); the sandbox keeps mock engine lines, since its board is mock
+ * data the engine has no moves for.
  *
  * The local state below is deliberately the *whole* set, and it stays small
  * enough to read in one go. KOCH-11 replaces it with a reducer/context; the
@@ -71,9 +72,8 @@ const GameLoadError = ({ message }: { message: string }) => (
  * `useState` calls in one component (KOCH-HANDOFF.md §8).
  */
 const Analyzer = ({ gameId }: { gameId: number | null }) => {
-  const { replay, error, isLoading } = useGameReplay(gameId);
+  const { replay, error, isLoading, liveSnapshot } = useGameReplay(gameId);
   const isGameMode = gameId !== null;
-
   const [viewedPly, setViewedPly] = useState(START_POSITION_PLY);
   const [isFlipped, setIsFlipped] = useState(false);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("running");
@@ -93,6 +93,9 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const moves = isGameMode
     ? (replay?.positions.slice(1).map((p) => p.san ?? "") ?? [])
     : MOCK_MOVES;
+  const uciMoves = isGameMode
+    ? (replay?.positions.slice(1).map((p) => p.uci ?? "") ?? [])
+    : [];
   // While a game loads, an empty start position rather than the sandbox's
   // mock — nothing on screen should claim to be the game before it is.
   const pieces = isGameMode
@@ -114,25 +117,53 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     ? (replay?.black_accuracy ?? null)
     : MOCK_BLACK_ACCURACY;
 
-  // Stopping the engine clears the lines rather than leaving stale ones on
-  // screen attributed to a search that's no longer happening. The threat
-  // comes from a second search (KOCH-14's flipped-turn probe), so it stops
-  // with the engine for the same reason.
-  const isEngineShowing = !isGameMode && engineStatus !== "stopped";
-  const snapshot = isEngineShowing ? MOCK_ENGINE_SNAPSHOT : null;
-  const threatMove = isEngineShowing ? MOCK_THREAT_MOVE : null;
-  const bestMove = topLineMove(snapshot?.lines);
+  // ---- The live engine (KOCH-10) ----
+  // Its name for a position: which game, and how far into it.
+  const positionKeyAt = (ply: number) => `${gameId}:${ply}`;
+  const searchPosition = (ply: number) =>
+    updateLiveEnginePosition(
+      positionKeyAt(ply),
+      uciMoves.slice(0, ply + 1),
+    ).catch(console.error);
 
-  // A loaded game has a real eval for every analysed ply already — the
-  // one the analysis pass stored — so the bar shows that rather than
-  // waiting on a live engine. Null for the start position and for a game
-  // that hasn't been analysed.
+  // The search starts on the position the screen opens on; after that
+  // `goToPly` sends each new one. Leaving the screen stops it — an infinite
+  // search holds every engine thread at full load — while the session
+  // stays for next time.
+  useEffect(() => {
+    if (!isGameMode) return;
+    updateLiveEnginePosition(`${gameId}:${START_POSITION_PLY}`, []).catch(
+      console.error,
+    );
+    return () => {
+      stopLiveEngine().catch(console.error);
+    };
+  }, [gameId, isGameMode]);
+
+  // Stopping the engine clears the lines rather than leaving stale ones on
+  // screen attributed to a search that's no longer happening.
+  const isEngineShowing = engineStatus !== "stopped";
+  // Only a snapshot for the position on screen counts, so one that arrives
+  // late for the last position is never shown against this one.
+  const liveForThisPosition =
+    liveSnapshot?.position_key === positionKeyAt(viewedPly)
+      ? liveSnapshot
+      : null;
+  const shownSnapshot = isGameMode ? liveForThisPosition : MOCK_ENGINE_SNAPSHOT;
+  const snapshot = isEngineShowing ? shownSnapshot : null;
+  // The threat is still mock data — the search behind it is KOCH-14 — so a
+  // loaded game shows none rather than a made-up one.
+  const threatMove = isEngineShowing && !isGameMode ? MOCK_THREAT_MOVE : null;
+  const bestMove = topLineMove(snapshot?.pv_lines);
+
+  // The live engine's top line when it has one for this position.
+  // Otherwise a loaded game falls back to the eval its analysis pass
+  // stored — null for the start position and for a game that hasn't been
+  // analysed.
   const storedEval = position?.eval_cp ?? null;
-  const evalScore: EvalScore | null = isGameMode
-    ? storedEval === null
-      ? null
-      : { kind: "cp", centipawns: storedEval }
-    : topLineScore(snapshot?.lines);
+  const storedScore: EvalScore | null =
+    storedEval === null ? null : { kind: "cp", centipawns: storedEval };
+  const evalScore = topLineScore(snapshot?.pv_lines) ?? storedScore;
 
   // ---- What's drawn: everything switched on, plus the preview ----
   // Every mask this ply could draw, rebuilt each render — so an id that's
@@ -157,6 +188,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const goToPly = (ply: number) => {
     const next = clampPly(ply, moves.length);
     if (next === viewedPly) return;
+    if (isGameMode && engineStatus === "running") searchPosition(next);
     setViewedPly(next);
     // What's switched on stays on: it's ids, and the masks are rebuilt
     // for the new ply. The preview goes, though — the row it came from
@@ -175,6 +207,14 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         : new Set([...shown, id]),
     );
     setPreviewMaskId(null);
+  };
+
+  const toggleEngine = () => {
+    const willRun = engineStatus !== "running";
+    setEngineStatus(willRun ? "running" : "stopped");
+    if (!isGameMode) return;
+    if (willRun) searchPosition(viewedPly);
+    else stopLiveEngine().catch(console.error);
   };
 
   const clearOverlays = () => {
@@ -267,11 +307,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                   bestMove={bestMove}
                   threatMove={threatMove}
                   engineStatus={engineStatus}
-                  onToggleEngine={() =>
-                    setEngineStatus((status) =>
-                      status === "running" ? "stopped" : "running",
-                    )
-                  }
+                  onToggleEngine={toggleEngine}
                 />
               </MaskSelectionContext>
             </div>

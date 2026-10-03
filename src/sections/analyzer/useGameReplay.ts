@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { loadGameReplay } from "../../api/analyzer";
+import {
+  loadGameReplay,
+  onLiveEngineSnapshot,
+  refreshLiveEngineSession,
+} from "../../api/analyzer";
+import type { EngineSnapshot } from "../../api/bindings/EngineSnapshot";
 import type { GameReplay } from "../../api/bindings/GameReplay";
 
 interface Loaded {
@@ -12,9 +17,15 @@ interface Loaded {
   error: string | null;
 }
 
-/** Loads a saved game for the analyzer. `null` means sandbox: nothing to load. */
+/**
+ * Loads a saved game for the analyzer, and keeps the live engine session
+ * on that game. `null` means sandbox: nothing to load.
+ */
 export const useGameReplay = (gameId: number | null) => {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // The live engine's latest full set of lines, for whichever position it
+  // was last searching — the caller checks its `position_key`.
+  const [liveSnapshot, setLiveSnapshot] = useState<EngineSnapshot | null>(null);
 
   useEffect(() => {
     if (gameId === null) return;
@@ -31,10 +42,22 @@ export const useGameReplay = (gameId: number | null) => {
     };
   }, [gameId]);
 
+  useEffect(() => {
+    refreshLiveEngineSession(gameId).catch(console.error);
+  }, [gameId]);
+
+  useEffect(() => {
+    const unlisten = onLiveEngineSnapshot(setLiveSnapshot);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  }, []);
+
   const isForThisGame = loaded !== null && loaded.gameId === gameId;
   return {
     replay: isForThisGame ? loaded.replay : null,
     error: isForThisGame ? loaded.error : null,
     isLoading: gameId !== null && !isForThisGame,
+    liveSnapshot,
   };
 };

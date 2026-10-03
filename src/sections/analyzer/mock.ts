@@ -39,25 +39,23 @@ export const MOCK_GAME: GameSummary = {
  * fall apart on `+0.28`, which is the case worth seeing while building.
  */
 export const MOCK_ENGINE_SNAPSHOT: EngineSnapshot = {
+  position_key: "sandbox",
   depth: 24,
-  lines: [
+  multi_pv: 4,
+  pv_lines: [
     {
-      multipv: 1,
       score: { kind: "cp", centipawns: 28 },
       moves: ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"],
     },
     {
-      multipv: 2,
       score: { kind: "cp", centipawns: 24 },
       moves: ["d2d4", "g8f6", "c2c4", "e7e6", "g1f3"],
     },
     {
-      multipv: 3,
       score: { kind: "cp", centipawns: 19 },
       moves: ["g1f3", "d7d5", "d2d4", "g8f6", "c2c4"],
     },
     {
-      multipv: 4,
       score: { kind: "cp", centipawns: 17 },
       moves: ["c2c4", "e7e5", "b1c3", "g8f6", "g1f3"],
     },

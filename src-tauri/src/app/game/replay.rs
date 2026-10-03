@@ -40,6 +40,7 @@ pub struct ReplayPosition {
     pub findings: PositionFindings,
     pub last_move: Option<LastMove>,
     pub san: Option<String>,
+    pub uci: Option<String>,
     /// How long the move took to play.
     pub time_ms: Option<u32>,
     /// White-relative engine eval of this position, in centipawns. `None`
@@ -80,6 +81,7 @@ fn start_position(board: &Board) -> ReplayPosition {
         findings: PositionFindings::from(board),
         last_move: None,
         san: None,
+        uci: None,
         time_ms: None,
         eval_cp: None,
         quality: None,
@@ -92,6 +94,7 @@ fn position_after(board: &Board, played: &GameMoveRow, last_move: LastMove) -> R
         findings: PositionFindings::from(board),
         last_move: Some(last_move),
         san: Some(played.san.clone()),
+        uci: Some(played.uci.clone()),
         time_ms: Some(played.time_ms),
         eval_cp: played.eval_cp,
         quality: played.quality.as_deref().and_then(MoveQuality::parse),
