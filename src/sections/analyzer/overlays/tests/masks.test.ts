@@ -3,7 +3,7 @@ import type { Fork } from "../../../../api/bindings/Fork";
 import type { Pin } from "../../../../api/bindings/Pin";
 import { TONE_SQUARE_COLOR } from "../../../../components/chessboard/lib/highlightTones";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
-import { MOCK_PIECES, MOCK_POSITION_FINDINGS } from "../../mock";
+import { FIXTURE_FINDINGS, FIXTURE_PIECES } from "../../tests/fixtures";
 import {
   CONTROL_PRIORITY,
   ENGINE_MOVE_PRIORITY,
@@ -110,7 +110,7 @@ describe("kingSafetyMask", () => {
   it("converges an arrow from every attacker on the king", () => {
     const mask = kingSafetyMask(
       {
-        ...MOCK_POSITION_FINDINGS.black_king_safety,
+        ...FIXTURE_FINDINGS.black_king_safety,
         color: "black",
         attacking_piece_ids: [29, 30],
       },
@@ -128,7 +128,7 @@ describe("kingSafetyMask", () => {
 describe("pawnFlagMask", () => {
   it("fills a passed pawn as a strength and the other flags as weaknesses", () => {
     const structure = {
-      ...MOCK_POSITION_FINDINGS.white_pawn_structure,
+      ...FIXTURE_FINDINGS.white_pawn_structure,
       color: "white" as const,
       passed_pawn_ids: [40],
       isolated_pawn_ids: [40],
@@ -171,7 +171,7 @@ describe("positionMasks", () => {
   // squares and arrows by it — two masks sharing one would light together
   // and collide in React.
   it("gives every mask its own id", () => {
-    const ids = positionMasks(MOCK_POSITION_FINDINGS, MOCK_PIECES).map(
+    const ids = positionMasks(FIXTURE_FINDINGS, FIXTURE_PIECES).map(
       (mask) => mask.id,
     );
     expect(new Set(ids).size).toBe(ids.length);

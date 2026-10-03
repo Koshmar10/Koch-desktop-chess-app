@@ -24,7 +24,7 @@ pub struct LiveEngineSettings {
 impl Default for LiveEngineSettings {
     fn default() -> Self {
         Self {
-            multi_pv: 1,
+            multi_pv: 3,
             threads: 1,
             hash_mb: 16,
         }

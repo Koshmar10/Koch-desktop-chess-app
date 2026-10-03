@@ -1,4 +1,5 @@
 import { Home, Play, LineChart, History, Puzzle, Settings } from "lucide-react";
+import kochLogo from "../../assets/koch-logo.svg";
 import SidebarButton from "./SidebarButton";
 
 const SIDEBAR_ITEMS = [
@@ -12,9 +13,7 @@ const SIDEBAR_ITEMS = [
 
 const LogoSection = () => (
   <div className="flex justify-center items-center pt-8 border-b-[1px] border-sidebar-border pb-6">
-    <span className="w-fit h-fit px-5 py-3 rounded-lg text-sidebar-foreground bg-accent text-xl">
-      K
-    </span>
+    <img src={kochLogo} alt="Koch" className="size-12" />
   </div>
 );
 

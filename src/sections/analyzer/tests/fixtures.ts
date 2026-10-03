@@ -1,158 +1,15 @@
-import type { PlacedPiece } from "../../components/chessboard/lib/types";
-import type { GameSummary } from "../../api/bindings/GameSummary";
-import type { MoveQuality } from "../../api/bindings/MoveQuality";
-import type { PositionFindings } from "../../api/bindings/PositionFindings";
-import type { SideAccuracy } from "../../api/bindings/SideAccuracy";
-import type { EngineSnapshot } from "./types";
+import type { PlacedPiece } from "../../../components/chessboard/lib/types";
+import type { PositionFindings } from "../../../api/bindings/PositionFindings";
 
-/**
- * The game the analyzer is pretending to have open. Shaped as the real
- * `GameSummary` that History already lists and that KOCH-12 will hand
- * this screen, so the game tab needs no rework when loading arrives —
- * only its source changes.
- */
-export const MOCK_GAME: GameSummary = {
-  game_id: 1,
-  game_hash: "mock-ruy-lopez",
-  date_played: "2026-09-12 19:41:00",
-  white_player: "Petru",
-  black_player: "Stockfish 17",
-  white_elo: 1640,
-  black_elo: 1800,
-  result: "1-0",
-  opening_id: null,
-  opening_name: "Ruy Lopez, Closed Defence",
-  time_control: "600+0",
-  source: "koch",
-  human_color: "white",
-  has_analysis: true,
-  partial_import: false,
-};
+// Test fixtures only — nothing on screen reads these.
 
-// Stand-ins until KOCH-10 streams the real thing. Kept in the shape the
-// backend will emit, not a convenient-for-React shape, so wiring the
-// session in later is a swap of the source and nothing else.
-
-/**
- * The start position at a plausible search depth. Real-ish numbers rather
- * than round ones: a bar and a line list both look fine on `+1.00` and
- * fall apart on `+0.28`, which is the case worth seeing while building.
- */
-export const MOCK_ENGINE_SNAPSHOT: EngineSnapshot = {
-  position_key: "sandbox",
-  depth: 24,
-  multi_pv: 4,
-  pv_lines: [
-    {
-      score: { kind: "cp", centipawns: 28 },
-      moves: ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"],
-    },
-    {
-      score: { kind: "cp", centipawns: 24 },
-      moves: ["d2d4", "g8f6", "c2c4", "e7e6", "g1f3"],
-    },
-    {
-      score: { kind: "cp", centipawns: 19 },
-      moves: ["g1f3", "d7d5", "d2d4", "g8f6", "c2c4"],
-    },
-    {
-      score: { kind: "cp", centipawns: 17 },
-      moves: ["c2c4", "e7e5", "b1c3", "g8f6", "g1f3"],
-    },
-  ],
-};
-
-/**
- * A Ruy Lopez opening, in SAN, purely so the ply scrubber has a real move
- * list to walk. The board stays on the starting position for now — moving
- * it in step with this is KOCH-12, not part of the shell.
- */
-export const MOCK_MOVES: string[] = [
-  "e4",
-  "e5",
-  "Nf3",
-  "Nc6",
-  "Bb5",
-  "a6",
-  "Ba4",
-  "Nf6",
-  "O-O",
-  "Be7",
-  "Re1",
-  "b5",
-  "Bb3",
-  "d6",
-  "c3",
-  "O-O",
-];
-
-/**
- * A grade for every move in MOCK_MOVES, both sides — the analysis grades
- * both now. Illustrative: White's column is chosen to show every colour
- * once, not a verdict on these moves (10.Re1 is no mistake).
- */
-export const MOCK_QUALITIES: (MoveQuality | null)[] = [
-  "Brilliant", // e4
-  "Brilliant", // e5
-  "Great", // Nf3
-  "Great", // Nc6
-  "Excellent", // Bb5
-  "Good", // a6
-  "Good", // Ba4
-  "Excellent", // Nf6
-  "Inaccuracy", // O-O
-  "Great", // Be7
-  "Mistake", // Re1
-  "Inaccuracy", // b5
-  "Blunder", // Bb3
-  "Good", // d6
-  "Great", // c3
-  "Excellent", // O-O
-];
-
-/** Each side's accuracy over MOCK_MOVES, in line with the grades above. */
-export const MOCK_WHITE_ACCURACY: SideAccuracy = {
-  accuracy_percent: 78.4,
-  average_centipawn_loss: 41,
-};
-export const MOCK_BLACK_ACCURACY: SideAccuracy = {
-  accuracy_percent: 91.2,
-  average_centipawn_loss: 17,
-};
-
-/**
- * Remaining clock after each ply of MOCK_MOVES, from a 10-minute game.
- * Illustrative: nothing in the current backend carries per-move clocks
- * yet — `GameStateView.move_history` is SAN only and `GameAnalysis` has
- * the human's move *times*, not the clock they left behind. The move
- * timeline drops the column when it gets none, so this is what the
- * populated version looks like.
- */
-export const MOCK_CLOCKS: string[] = [
-  "9:58",
-  "9:57",
-  "9:51",
-  "9:49",
-  "9:45",
-  "9:40",
-  "9:33",
-  "9:26",
-  "9:20",
-  "9:11",
-  "9:08",
-  "8:59",
-  "8:55",
-  "8:44",
-  "8:40",
-  "8:30",
-];
-
-// The position MOCK_MOVES actually reaches, so the board, the move count
-// and every id the findings below reference describe the same chess. Ids
-// follow STARTING_POSITION's scheme (black back rank 0-7, black pawns
-// 8-15, white pawns 16-23, white back rank 24-31), carried through the
-// moves — so id 1 is the knight that began on b8 and now stands on c6.
-export const MOCK_PIECES: PlacedPiece[] = [
+// A Closed Ruy Lopez (1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4 Nf6 5.O-O Be7
+// 6.Re1 b5 7.Bb3 d6 8.c3 O-O), so the pieces and every id the findings
+// below reference describe the same chess. Ids follow STARTING_POSITION's
+// scheme (black back rank 0-7, black pawns 8-15, white pawns 16-23, white
+// back rank 24-31), carried through the moves — so id 1 is the knight that
+// began on b8 and now stands on c6.
+export const FIXTURE_PIECES: PlacedPiece[] = [
   // Black
   { id: 0, kind: "rook", color: "black", square: { rank: 0, file: 0 } },
   { id: 2, kind: "bishop", color: "black", square: { rank: 0, file: 2 } },
@@ -238,32 +95,23 @@ const controlFixture = () => {
 };
 
 /**
- * Black's best reply if White passed — what the threat probe (KOCH-14)
- * will report. ...Na5 hitting the b3 bishop is *the* Closed Ruy threat:
- * it's why White so often spends a tempo on Bc2 in this structure.
- */
-export const MOCK_THREAT_MOVE = "c6a5";
-
-/**
  * Findings for the position above.
  *
  * The pin is real geometry — the b3 bishop looks down the b3-g8 diagonal
  * at f7, with Black's king behind it — and the king safety numbers are
  * plausible for a Closed Ruy.
  *
- * The fork and the pawn weaknesses are **fixtures**, not the truth about
- * the position: a Closed Ruy has no fork, and both sides hold all eight
- * files, so nothing there is really passed or isolated. They're set so
- * every row type renders while the panel is being built. The fixture is
- * at least self-consistent — White's island list and `unoccupied_files`
- * agree with the isolated a2 pawn rather than contradicting it on screen
- * — but it describes fewer pawns than the board shows. Empty every list
- * to see the panel's empty states.
+ * The fork and the pawn weaknesses are made up, not the truth about the
+ * position: a Closed Ruy has no fork, and both sides hold all eight files,
+ * so nothing there is really passed or isolated. They're set so every
+ * finding type has something to test against. The fixture is at least
+ * self-consistent — White's island list and `unoccupied_files` agree with
+ * the isolated a2 pawn rather than contradicting it.
  *
  * Square control comes from `CONTROL_FIXTURE` above — real coverers for
  * the squares that matter, not all 64.
  */
-export const MOCK_POSITION_FINDINGS: PositionFindings = {
+export const FIXTURE_FINDINGS: PositionFindings = {
   ...controlFixture(),
   hanging_squares: [{ rank: 3, file: 4 }],
   pins: [
@@ -285,8 +133,7 @@ export const MOCK_POSITION_FINDINGS: PositionFindings = {
     color: "white",
     // a2 stands alone with the b-file empty beside it, which is what
     // makes it isolated — so the islands and unoccupied_files below have
-    // to show that gap too, or the panel would claim one connected
-    // island next to a pawn marked isolated.
+    // to show that gap too.
     pawn_islands: [[16], [18, 19, 20, 21, 22, 23]],
     backward_pawn_ids: [19],
     passed_pawn_ids: [],

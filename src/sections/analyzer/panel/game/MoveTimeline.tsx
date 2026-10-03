@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
 import { MOVE_QUALITY_COLOR } from "../../moveQuality";
 import { START_POSITION_PLY } from "../../types";
@@ -42,6 +43,16 @@ const MoveCell = ({
   isViewed,
   onSelect,
 }: MoveCellProps) => {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  // Keeps the viewed move in sight however it got there — the toolbar, the
+  // timeline chart, the keyboard. `nearest` only scrolls when the move is
+  // out of view, and only as far as it takes, so clicking a move that's
+  // already visible never jumps the list.
+  useEffect(() => {
+    if (isViewed) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [isViewed]);
+
   // Black's column is short by one on an odd-length game. An empty cell
   // rather than nothing at all, so the two columns stay in step and the
   // numbers beside them keep lining up.
@@ -51,6 +62,7 @@ const MoveCell = ({
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={() => onSelect(ply)}
       className={`${ROW_HEIGHT_CLASS} flex cursor-pointer items-center justify-between gap-2 rounded px-2 text-sm font-medium transition-colors duration-100 ${

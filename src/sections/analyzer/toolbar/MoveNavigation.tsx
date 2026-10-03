@@ -34,7 +34,7 @@ const MoveNavigation = ({
   const isAtEnd = viewedPly >= totalPlies - 1;
 
   return (
-    <div className="flex w-fit flex-row items-center gap-3 px-3 py-2 shadow-sm">
+    <div className="flex w-fit flex-row items-center gap-2 py-2 shadow-sm">
       <TooltipButton
         icon={<ChevronFirst size={ICON_SIZE} />}
         tooltip="Start"
@@ -47,6 +47,9 @@ const MoveNavigation = ({
         onClick={onPrev}
         disabled={isAtStart}
       />
+      <div className="text-primary text-lg border-b-[2px] border-primary/60">
+        {viewedPly + 1}
+      </div>
       <TooltipButton
         icon={<ChevronRight size={ICON_SIZE} />}
         tooltip="Next move"

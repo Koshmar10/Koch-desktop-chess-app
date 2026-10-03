@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PositionFindings } from "../../../../../api/bindings/PositionFindings";
-import { MOCK_POSITION_FINDINGS } from "../../../mock";
+import { FIXTURE_FINDINGS } from "../../../tests/fixtures";
 import { controlCounts, controlOf, controlTints } from "../controlTint";
 
 const SQUARE_COUNT = 64;
@@ -10,7 +10,7 @@ const findingsWith = (
   squares: { index: number; white: number[]; black: number[] }[],
 ): PositionFindings => {
   const findings: PositionFindings = {
-    ...MOCK_POSITION_FINDINGS,
+    ...FIXTURE_FINDINGS,
     square_threats: Array.from({ length: SQUARE_COUNT }, () => 0),
     attackers: Array.from({ length: SQUARE_COUNT }, () => []),
     defenders: Array.from({ length: SQUARE_COUNT }, () => []),

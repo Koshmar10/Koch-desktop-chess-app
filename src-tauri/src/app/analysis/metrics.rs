@@ -7,10 +7,14 @@ use koch_uci::Score;
 
 use crate::app::game::TimeControl;
 
-// A forced mate has no natural centipawn value — clamping it to this keeps
-// it comparable to (and dominant over) ordinary centipawn swings without
-// risking overflow once two of these get summed.
-const MATE_SCORE_CP: i32 = 100_000;
+// Every eval is capped at ±10 pawns, and a forced mate counts as the cap.
+// Past this the position is decided whichever it is, and an uncapped mate
+// value dwarfs everything else: one missed mate would put a ~100k-centipawn
+// loss into a player's average and flatten the eval chart. Lichess caps
+// centipawn loss at the same point. Already beyond every grade threshold,
+// and where the win% curve is nearly flat, so grades and accuracy barely
+// notice.
+const EVAL_CAP_CP: i32 = 1_000;
 
 // Fixed absolute threshold, not scaled to the game's time control — 30s
 // left reads as "time trouble" the same way regardless of whether this was
@@ -32,13 +36,13 @@ const ACCURACY_MIN_PERCENT: f64 = 0.0;
 const ACCURACY_MAX_PERCENT: f64 = 100.0;
 
 /// UCI scores are always relative to the side to move — this flattens one
-/// to a plain signed centipawn number so it can be added/subtracted freely.
-/// A mate is clamped to a large finite value rather than left as infinity.
+/// to a plain signed centipawn number so it can be added/subtracted freely,
+/// capped at [`EVAL_CAP_CP`] either way. A mate is the cap itself.
 pub(super) fn to_centipawns(score: Score) -> i32 {
     match score {
-        Score::Centipawns(cp) => cp,
-        Score::Mate(n) if n >= 0 => MATE_SCORE_CP,
-        Score::Mate(_) => -MATE_SCORE_CP,
+        Score::Centipawns(cp) => cp.clamp(-EVAL_CAP_CP, EVAL_CAP_CP),
+        Score::Mate(n) if n >= 0 => EVAL_CAP_CP,
+        Score::Mate(_) => -EVAL_CAP_CP,
     }
 }
 
@@ -152,6 +156,15 @@ impl TimeStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn evals_are_capped_and_a_mate_is_the_cap() {
+        assert_eq!(to_centipawns(Score::Centipawns(35)), 35);
+        assert_eq!(to_centipawns(Score::Centipawns(2_400)), EVAL_CAP_CP);
+        assert_eq!(to_centipawns(Score::Centipawns(-2_400)), -EVAL_CAP_CP);
+        assert_eq!(to_centipawns(Score::Mate(3)), EVAL_CAP_CP);
+        assert_eq!(to_centipawns(Score::Mate(-3)), -EVAL_CAP_CP);
+    }
 
     #[test]
     fn no_time_control_means_no_time_trouble_but_still_sums_move_times() {
