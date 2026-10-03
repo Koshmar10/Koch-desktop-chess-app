@@ -209,6 +209,12 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     setPreviewMaskId(null);
   };
 
+  // New engine settings stop the search to apply; pick it back up on the
+  // position on screen, unless the engine is switched off.
+  const resumeSearch = () => {
+    if (isGameMode && engineStatus === "running") searchPosition(viewedPly);
+  };
+
   const toggleEngine = () => {
     const willRun = engineStatus !== "running";
     setEngineStatus(willRun ? "running" : "stopped");
@@ -308,6 +314,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                   threatMove={threatMove}
                   engineStatus={engineStatus}
                   onToggleEngine={toggleEngine}
+                  onEngineSettingsApplied={resumeSearch}
                 />
               </MaskSelectionContext>
             </div>

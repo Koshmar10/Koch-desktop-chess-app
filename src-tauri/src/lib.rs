@@ -51,9 +51,11 @@ pub fn run() {
             app::settings::save_player_engine_settings,
             app::stats::get_player_stats,
             app::stats::get_rating_history,
-            app::live_engine::engine::refresh_live_engine_session,
-            app::live_engine::engine::update_live_engine_position,
-            app::live_engine::engine::stop_live_engine
+            app::live_engine::commands::refresh_live_engine_session,
+            app::live_engine::commands::update_live_engine_position,
+            app::live_engine::commands::stop_live_engine,
+            app::live_engine::commands::apply_live_engine_settings,
+            app::live_engine::commands::get_live_engine_settings
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

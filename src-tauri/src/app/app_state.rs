@@ -1,4 +1,4 @@
-use crate::app::{game::Game, live_engine::engine::LiveEngineHandle};
+use crate::app::{game::Game, live_engine::LiveEngineHandle};
 use std::sync::Mutex;
 
 #[derive(Default)]

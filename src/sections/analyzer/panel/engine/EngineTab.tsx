@@ -2,13 +2,15 @@ import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import EngineLines from "./EngineLines";
 import EngineOverlays from "./EngineOverlays";
 import EngineSettings from "./EngineSettings";
-import { useAnalyzerEngineSettings } from "./useAnalyzerEngineSettings";
+import { useLiveEngineSettings } from "./useLiveEngineSettings";
 import type { EngineSnapshot, EngineStatus } from "../../types";
 
 interface EngineTabProps {
   snapshot: EngineSnapshot | null;
   status: EngineStatus;
   onToggleStatus: () => void;
+  // New engine settings stop the search to apply; this picks it back up.
+  onSettingsApplied: () => void;
   bestMove: string | null;
   threatMove: string | null;
   pieces: PlacedPiece[];
@@ -22,11 +24,12 @@ const EngineTab = ({
   snapshot,
   status,
   onToggleStatus,
+  onSettingsApplied,
   bestMove,
   threatMove,
   pieces,
 }: EngineTabProps) => {
-  const [settings, setSettings] = useAnalyzerEngineSettings();
+  const [settings, setSettings] = useLiveEngineSettings(onSettingsApplied);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">

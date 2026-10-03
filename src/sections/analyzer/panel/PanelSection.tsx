@@ -35,7 +35,7 @@ const PanelSection = ({
 
   return (
     <section className={`flex flex-col gap-2 ${sizing} ${rule}`}>
-      <h3 className="shrink-0 text-xs font-semibold tracking-wide text-foreground/60 uppercase">
+      <h3 className="shrink-0 text-sm font-semibold tracking-wide text-foreground/60 uppercase">
         {title}
       </h3>
       {fill ? (

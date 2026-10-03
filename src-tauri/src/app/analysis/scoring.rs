@@ -2,14 +2,17 @@ use koch_engine::analyzer::PositionFindings;
 use koch_engine::{Board, PieceColor};
 use koch_uci::{Engine, GoLimits, Score, SearchEvent, UciError};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use ts_rs::TS;
 
 use super::job::AnalysisJob;
 use super::metrics::{expected_win_percent, move_accuracy_percent, to_centipawns, TimeStats};
 use super::status::{emit_status, AnalysisStage};
+use crate::app::settings::{AnalyzerEngineSettings, SearchLimit, SearchLimitMode};
+use crate::db::{self, services::settings::SettingsService};
 
 const ENGINE_PATH: &str = "stockfish";
+/// The search depth when no analyzer settings have been saved.
 const ANALYSIS_DEPTH: u32 = 20;
 
 // Chess.com-style tiers, cheapest (centipawn-loss threshold) approximation
@@ -228,19 +231,45 @@ pub struct GameAnalysis {
     pub position_findings: Vec<PositionFindings>,
 }
 
-/// Runs a fixed-depth search on the engine's current position and returns
-/// the score from the last `info` line seen before `bestmove` — the
-/// deepest (most accurate) one the search reached. No cancellation here:
-/// unlike live play, where a new position can supersede a search still in
+/// The saved analyzer settings, or `None` when nothing has been saved or
+/// the row can't be read — the pass then runs at its built-in defaults
+/// rather than failing.
+fn saved_settings(app: &AppHandle) -> Option<AnalyzerEngineSettings> {
+    let db = app.state::<db::Db>();
+    let conn = db.lock().ok()?;
+    let row = SettingsService::new(&conn)
+        .get_latest_analyzer_engine_settings()
+        .ok()??;
+    AnalyzerEngineSettings::try_from(row).ok()
+}
+
+/// One position's search, bounded by the saved limit.
+fn go_limits(limit: SearchLimit) -> GoLimits {
+    match limit.mode {
+        SearchLimitMode::Depth => GoLimits {
+            depth: Some(limit.value),
+            ..Default::default()
+        },
+        SearchLimitMode::MoveTime => GoLimits {
+            movetime_ms: Some(u64::from(limit.value)),
+            ..Default::default()
+        },
+        SearchLimitMode::Nodes => GoLimits {
+            nodes: Some(u64::from(limit.value)),
+            ..Default::default()
+        },
+    }
+}
+
+/// Runs a bounded search on the engine's current position and returns the
+/// score from the last `info` line seen before `bestmove` — the deepest
+/// (most accurate) one the search reached. No cancellation here: unlike
+/// live play, where a new position can supersede a search still in
 /// flight, analysis evaluates one position fully before moving to the next
 /// — there's nothing to cancel.
-async fn search_eval(engine: &mut Engine) -> Result<Score, UciError> {
+async fn search_eval(engine: &mut Engine, limits: &GoLimits) -> Result<Score, UciError> {
     let mut latest = Score::Centipawns(0);
-    let limits = GoLimits {
-        depth: Some(ANALYSIS_DEPTH),
-        ..Default::default()
-    };
-    engine.go(&limits).await?;
+    engine.go(limits).await?;
     loop {
         match engine.next_search_event().await? {
             SearchEvent::Info(info) => {
@@ -254,13 +283,34 @@ async fn search_eval(engine: &mut Engine) -> Result<Score, UciError> {
 }
 
 /// Evaluates every position in the game (start position plus after each
-/// ply) at a fixed depth, then scores only `human_color`'s moves against
-/// those evals.
+/// ply) with the saved analyzer settings, then scores only `human_color`'s
+/// moves against those evals.
 pub async fn run_analysis(
     analysis_job: &AnalysisJob,
     app: &AppHandle,
 ) -> Result<GameAnalysis, UciError> {
+    let settings = saved_settings(app);
+    let limits = settings.as_ref().map_or(
+        GoLimits {
+            depth: Some(ANALYSIS_DEPTH),
+            ..Default::default()
+        },
+        |settings| go_limits(settings.search_limit),
+    );
+
     let mut engine = Engine::spawn(ENGINE_PATH).await?;
+    if let Some(settings) = &settings {
+        // No MultiPV: grading reads one score per position, and with more
+        // lines the last `info` before `bestmove` would be the worst line's.
+        engine
+            .set_option("Threads", Some(&settings.threads.to_string()))
+            .await?;
+        engine
+            .set_option("Hash", Some(&settings.hash_mb.to_string()))
+            .await?;
+    }
+    // Also waits for `readyok`, so the hash is allocated before the first
+    // search.
     engine.new_game().await?;
 
     let move_list = &analysis_job.move_list;
@@ -295,7 +345,7 @@ pub async fn run_analysis(
         }
 
         engine.set_position_startpos(&uci_moves[..i]).await?;
-        evals.push(to_centipawns(search_eval(&mut engine).await?));
+        evals.push(to_centipawns(search_eval(&mut engine, &limits).await?));
         position_findings.push(PositionFindings::from(&board));
 
         let percent = (((i + 1) * 100) / total_positions) as u8;
@@ -350,6 +400,14 @@ pub async fn run_analysis(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_search_limit_bounds_the_matching_go_field() {
+        let limit = |mode, value| go_limits(SearchLimit { mode, value });
+        assert_eq!(limit(SearchLimitMode::Depth, 18).depth, Some(18));
+        assert_eq!(limit(SearchLimitMode::MoveTime, 500).movetime_ms, Some(500));
+        assert_eq!(limit(SearchLimitMode::Nodes, 100_000).nodes, Some(100_000));
+    }
 
     // `Display` writes a quality into `game_moves`, `parse` reads it back.
     // If one is renamed without the other, every stored grade silently

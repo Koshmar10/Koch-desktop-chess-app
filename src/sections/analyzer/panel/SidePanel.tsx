@@ -50,6 +50,7 @@ interface SidePanelProps {
   snapshot: EngineSnapshot | null;
   engineStatus: EngineStatus;
   onToggleEngine: () => void;
+  onEngineSettingsApplied: () => void;
   // Null while a game is still loading, or if it failed to.
   findings: PositionFindings | null;
   pieces: PlacedPiece[];
@@ -70,6 +71,7 @@ const SidePanel = ({
   snapshot,
   engineStatus,
   onToggleEngine,
+  onEngineSettingsApplied,
   findings,
   pieces,
   bestMove,
@@ -141,6 +143,7 @@ const SidePanel = ({
             snapshot={snapshot}
             status={engineStatus}
             onToggleStatus={onToggleEngine}
+            onSettingsApplied={onEngineSettingsApplied}
             bestMove={bestMove}
             threatMove={threatMove}
             pieces={pieces}
