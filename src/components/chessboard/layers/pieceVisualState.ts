@@ -14,8 +14,11 @@ export const getPieceVisualState = (
 ): PieceVisualState => {
   if (isBeingDragged && dragPosition) {
     return {
+      // `fixed`, so the piece in your hand can leave the board without being
+      // clipped by the scrolling content area around it. No transform
+      // transition here: it has to stay glued to the cursor, not trail it.
       className:
-        "fixed p-2 box-border select-none pointer-events-none transition-[width,height] duration-100 ease-out transition-[left, top] duration-200 ease-in",
+        "fixed p-2 box-border select-none pointer-events-none transition-[width,height] duration-100 ease-out",
       style: {
         zIndex: DRAGGED_PIECE_Z_INDEX,
         left: dragPosition.x - squareSize / 2,
@@ -27,10 +30,14 @@ export const getPieceVisualState = (
   }
 
   return {
-    className: "p-2 box-border select-none cursor-grab",
+    // Placed with a transform rather than a grid cell. A grid cell can only
+    // jump from one square to the next, while a transform can be
+    // interpolated between them, so a move slides — and the browser animates
+    // a transform on the GPU, without re-laying-out the board every frame.
+    className:
+      "absolute top-0 left-0 p-2 box-border select-none cursor-grab transition-transform duration-200 ease-in-out motion-reduce:transition-none",
     style: {
-      gridRowStart: row + 1,
-      gridColumnStart: col + 1,
+      transform: `translate(${col * squareSize}px, ${row * squareSize}px)`,
       width: squareSize,
       height: squareSize,
     },

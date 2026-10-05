@@ -10,7 +10,7 @@ import {
 const SQUARE_SIZE = 72;
 
 describe("getPieceVisualState", () => {
-  it("places a resting piece on its grid cell at the board's square size", () => {
+  it("translates a resting piece onto its square at the board's square size", () => {
     const { className, style } = getPieceVisualState(
       false,
       null,
@@ -21,11 +21,16 @@ describe("getPieceVisualState", () => {
 
     expect(className).toContain("cursor-grab");
     expect(style).toMatchObject({
-      gridRowStart: 4,
-      gridColumnStart: 6,
+      transform: `translate(${5 * SQUARE_SIZE}px, ${3 * SQUARE_SIZE}px)`,
       width: SQUARE_SIZE,
       height: SQUARE_SIZE,
     });
+  });
+
+  it("slides a resting piece between squares", () => {
+    const { className } = getPieceVisualState(false, null, 3, 5, SQUARE_SIZE);
+
+    expect(className).toContain("transition-transform");
   });
 
   it("follows the cursor and enlarges while being dragged", () => {
@@ -39,6 +44,8 @@ describe("getPieceVisualState", () => {
     );
 
     expect(className).toContain("pointer-events-none");
+    // A transform transition would make the piece trail behind the cursor.
+    expect(className).not.toContain("transition-transform");
     expect(style).toMatchObject({
       zIndex: DRAGGED_PIECE_Z_INDEX,
       left: dragPosition.x - SQUARE_SIZE / 2,
@@ -52,8 +59,7 @@ describe("getPieceVisualState", () => {
     const { style } = getPieceVisualState(true, null, 3, 5, SQUARE_SIZE);
 
     expect(style).toMatchObject({
-      gridRowStart: 4,
-      gridColumnStart: 6,
+      transform: `translate(${5 * SQUARE_SIZE}px, ${3 * SQUARE_SIZE}px)`,
     });
   });
 });
