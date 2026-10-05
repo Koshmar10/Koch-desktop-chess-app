@@ -18,14 +18,31 @@ interface Loaded {
 }
 
 /**
+ * The live engine's latest full set of lines, for whichever position it was
+ * last searching — the caller checks its `position_key`.
+ */
+export const useLiveEngine = (): EngineSnapshot | null => {
+  const [liveSnapshot, setLiveSnapshot] = useState<EngineSnapshot | null>(null);
+
+  // Subscribed once, on mount. Without the `[]` it re-subscribed after every
+  // render — and every snapshot is a render — dropping whatever arrived
+  // while the old listener was gone and the new one not yet attached.
+  useEffect(() => {
+    const unlisten = onLiveEngineSnapshot(setLiveSnapshot);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  }, []);
+
+  return liveSnapshot;
+};
+
+/**
  * Loads a saved game for the analyzer, and keeps the live engine session
  * on that game. `null` means sandbox: nothing to load.
  */
 export const useGameReplay = (gameId: number | null) => {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  // The live engine's latest full set of lines, for whichever position it
-  // was last searching — the caller checks its `position_key`.
-  const [liveSnapshot, setLiveSnapshot] = useState<EngineSnapshot | null>(null);
 
   useEffect(() => {
     if (gameId === null) return;
@@ -46,18 +63,12 @@ export const useGameReplay = (gameId: number | null) => {
     refreshLiveEngineSession(gameId).catch(console.error);
   }, [gameId]);
 
-  useEffect(() => {
-    const unlisten = onLiveEngineSnapshot(setLiveSnapshot);
-    return () => {
-      unlisten.then((stop) => stop());
-    };
-  }, []);
+
 
   const isForThisGame = loaded !== null && loaded.gameId === gameId;
   return {
     replay: isForThisGame ? loaded.replay : null,
     error: isForThisGame ? loaded.error : null,
     isLoading: gameId !== null && !isForThisGame,
-    liveSnapshot,
   };
 };

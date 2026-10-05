@@ -10,6 +10,7 @@ import EngineTab from "./engine/EngineTab";
 import GamePanel from "./game/GamePanel";
 import PositionPanel from "./position/PositionPanel";
 import type { EngineSnapshot, EngineStatus } from "../types";
+import { useAnalyzerContext } from "../AnalyzerContext";
 
 const TAB_ICON_SIZE = 14;
 // Wider than the board's other neighbours because the Position tab holds
@@ -83,9 +84,7 @@ const SidePanel = ({
   //
   // Opens on Game when there's a game to show and Engine otherwise, so
   // sandbox mode never lands you on the one tab that has nothing in it.
-  const [tab, setTab] = useState<PanelTab>(
-    initialTab ?? (game === null ? "engine" : "game"),
-  );
+  const { game: { selectedTab, setSelectedTab } } = useAnalyzerContext();
 
   return (
     <div
@@ -100,19 +99,18 @@ const SidePanel = ({
           if the surface is opaque — and this one isn't. */}
       <div role="tablist" className="flex flex-row">
         {TAB_OPTIONS.map(({ tab: value, label, icon }) => {
-          const isActive = tab === value;
+          const isActive = selectedTab === value;
           return (
             <button
               key={value}
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setTab(value)}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors duration-150 ${
-                isActive
-                  ? "border-[1px] border-b-0 border-border/80 bg-secondary/40 font-semibold text-foreground"
-                  : "border-b-[1px] border-border/80 bg-secondary/15 text-foreground/55 hover:bg-secondary/30 hover:text-foreground/80"
-              }`}
+              onClick={() => setSelectedTab(value)}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors duration-150 ${isActive
+                ? "border-[1px] border-b-0 border-border/80 bg-secondary/40 font-semibold text-foreground"
+                : "border-b-[1px] border-border/80 bg-secondary/15 text-foreground/55 hover:bg-secondary/30 hover:text-foreground/80"
+                }`}
             >
               {icon}
               {label}
@@ -123,7 +121,7 @@ const SidePanel = ({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-b-lg border-[1px] border-t-0 border-border/80 bg-secondary/40 p-3 shadow-sm">
-        {tab === "game" && (
+        {selectedTab === "game" && (
           <GamePanel
             game={game}
             moves={moves}
@@ -135,10 +133,10 @@ const SidePanel = ({
             onSelectPly={onSelectPly}
           />
         )}
-        {tab === "position" && (
+        {selectedTab === "position" && (
           <PositionPanel findings={findings} pieces={pieces} />
         )}
-        {tab === "engine" && (
+        {selectedTab === "engine" && (
           <EngineTab
             snapshot={snapshot}
             status={engineStatus}

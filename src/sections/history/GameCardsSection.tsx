@@ -5,6 +5,7 @@ import { GameSummary } from "../../api/bindings/GameSummary"
 import { PieceColor } from "../../api/bindings/PieceColor"
 import GameCard from "./GameCard"
 import AnalyzeSidePopup from "./AnalyzeSidePopup"
+import { useAnalyzerContext } from "../analyzer/AnalyzerContext"
 
 const MissingGames = () => (
   <div className="text-sm text-foreground/50 px-6 py-8 text-center">
@@ -15,6 +16,7 @@ const MissingGames = () => (
 const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
   const [gameData, setGameData] = useState<GameSummary[] | null>(null)
   const [sideNeeded, setSideNeeded] = useState<GameSummary | null>(null)
+  const { setLoadedGameId } = useAnalyzerContext();
   const navigate = useNavigate()
   useEffect(() => {
     getGames().then(setGameData).catch(console.error)
@@ -44,6 +46,7 @@ const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
   // Steps through the game in the analyzer — works whether or not it's
   // been analysed; an unanalysed game just has no evals or move grades.
   const handleOpen = (game: GameSummary) => {
+    setLoadedGameId(game.game_id)
     navigate(`/analysis/${game.game_id}`)
   }
 

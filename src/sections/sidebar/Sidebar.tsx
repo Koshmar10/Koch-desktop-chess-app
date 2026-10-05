@@ -1,6 +1,7 @@
 import { Home, Play, LineChart, History, Puzzle, Settings } from "lucide-react";
 import kochLogo from "../../assets/koch-logo.svg";
 import SidebarButton from "./SidebarButton";
+import { useAnalyzerContext } from "../analyzer/AnalyzerContext";
 
 const SIDEBAR_ITEMS = [
   { to: "/", icon: Home },
@@ -17,13 +18,29 @@ const LogoSection = () => (
   </div>
 );
 
-const ButtonSection = () => (
-  <div className="h-full flex flex-col px-2 gap-4 items-center">
-    {SIDEBAR_ITEMS.map(({ to, icon }) => (
-      <SidebarButton key={to} to={to} icon={icon} />
-    ))}
-  </div>
-);
+const ButtonSection = () => {
+  // Called once, at the top level — hooks can't run inside the loop below.
+  const { loadedGameId } = useAnalyzerContext();
+
+  return (
+    <div className="h-full flex flex-col px-2 gap-4 items-center">
+      {SIDEBAR_ITEMS.map(({ to, icon }) => {
+        // The analysis button goes back to the last game opened, if there
+        // was one, rather than always to the sandbox.
+        if (to === "/analysis" && loadedGameId !== null) {
+          return (
+            <SidebarButton
+              key={`${to}/${loadedGameId}`}
+              to={`${to}/${loadedGameId}`}
+              icon={icon}
+            />
+          );
+        }
+        return <SidebarButton key={to} to={to} icon={icon} />;
+      })}
+    </div>
+  );
+};
 
 const Sidebar = () => {
   return (
@@ -31,7 +48,7 @@ const Sidebar = () => {
       <LogoSection />
       <ButtonSection />
       <div className="flex flex-row justify-center py-4 items-center border-t-[1px] border-sidebar-border">
-      <SidebarButton key={'/settings'} to={'/settings'} icon={Settings} />
+        <SidebarButton key={'/settings'} to={'/settings'} icon={Settings} />
       </div>
     </div>
   );

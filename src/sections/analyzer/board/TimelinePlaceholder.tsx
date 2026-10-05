@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceDot, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { BOARD_PIXEL_SIZE, BOARD_SIZE, SQUARE_SIZE } from "../../../components/chessboard/lib/constants";
 import { TimelineMove } from "../Analyzer";
@@ -27,11 +28,17 @@ const TimelinePlaceholder = ({
   viewedPly,
   onSelectPly,
 }: TimelinePlaceholderProps) => {
-  const data = moves.map((move) => ({
-    ...move,
-    // 0 = Black winning, 0.5 = equal, 1 = White winning
-    white: evalBarWhiteFraction({ kind: "cp", centipawns: move.score }),
-  }));
+  // Rebuilt only when the moves change, not when just the ply marker moves —
+  // Recharts re-lays-out the whole curve whenever `data` is a new array.
+  const data = useMemo(
+    () =>
+      moves.map((move) => ({
+        ...move,
+        // 0 = Black winning, 0.5 = equal, 1 = White winning
+        white: evalBarWhiteFraction({ kind: "cp", centipawns: move.score }),
+      })),
+    [moves],
+  );
   // Undefined before the first move, and on a move with no stored eval —
   // there's no point on the curve to mark then.
   const current = data.find((point) => point.index - 1 === viewedPly);
@@ -118,4 +125,7 @@ const TimelinePlaceholder = ({
     </div >
   )
 };
-export default TimelinePlaceholder;
+// Memoised: engine snapshots re-render the analyzer several times a second,
+// and with stable props (memoised moves, a `useCallback` `onSelectPly`) the
+// chart skips every render where only the engine lines changed.
+export default memo(TimelinePlaceholder);

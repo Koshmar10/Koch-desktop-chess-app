@@ -1,4 +1,10 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
@@ -24,7 +30,7 @@ import {
   positionMasks,
   threatMask,
 } from "./overlays/masks";
-import { useGameReplay } from "./useGameReplay";
+import { useLiveEngine } from "./useGameReplay";
 import {
   START_POSITION_PLY,
   type EngineStatus,
@@ -32,6 +38,8 @@ import {
   type MaskSelection,
 } from "./types";
 import { MoveQuality } from "../../api/bindings/MoveQuality";
+import type { Square } from "../../api/bindings/Square";
+import { GameAnalyzerContextValue, useAnalyzerContext } from "./AnalyzerContext";
 
 const CHAT_PANEL_WIDTH_PX = 320;
 const PLACEHOLDER_ICON_SIZE = 28;
@@ -66,64 +74,103 @@ const GameLoadError = ({ message }: { message: string }) => (
  * `useState` calls in one component (KOCH-HANDOFF.md §8).
  */
 const Analyzer = ({ gameId }: { gameId: number | null }) => {
-  const { replay, error, isLoading, liveSnapshot } = useGameReplay(gameId);
+  const { game: saved, sandbox } = useAnalyzerContext();
+  const liveSnapshot = useLiveEngine();
   const isGameMode = gameId !== null;
-  const [viewedPly, setViewedPly] = useState(START_POSITION_PLY);
-  const [isFlipped, setIsFlipped] = useState(false);
+
+  // ---- The source: what's on screen, from whichever mode this is ----
+  // Both modes produce the same ReplayPosition list; only a saved game has
+  // a summary and accuracies, and everything that shows those already
+  // copes with null. The sandbox never reads the game, and vice versa.
+  const replay = isGameMode ? saved.replay : null;
+  const positions = useMemo(
+    () => (isGameMode ? (replay?.positions ?? []) : sandbox.positions),
+    [isGameMode, replay, sandbox.positions],
+  );
+  const game = replay?.summary ?? null;
+  const whiteAccuracy = replay?.white_accuracy ?? null;
+  const blackAccuracy = replay?.black_accuracy ?? null;
+  // Each mode keeps its own place and its own overlays, so nothing done in
+  // one shows up in the other.
+  const viewedPly = isGameMode ? saved.viewedPly : sandbox.viewedPly;
+  const setViewedPly = isGameMode ? saved.setViewedPly : sandbox.setViewedPly;
+  const shownMasks = isGameMode ? saved.shownMasks : sandbox.shownMasks;
+  const setShownMasks = isGameMode
+    ? saved.setShownMasks
+    : sandbox.setShownMasks;
+
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("running");
   const [isChatOpen, setIsChatOpen] = useState(true);
   // What's on the board, by mask id. Lives here rather than in the panel
   // because the board is the panel's sibling, not its child — the panel
   // decides what to light up, the board draws it.
-  const [shownMasks, setShownMasks] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const [previewMaskId, setPreviewMaskId] = useState<string | null>(null);
 
-  // ---- What's on screen: the loaded game's position, or the sandbox ----
+  // ---- The position on screen ----
   // `positions[0]` is the start position, so the viewed ply is offset by
-  // one — ply -1 (before any move) is index 0. The sandbox has no replay,
-  // so everything below falls back to an empty starting position — as
-  // does a game that's still loading, so nothing claims to be the game
-  // before it is.
-  const position = replay?.positions[viewedPly + 1] ?? null;
-  const moves = replay?.positions.slice(1).map((p) => p.san ?? "") ?? [];
-  const uciMoves = replay?.positions.slice(1).map((p) => p.uci ?? "") ?? [];
+  // one — ply -1 (before any move) is index 0. With no positions yet (an
+  // empty sandbox, a game still loading) everything below falls back to an
+  // empty starting position, so nothing claims to be the game before it is.
+  const position = positions[viewedPly + 1] ?? null;
+  // Built once per list of positions rather than on every render — engine
+  // snapshots re-render this screen several times a second, and a fresh
+  // array each time would make every memoised child (the timeline chart)
+  // redraw too.
+  const moves = useMemo(
+    () => positions.slice(1).map((p) => p.san ?? ""),
+    [positions],
+  );
+  const uciMoves = useMemo(
+    () => positions.slice(1).map((p) => p.uci ?? ""),
+    [positions],
+  );
   // One point per move that has both a stored eval and a grade, so an
-  // unanalysed game has none. `index` is the move's ply — the number
-  // `goToPly` takes — and `score` is White-relative centipawns.
-  const timelineMoves: TimelineMove[] =
-    replay?.positions
-      .slice(1)
-      .flatMap((p, index) =>
-        p.eval_cp === null || p.quality === null
-          ? []
-          : [{ index: index + 1, score: p.eval_cp, quality: p.quality }],
-      ) ?? [];
+  // unanalysed game — and the sandbox — has none. `index` is the move's
+  // ply — the number `goToPly` takes — and `score` is White-relative
+  // centipawns.
+  const timelineMoves: TimelineMove[] = useMemo(
+    () =>
+      positions
+        .slice(1)
+        .flatMap((p, index) =>
+          p.eval_cp === null || p.quality === null
+            ? []
+            : [{ index: index + 1, score: p.eval_cp, quality: p.quality }],
+        ),
+    [positions],
+  );
   const pieces = position?.pieces ?? STARTING_POSITION;
   const findings = position?.findings ?? null;
-  const game = replay?.summary ?? null;
-  const qualities = replay?.positions.slice(1).map((p) => p.quality);
-  const whiteAccuracy = replay?.white_accuracy ?? null;
-  const blackAccuracy = replay?.black_accuracy ?? null;
+  const qualities = positions.slice(1).map((p) => p.quality);
 
   // ---- The live engine (KOCH-10) ----
   // Its name for a position: which game, and how far into it.
   const positionKeyAt = (ply: number) => `${gameId}:${ply}`;
-  const searchPosition = (ply: number) =>
-    updateLiveEnginePosition(
-      positionKeyAt(ply),
-      uciMoves.slice(0, ply + 1),
-    ).catch(console.error);
+  // Same function across renders, so `goToPly` below can be too. The key
+  // is spelled out rather than calling `positionKeyAt`, which is a new
+  // function every render and would defeat the point.
+  const searchPosition = useCallback(
+    (ply: number) =>
+      updateLiveEnginePosition(
+        `${gameId}:${ply}`,
+        uciMoves.slice(0, ply + 1),
+      ).catch(console.error),
+    [gameId, uciMoves],
+  );
 
-  // The search starts on the position the screen opens on; after that
-  // `goToPly` sends each new one. Leaving the screen stops it — an infinite
-  // search holds every engine thread at full load — while the session
-  // stays for next time.
+  // The search starts on the position the screen opens on — after a
+  // remount that's the remembered ply, not the start — and `goToPly` sends
+  // each new one after that. An effect event, so it reads the latest ply
+  // and moves without them being dependencies: as dependencies they'd
+  // restart the search on every ply change and every render.
+  const startSearch = useEffectEvent(() => {
+    if (engineStatus === "running") searchPosition(viewedPly);
+  });
+
+  // Leaving the screen stops the search — an infinite one holds every
+  // engine thread at full load — while the session stays for next time.
   useEffect(() => {
-    updateLiveEnginePosition(`${gameId}:${START_POSITION_PLY}`, []).catch(
-      console.error,
-    );
+    startSearch();
     return () => {
       stopLiveEngine().catch(console.error);
     };
@@ -173,17 +220,23 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   // no way to clear them from here.
   const hasOverlays = shownMasks.size > 0;
 
-  const goToPly = (ply: number) => {
-    const next = clampPly(ply, moves.length);
-    if (next === viewedPly) return;
-    if (engineStatus === "running") searchPosition(next);
-    setViewedPly(next);
-    // What's switched on stays on: it's ids, and the masks are rebuilt
-    // for the new ply. The preview goes, though — the row it came from
-    // may not exist on the new ply, and a row that unmounts under the
-    // pointer never gets its pointer-leave to clear it.
-    setPreviewMaskId(null);
-  };
+  // Stable across renders that don't change what it uses — in particular
+  // the snapshot renders — so the memoised timeline chart, which gets it
+  // as `onSelectPly`, can skip them.
+  const goToPly = useCallback(
+    (ply: number) => {
+      const next = clampPly(ply, moves.length);
+      if (next === viewedPly) return;
+      if (engineStatus === "running") searchPosition(next);
+      setViewedPly(next);
+      // What's switched on stays on: it's ids, and the masks are rebuilt
+      // for the new ply. The preview goes, though — the row it came from
+      // may not exist on the new ply, and a row that unmounts under the
+      // pointer never gets its pointer-leave to clear it.
+      setPreviewMaskId(null);
+    },
+    [moves.length, viewedPly, engineStatus, searchPosition, setViewedPly],
+  );
 
   // A click ends the preview it happened over: switching something on
   // makes the preview redundant, and switching it off has to take it off
@@ -208,6 +261,27 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     setEngineStatus(willRun ? "running" : "stopped");
     if (willRun) searchPosition(viewedPly);
     else stopLiveEngine().catch(console.error);
+  };
+
+  // ---- Sandbox moves ----
+  // Only in the sandbox, and only from its latest position: moving from an
+  // earlier one would have to branch the line, which the sandbox doesn't do.
+  const canMove = !isGameMode && viewedPly === moves.length - 1;
+  const playSandboxMove = (from: Square, to: Square) => {
+    // The new move's ply and the moves leading to it, read now: this
+    // render's lists don't have the move yet.
+    const ply = uciMoves.length;
+    sandbox
+      .makeMove(from, to)
+      .then((played) => {
+        setPreviewMaskId(null);
+        if (engineStatus !== "running") return;
+        updateLiveEnginePosition(positionKeyAt(ply), [
+          ...uciMoves,
+          played.uci ?? "",
+        ]).catch(console.error);
+      })
+      .catch(console.error);
   };
 
   const clearOverlays = () => {
@@ -242,8 +316,8 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
               viewedPly={viewedPly}
               totalPlies={moves.length}
               onGoToPly={goToPly}
-              isFlipped={isFlipped}
-              onFlip={() => setIsFlipped((flipped) => !flipped)}
+              isFlipped={saved.isFlipped}
+              onFlip={() => saved.setIsFlipped((flipped) => !flipped)}
               hasOverlays={hasOverlays}
               onClearOverlays={clearOverlays}
               isChatOpen={isChatOpen}
@@ -251,30 +325,34 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
             />
 
             <div className="col-start-1 row-start-2">
-              <EvalBar score={evalScore} isFlipped={isFlipped} />
+              <EvalBar score={evalScore} isFlipped={saved.isFlipped} />
             </div>
 
-            {/* No `onMove`, so it's read-only: sandbox play needs both
-                colors draggable, which `PieceLayer` gates on a single
-                `humanColor` — that's KOCH-12's problem. */}
+            {/* A saved game is read-only. In the sandbox, whichever side is
+                to move is the one you drag — `humanColor` follows the turn —
+                and only while you're on the latest position. */}
             <div className="col-start-2 row-start-2">
               <Chessboard
                 pieces={pieces}
-                flipped={isFlipped}
+                flipped={saved.isFlipped}
                 lastMove={position?.last_move ?? null}
+                canPlayerMove={canMove}
+                humanColor={sandbox.turn}
+                legalMoves={canMove ? sandbox.legalMoves : undefined}
+                onMove={playSandboxMove}
               >
                 <Squares />
                 <OverlayLayer masks={drawnMasks} />
                 <PieceLayer />
                 <ArrowLayer />
-                {isLoading && (
+                {isGameMode && saved.isLoading && (
                   <BoardOverlay>
                     <LoadingSpinner message="Loading game…" />
                   </BoardOverlay>
                 )}
-                {error && (
+                {isGameMode && saved.error && (
                   <BoardOverlay>
-                    <GameLoadError message={error} />
+                    <GameLoadError message={saved.error} />
                   </BoardOverlay>
                 )}
               </Chessboard>

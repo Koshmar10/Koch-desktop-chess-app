@@ -2,9 +2,10 @@
 //! persisted `db::schemas::game::Game` row. Plus the check-in/out of the
 //! single active game from `AppState`.
 
+use std::collections::HashMap;
 use std::time::Instant;
 
-use koch_engine::{Board, MoveStruct, PieceColor};
+use koch_engine::{Board, MoveStruct, PieceColor, Square};
 use koch_uci::{Engine, UciError};
 
 use crate::app::app_state::AppState;
@@ -104,20 +105,7 @@ impl Game {
             .map(PieceView::from)
             .collect();
 
-        let legal_moves = self
-            .board
-            .legal_moves
-            .iter()
-            .map(|(&id, moves)| {
-                let destinations = moves
-                    .quiet_moves
-                    .iter()
-                    .chain(moves.capture_moves.iter())
-                    .copied()
-                    .collect();
-                (id, destinations)
-            })
-            .collect();
+        let legal_moves = legal_moves_view(&self.board);
 
         let move_history = self.move_list.iter().map(|m| m.san.clone()).collect();
 
@@ -143,6 +131,25 @@ impl Game {
             elapsed_this_turn_ms: self.turn_started_at.elapsed().as_millis() as u32,
         }
     }
+}
+
+/// Every piece's legal destinations, keyed by piece id — the shape the
+/// board's drag-and-drop highlights from. Shared by the live game and the
+/// analyzer's sandbox, which both let you move pieces.
+pub(super) fn legal_moves_view(board: &Board) -> HashMap<u32, Vec<Square>> {
+    board
+        .legal_moves
+        .iter()
+        .map(|(&id, moves)| {
+            let destinations = moves
+                .quiet_moves
+                .iter()
+                .chain(moves.capture_moves.iter())
+                .copied()
+                .collect();
+            (id, destinations)
+        })
+        .collect()
 }
 
 pub(super) fn take_active_game(state: &AppState) -> Option<Game> {

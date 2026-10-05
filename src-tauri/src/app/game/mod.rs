@@ -13,6 +13,7 @@ pub(crate) mod import;
 mod live;
 mod play;
 pub(crate) mod replay;
+pub mod sandbox;
 mod view;
 
 pub use live::Game;

@@ -33,7 +33,7 @@ use super::view::{GameSummary, LastMove, PieceView};
 /// position just after one of its moves. The move-related fields are about
 /// the move that *produced* this position, so they're all `None` for the
 /// start position.
-#[derive(Serialize, TS)]
+#[derive(Serialize, TS, Clone)]
 #[ts(export)]
 pub struct ReplayPosition {
     pub pieces: Vec<PieceView>,
@@ -65,7 +65,7 @@ pub struct GameReplay {
     pub black_accuracy: Option<SideAccuracy>,
 }
 
-fn pieces_of(board: &Board) -> Vec<PieceView> {
+pub(crate) fn pieces_of(board: &Board) -> Vec<PieceView> {
     board
         .squares
         .iter()
@@ -75,7 +75,7 @@ fn pieces_of(board: &Board) -> Vec<PieceView> {
         .collect()
 }
 
-fn start_position(board: &Board) -> ReplayPosition {
+pub(crate) fn start_position(board: &Board) -> ReplayPosition {
     ReplayPosition {
         pieces: pieces_of(board),
         findings: PositionFindings::from(board),

@@ -3,12 +3,38 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { EngineSnapshot } from "./bindings/EngineSnapshot";
 import type { GameReplay } from "./bindings/GameReplay";
 import type { LiveEngineSettings } from "./bindings/LiveEngineSettings";
+import type { PieceType } from "./bindings/PieceType";
+import type { SandboxMoved } from "./bindings/SandboxMoved";
+import type { SandboxStarted } from "./bindings/SandboxStarted";
+import type { Square } from "./bindings/Square";
 
 // A saved game rebuilt position by position — pieces, the move that led
 // to each, and that position's findings, all from one backend replay so
 // the piece ids the findings name are the ones on the board.
 export const loadGameReplay = (gameId: number): Promise<GameReplay> =>
   invoke<GameReplay>("load_game_replay", { gameId });
+
+// ---- Sandbox ----
+
+/**
+ * Starts a fresh sandbox on `fen` — the standard start when null —
+ * replacing any open one. Resolves to its positions (just the start,
+ * `positions[0]`, the same shape a replay uses) and what can move.
+ */
+export const sandboxNew = (fen: string | null): Promise<SandboxStarted> =>
+  invoke<SandboxStarted>("sandbox_new", { fen });
+
+/**
+ * Plays a move in the open sandbox. Resolves to the position it leads to —
+ * only that one, to append to the list — and what can move from there;
+ * rejects on an illegal move. With no `promotion`, a pawn queens.
+ */
+export const sandboxMove = (
+  from: Square,
+  to: Square,
+  promotion: PieceType | null,
+): Promise<SandboxMoved> =>
+  invoke<SandboxMoved>("sandbox_move", { from, to, promotion });
 
 // ---- Live engine (KOCH-10) ----
 

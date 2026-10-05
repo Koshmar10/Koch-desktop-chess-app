@@ -13,21 +13,18 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import Dropdown from "../../../components/Dropdown";
 import { TooltipButton } from "../../../components/TooltipButton";
 import { START_POSITION_PLY } from "../types";
 import MoveNavigation from "./MoveNavigation";
+import { useAnalyzerContext } from "../AnalyzerContext";
+import { AnalyzerMode } from "../AnalyzerProvider";
 
 const ICON_SIZE = 18;
 
-// Provisional: local state so the two button sets can be compared while
-// the design settles. The real mode is the route (`/analysis` is the
-// sandbox, `/analysis/:gameId` a game) — switching will navigate.
-type AnalyzerMode = "game" | "sandbox";
-const MODES: AnalyzerMode[] = ["game", "sandbox"];
-
 // Game shares the side panel's Game-tab icon, so the two read as one idea.
+const MODES: AnalyzerMode[] = ["game", "sandbox"];
 const MODE_ICON: Record<AnalyzerMode, LucideIcon> = {
   game: Swords,
   sandbox: FlaskConical,
@@ -106,8 +103,21 @@ const AnalyzerToolbar = ({
   isChatOpen,
   onToggleChat,
 }: AnalyzerToolbarProps) => {
-  const [analyzerMode, setAnalyzerMode] = useState<AnalyzerMode>("sandbox");
+  // The mode is the route, so it can't disagree with what's on screen:
+  // `/analysis/:gameId` is a game, `/analysis` the sandbox. Switching
+  // navigates — to the last game opened, or to the sandbox.
+  const { gameId } = useParams();
+  const navigate = useNavigate();
+  const { loadedGameId } = useAnalyzerContext();
+  const analyzerMode: AnalyzerMode = gameId === undefined ? "sandbox" : "game";
   const ModeIcon = MODE_ICON[analyzerMode];
+
+  const switchTo = (mode: AnalyzerMode) =>
+    navigate(
+      mode === "game" && loadedGameId !== null
+        ? `/analysis/${loadedGameId}`
+        : "/analysis",
+    );
 
   return (
     <div className="col-start-2 row-start-1 flex items-center">
@@ -134,9 +144,12 @@ const AnalyzerToolbar = ({
                     <button
                       key={mode}
                       type="button"
-                      className={`flex cursor-pointer items-center gap-2 px-3 py-1 text-left hover:bg-primary/30 ${mode === analyzerMode ? "text-primary" : ""}`}
+                      // No game has been opened yet, so there's none to go
+                      // back to — History is where one gets picked.
+                      disabled={mode === "game" && loadedGameId === null}
+                      className={`flex cursor-pointer items-center gap-2 px-3 py-1 text-left hover:bg-primary/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${mode === analyzerMode ? "text-primary" : ""}`}
                       onClick={() => {
-                        setAnalyzerMode(mode);
+                        switchTo(mode);
                         close();
                       }}
                     >
