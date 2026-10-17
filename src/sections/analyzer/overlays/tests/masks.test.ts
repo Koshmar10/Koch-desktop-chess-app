@@ -74,7 +74,10 @@ describe("pinMask", () => {
       { rank: 0, file: 4 },
     ]);
     expect(mask.arrows).toEqual([
-      expect.objectContaining({ from: [3, 1], to: [0, 4] }),
+      expect.objectContaining({
+        from: { rank: 3, file: 1 },
+        to: { rank: 0, file: 4 },
+      }),
     ]);
   });
 
@@ -96,12 +99,12 @@ describe("forkMask", () => {
     const mask = forkMask(FORK, PIECES);
 
     expect(mask.arrows?.map((arrow) => arrow.from)).toEqual([
-      [1, 2],
-      [1, 2],
+      { rank: 1, file: 2 },
+      { rank: 1, file: 2 },
     ]);
     expect(mask.arrows?.map((arrow) => arrow.to)).toEqual([
-      [0, 4],
-      [0, 0],
+      { rank: 0, file: 4 },
+      { rank: 0, file: 0 },
     ]);
   });
 });
@@ -119,8 +122,8 @@ describe("kingSafetyMask", () => {
 
     expect(mask.id).toBe(maskIdFor.king("black"));
     expect(mask.arrows?.map((arrow) => arrow.to)).toEqual([
-      [0, 4],
-      [0, 4],
+      { rank: 0, file: 4 },
+      { rank: 0, file: 4 },
     ]);
   });
 });
@@ -145,7 +148,10 @@ describe("pawnFlagMask", () => {
 describe("engine move masks", () => {
   it("draws the move as a single arrow", () => {
     expect(bestMoveMask("e2e4").arrows).toEqual([
-      expect.objectContaining({ from: [6, 4], to: [4, 4] }),
+      expect.objectContaining({
+        from: { rank: 6, file: 4 },
+        to: { rank: 4, file: 4 },
+      }),
     ]);
   });
 

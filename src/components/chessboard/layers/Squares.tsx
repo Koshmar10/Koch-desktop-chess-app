@@ -1,6 +1,9 @@
+import type { Square } from "../../../api/bindings/Square";
 import { useChessboardContext } from "../ChessboardContext";
-import { flipCoords } from "../lib/orientation";
-import { FILES } from "../lib/squareName";
+import { fromScreen } from "../lib/orientation";
+import { pieceAt } from "../lib/pieces";
+import { isDarkSquare, sameSquare } from "../lib/square";
+import { fileLetter, rankNumber } from "../lib/squareName";
 import { DARK_SQUARE_COLOR, LIGHT_SQUARE_COLOR } from "../lib/constants";
 import { LEGAL_MOVE_MARKER_Z_INDEX } from "../lib/zIndex";
 
@@ -64,68 +67,55 @@ const Squares: React.FC = () => {
     lastMove,
   } = useChessboardContext();
 
-  const handleSquareClick = (row: number, col: number) => {
+  const handleSquareClick = (square: Square) => {
     if (!selectedSquare) return;
 
-    const [rank, file] = flipCoords(row, col, isFlipped);
-    if (selectedSquare[0] === rank && selectedSquare[1] === file) {
+    if (sameSquare(selectedSquare, square)) {
       clearSelection();
       return;
     }
 
     // Clicking another piece of your own color should switch the
     // selection to it, not attempt an (illegal) move onto your own piece.
-    const clickedPiece = pieces.find(
-      (p) => p.square.rank === rank && p.square.file === file,
-    );
-    const selectedPiece = pieces.find(
-      (p) =>
-        p.square.rank === selectedSquare[0] &&
-        p.square.file === selectedSquare[1],
-    );
+    const clickedPiece = pieceAt(pieces, square);
+    const selectedPiece = pieceAt(pieces, selectedSquare);
     if (clickedPiece && selectedPiece?.color === clickedPiece.color) {
-      selectSquare(rank, file);
+      selectSquare(square);
       return;
     }
 
-    movePiece(selectedSquare, [rank, file]);
+    movePiece(selectedSquare, square);
   };
 
-  // `selectedSquare` is a board (rank/file) coordinate; convert it once to
-  // the screen position it should highlight, rather than re-converting each
-  // grid cell's row/col back to board space just to compare.
-  const selectedScreenSquare = selectedSquare
-    ? flipCoords(selectedSquare[0], selectedSquare[1], isFlipped)
-    : null;
-
+  // Laid out in screen order — the grid fills from the top-left — with each
+  // cell then working out which board square it shows.
   const squares = Array.from({ length: boardSize * boardSize }, (_, i) => {
     const row = Math.floor(i / boardSize);
     const col = i % boardSize;
-    const dark = (row + col) % 2 === 1;
-    const isSelected =
-      selectedScreenSquare?.[0] === row && selectedScreenSquare?.[1] === col;
+    const square = fromScreen([row, col], isFlipped);
+    const dark = isDarkSquare(square);
+    const isSelected = sameSquare(selectedSquare, square);
 
-    const [rank, file] = flipCoords(row, col, isFlipped);
-    const rankLabel = col === 0 ? 8 - rank : null;
-    const fileLabel = row === 7 ? FILES[file] : null;
+    // Coordinates label the screen's left column and bottom row, whichever
+    // side of the board is at the bottom.
+    const rankLabel = col === 0 ? rankNumber(square) : null;
+    const fileLabel = row === boardSize - 1 ? fileLetter(square) : null;
     const labelColor = dark ? "text-white/60" : "text-black/60";
-    const isLegalDestination = legalDestinations.some(
-      (sq) => sq.rank === rank && sq.file === file,
+    const isLegalDestination = legalDestinations.some((destination) =>
+      sameSquare(destination, square),
     );
     const isLastMoveSquare =
       lastMove !== null &&
-      ((lastMove.from.rank === rank && lastMove.from.file === file) ||
-        (lastMove.to.rank === rank && lastMove.to.file === file));
+      (sameSquare(lastMove.from, square) || sameSquare(lastMove.to, square));
     // A legal destination with a piece already on it is a capture — those
     // render as a ring around the piece instead of a dot.
     const isCapture =
-      isLegalDestination &&
-      pieces.some((p) => p.square.rank === rank && p.square.file === file);
+      isLegalDestination && pieceAt(pieces, square) !== undefined;
 
     return (
       <div
         key={`${row}-${col}`}
-        onClick={() => handleSquareClick(row, col)}
+        onClick={() => handleSquareClick(square)}
         className="transition-colors duration-150"
         style={{
           position: "relative",

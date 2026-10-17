@@ -1,3 +1,4 @@
+import { pieceById } from "../../../components/chessboard/lib/pieces";
 import { squareName } from "../../../components/chessboard/lib/squareName";
 import type {
   PieceKind,
@@ -30,7 +31,7 @@ export const pieceLabel = (
   id: number,
   pieces: PlacedPiece[],
 ): string | null => {
-  const piece = pieces.find((p) => p.id === id);
+  const piece = pieceById(pieces, id);
   if (!piece) return null;
   return `${PIECE_LETTER[piece.kind]}${squareName(piece.square)}`;
 };

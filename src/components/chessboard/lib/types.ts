@@ -6,8 +6,8 @@ export type { PieceType as PieceKind } from "../../../api/bindings/PieceType";
 export type { PieceView as PlacedPiece } from "../../../api/bindings/PieceView";
 
 export interface ArrowData {
-  from: [number, number];
-  to: [number, number];
+  from: Square;
+  to: Square;
   color?: string;
   type: "engine" | "user" | "ghost" | "finding";
 }

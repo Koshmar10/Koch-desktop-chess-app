@@ -24,6 +24,7 @@ import type { PieceColor } from "../../../../api/bindings/PieceColor";
 import type { Pin } from "../../../../api/bindings/Pin";
 import type { PositionFindings } from "../../../../api/bindings/PositionFindings";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
+import { pieceById } from "../../../../components/chessboard/lib/pieces";
 import {
   FILES,
   squareName,
@@ -310,7 +311,7 @@ const PawnStructureRow = ({
   })).filter(({ ids }) => ids.length > 0);
 
   const squareOf = (id: number) => {
-    const piece = pieces.find((p) => p.id === id);
+    const piece = pieceById(pieces, id);
     return piece ? squareName(piece.square) : null;
   };
 

@@ -9,6 +9,7 @@ import {
   TONE_ARROW_COLOR,
   TONE_SQUARE_COLOR,
 } from "../../../components/chessboard/lib/highlightTones";
+import { pieceById } from "../../../components/chessboard/lib/pieces";
 import type {
   ArrowData,
   HighlightTone,
@@ -65,7 +66,7 @@ export const maskIdFor = {
 };
 
 const squareOf = (id: number, pieces: PlacedPiece[]): Square | undefined =>
-  pieces.find((p) => p.id === id)?.square;
+  pieceById(pieces, id)?.square;
 
 /**
  * Where the named pieces stand, filled in one tone — skipping any id this
@@ -92,14 +93,7 @@ const arrowBetween = (
   const from = squareOf(fromId, pieces);
   const to = squareOf(toId, pieces);
   if (!from || !to) return [];
-  return [
-    {
-      from: [from.rank, from.file],
-      to: [to.rank, to.file],
-      color: TONE_ARROW_COLOR[tone],
-      type: "finding",
-    },
-  ];
+  return [{ from, to, color: TONE_ARROW_COLOR[tone], type: "finding" }];
 };
 
 export const controlMask = (findings: PositionFindings): OverlayMask => ({
@@ -210,8 +204,8 @@ const engineMoveMask = (
     arrows: move
       ? [
           {
-            from: [move.from.rank, move.from.file],
-            to: [move.to.rank, move.to.file],
+            from: move.from,
+            to: move.to,
             color: TONE_ARROW_COLOR[tone],
             type: "engine",
           },

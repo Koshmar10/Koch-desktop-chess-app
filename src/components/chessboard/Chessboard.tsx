@@ -2,13 +2,12 @@ import { useState, type ReactNode } from "react";
 import { ChessboardContext } from "./ChessboardContext";
 import { applyMove } from "./lib/applyMove";
 import { BOARD_PIXEL_SIZE, BOARD_SIZE, SQUARE_SIZE } from "./lib/constants";
+import { pieceAt } from "./lib/pieces";
 import { STARTING_POSITION } from "./lib/startingPosition";
 import type { PieceColor, PlacedPiece } from "./lib/types";
 import type { GameStateView } from "../../api/bindings/GameStateView";
 import type { LastMove } from "../../api/bindings/LastMove";
 import type { Square } from "../../api/bindings/Square";
-
-const toSquare = ([rank, file]: [number, number]): Square => ({ rank, file });
 
 interface ChessboardProps {
   children: ReactNode;
@@ -63,21 +62,15 @@ const Chessboard: React.FC<ChessboardProps> = ({
     }
   }
 
-  const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(
-    null,
-  );
-
-  const selectSquare = (row: number, col: number) => {
-    setSelectedSquare([row, col]);
-  };
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
 
   const clearSelection = () => {
     setSelectedSquare(null);
   };
 
-  const movePiece = (from: [number, number], to: [number, number]) => {
+  const movePiece = (from: Square, to: Square) => {
     if (onMove) {
-      onMove(toSquare(from), toSquare(to));
+      onMove(from, to);
     } else {
       setPieces((prev) => applyMove(prev, from, to));
     }
@@ -85,11 +78,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   };
 
   const selectedPiece = selectedSquare
-    ? pieces.find(
-        (p) =>
-          p.square.rank === selectedSquare[0] &&
-          p.square.file === selectedSquare[1],
-      )
+    ? pieceAt(pieces, selectedSquare)
     : undefined;
   const legalDestinations = selectedPiece
     ? (legalMoves?.[selectedPiece.id] ?? [])
@@ -104,7 +93,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
         legalDestinations,
         isFlipped: flipped,
         selectedSquare,
-        selectSquare,
+        selectSquare: setSelectedSquare,
         movePiece,
         clearSelection,
         canPlayerMove,

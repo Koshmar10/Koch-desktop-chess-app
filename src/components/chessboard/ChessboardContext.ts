@@ -13,12 +13,12 @@ export interface ChessboardContextValue {
   legalDestinations: Square[];
   // Whether the board is shown from Black's perspective (rank/file reversed
   // on screen). `pieces`, `selectedSquare`, and `selectSquare`/`movePiece`
-  // all stay in absolute board coordinates regardless — only the rendering
-  // layers need this, to convert at the point they touch the screen grid.
+  // are all board `Square`s regardless — only the rendering layers need
+  // this, to convert to a `ScreenCell` at the point they touch the grid.
   isFlipped: boolean;
-  selectedSquare: [number, number] | null;
-  selectSquare: (row: number, col: number) => void;
-  movePiece: (from: [number, number], to: [number, number]) => void;
+  selectedSquare: Square | null;
+  selectSquare: (square: Square) => void;
+  movePiece: (from: Square, to: Square) => void;
   clearSelection: () => void;
   // Whether it's currently a legal moment to move *anything* (the human's
   // turn). Whether a specific piece is draggable also needs `humanColor` —
