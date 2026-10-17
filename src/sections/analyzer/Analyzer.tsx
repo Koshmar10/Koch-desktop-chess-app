@@ -42,7 +42,6 @@ import {
   type MaskSelection,
 } from "./types";
 import type { MoveQuality } from "../../api/bindings/MoveQuality";
-import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import { useAnalyzerContext } from "./AnalyzerContext";
 import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
@@ -329,7 +328,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const nextMistake = nextMistakePly(
     qualities,
     viewedPly,
-    (game?.human_color ?? null) as PieceColor | null,
+    game?.human_color ?? null,
   );
   const gameActions: GameActions = {
     analysisStage: saved.analysisStage,

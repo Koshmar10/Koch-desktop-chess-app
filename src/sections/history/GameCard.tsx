@@ -1,5 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { formatDatePlayed, getScoreCardStyle } from "../../api/gameSummary";
+import {
+  formatDatePlayed,
+  getScoreCardStyle,
+  resultToken,
+} from "../../api/gameSummary";
 import {
   Flame,
   Zap,
@@ -21,6 +25,7 @@ import {
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
+import type { TimeControl } from "../../api/bindings/TimeControl";
 import { useAnalysisStage } from "../../app/AppContext";
 import { MODE_TIME_CONTROL, type GameMode } from "../play/GameContext";
 import Dropdown from "../../components/Dropdown";
@@ -44,13 +49,13 @@ const MODE_ICON: Record<GameMode, ReactNode> = {
 
 const MODE_ORDER: GameMode[] = ["Bullet", "Blitz", "Rapid", "Classical"];
 
-const modeForTimeControl = (timeControl: string | null): GameMode | null => {
+const modeForTimeControl = (
+  timeControl: TimeControl | null,
+): GameMode | null => {
   if (!timeControl) return null;
-  const initialMs = parseInt(timeControl, 10);
-  if (Number.isNaN(initialMs)) return null;
   return (
     MODE_ORDER.find(
-      (mode) => initialMs <= MODE_TIME_CONTROL[mode].initial_ms,
+      (mode) => timeControl.initial_ms <= MODE_TIME_CONTROL[mode].initial_ms,
     ) ?? "Classical"
   );
 };
@@ -317,9 +322,9 @@ const GameCard = ({
       <CardSeparator />
       <div className="flex justify-between items-center">
         <span
-          className={`text-sm px-2 py-1 font-mono rounded-md ${getScoreCardStyle(gameSummary)}`}
+          className={`text-sm px-2 py-1 font-mono rounded-md ${getScoreCardStyle(gameSummary.human_score)}`}
         >
-          {gameSummary.result}
+          {resultToken(gameSummary.result)}
         </span>
         <span className="text-sm text-foreground/60">
           {formatDatePlayed(gameSummary.date_played)}

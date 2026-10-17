@@ -18,6 +18,6 @@ mod view;
 
 pub use live::Game;
 pub use view::{
-    GameCreateResponse, GameResult, GameStateView, GameSummary, LastMove, PieceView, PlayerInfo,
-    TerminationReason, TimeControl,
+    GameCreateResponse, GameResult, GameSource, GameStateView, GameSummary, LastMove, PieceView,
+    PlayerInfo, TerminationReason, TimeControl,
 };

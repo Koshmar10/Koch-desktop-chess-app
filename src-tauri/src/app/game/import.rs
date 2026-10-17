@@ -7,6 +7,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::app::error::AppError;
+use crate::app::game::{GameSource, TimeControl};
 use crate::db::{
     self,
     services::{
@@ -60,8 +61,8 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         .map(|opening| opening.opening_id);
 
     // Normalise the PGN's seconds-based `[TimeControl]` to the millisecond
-    // `"i+inc"` string every `games` row uses, so nothing downstream has to
-    // know a row's `source` to read its clock.
+    // clock every `games` row uses, so nothing downstream has to know a
+    // row's `source` to read its clock.
     let time_control = parse
         .game
         .tags
@@ -70,10 +71,13 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         .and_then(parse_pgn_time_control);
     let (initial_ms, increment_ms) = time_control.unwrap_or((0, 0));
     let move_times = reconstruct_move_times(&parse.game.moves, initial_ms, increment_ms);
-    let time_control = time_control.map(|(initial, increment)| format!("{initial}+{increment}"));
+    let time_control = time_control.map(|(initial_ms, increment_ms)| TimeControl {
+        initial_ms,
+        increment_ms,
+    });
 
     let meta = SaveMeta {
-        source: "pgn".to_string(),
+        source: GameSource::Pgn,
         date_played: pgn_date_to_sqlite(&parse.game.tags),
         partial_import: parse.truncated.is_some(),
     };

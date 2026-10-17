@@ -122,17 +122,15 @@ export function GameProvider({ children }: GameProviderProps) {
     losingSide?: PieceColor,
   ) => {
     try {
-      const result = await apiEndGame(
+      const finalState = await apiEndGame(
         reason,
         losingSide ?? humanColor ?? undefined,
       );
-      // Keep `game` around with its terminal result rather than clearing
-      // it — the result card reads `game.state.result` to know the game
-      // ended, and the final position/clocks/orientation should stay on
+      // Keep `game` around with its final state rather than clearing it —
+      // the result card reads `game.state` to know the game ended and how
+      // it went, and the final position/clocks/orientation should stay on
       // screen behind it rather than snapping back to placeholders.
-      setGame((prev) =>
-        prev ? { ...prev, state: { ...prev.state, result } } : prev,
-      );
+      setGame((prev) => (prev ? { ...prev, state: finalState } : prev));
     } catch (err) {
       console.error("failed to end game:", err);
     }

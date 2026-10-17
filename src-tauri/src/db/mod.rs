@@ -1,3 +1,4 @@
+pub mod columns;
 pub mod connection;
 pub mod migrations;
 pub mod schemas;

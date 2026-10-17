@@ -1,7 +1,8 @@
-use koch_engine::PieceColor;
+use koch_engine::{GameResult, PieceColor};
 use rusqlite::Row;
 
-use crate::app::game::TimeControl;
+use crate::app::game::{GameSource, TimeControl};
+use crate::db::columns::{color_from_db, parse_optional_text, parse_text};
 
 /// A `games` row that came from outside koch (`source != 'koch'`), typed
 /// for what an import legitimately lacks: it may have no clock and no
@@ -11,11 +12,11 @@ pub struct ImportedGame {
     pub game_id: u32,
     pub white_player: String,
     pub black_player: String,
-    pub result: String,
+    pub result: GameResult,
     pub opening_id: Option<i64>,
     pub time_control: Option<TimeControl>,
     pub human_color: Option<PieceColor>,
-    pub source: String,
+    pub source: GameSource,
     pub partial_import: bool,
 }
 
@@ -23,24 +24,15 @@ impl TryFrom<&Row<'_>> for ImportedGame {
     type Error = rusqlite::Error;
 
     fn try_from(row: &Row<'_>) -> Result<Self, Self::Error> {
-        let time_control = row
-            .get::<_, Option<String>>("time_control")?
-            .and_then(|raw| TimeControl::from_ms_pair(&raw));
-        let human_color = match row.get::<_, Option<String>>("human_color")?.as_deref() {
-            Some("white") => Some(PieceColor::White),
-            Some("black") => Some(PieceColor::Black),
-            _ => None,
-        };
-
         Ok(Self {
             game_id: row.get::<_, i64>("game_id")? as u32,
             white_player: row.get("white_player")?,
             black_player: row.get("black_player")?,
-            result: row.get("result")?,
+            result: parse_text(row, "result", GameResult::parse)?,
             opening_id: row.get("opening_id")?,
-            time_control,
-            human_color,
-            source: row.get("source")?,
+            time_control: parse_optional_text(row, "time_control", TimeControl::from_ms_pair)?,
+            human_color: parse_optional_text(row, "human_color", color_from_db)?,
+            source: parse_text(row, "source", GameSource::from_db_str)?,
             partial_import: row.get("partial_import")?,
         })
     }

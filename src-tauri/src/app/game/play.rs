@@ -75,16 +75,16 @@ fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
         PieceColor::Black => (game.black_player.elo, game.white_player.elo),
     };
 
-    let (score, reason) =
-        match (game.result, game.human_color) {
-            (GameResult::WhiteWin, PieceColor::White)
-            | (GameResult::BlackWin, PieceColor::Black) => (GameScore::Win, "game_win"),
-            (GameResult::WhiteWin, PieceColor::Black)
-            | (GameResult::BlackWin, PieceColor::White) => (GameScore::Loss, "game_loss"),
-            (GameResult::Draw, _) => (GameScore::Draw, "game_draw"),
-            // `save` only persists finished games, so this arm never runs.
-            (GameResult::Unfinished, _) => return,
-        };
+    // `save` only persists finished games, so there's always a score here.
+    let Some(score) = GameScore::for_side(game.result, game.human_color) else {
+        return;
+    };
+    // `player_rating.reason`'s spelling of each outcome.
+    let reason = match score {
+        GameScore::Win => "game_win",
+        GameScore::Draw => "game_draw",
+        GameScore::Loss => "game_loss",
+    };
 
     let delta = rating::elo_delta(human_elo, opponent_elo, score);
 

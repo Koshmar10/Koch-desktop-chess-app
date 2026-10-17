@@ -10,6 +10,7 @@ use koch_uci::{Engine, UciError};
 
 use crate::app::app_state::AppState;
 use crate::app::error::AppError;
+use crate::app::rating::GameScore;
 use crate::db;
 
 use super::view::{GameResult, GameStateView, LastMove, PieceView, PlayerInfo, TimeControl};
@@ -127,6 +128,7 @@ impl Game {
             last_move,
             opening_name,
             result: self.result,
+            human_score: GameScore::for_side(self.result, self.human_color),
             white_remaining_ms: self.white_remaining_ms,
             black_remaining_ms: self.black_remaining_ms,
             elapsed_this_turn_ms: self.turn_started_at.elapsed().as_millis() as u32,

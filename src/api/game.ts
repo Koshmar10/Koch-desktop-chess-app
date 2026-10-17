@@ -5,7 +5,6 @@ import type { Square } from "./bindings/Square";
 import type { PieceColor } from "./bindings/PieceColor";
 import type { GameCreateResponse } from "./bindings/GameCreateResponse";
 import type { TerminationReason } from "./bindings/TerminationReason";
-import type { GameResult } from "./bindings/GameResult";
 import type { TimeControl } from "./bindings/TimeControl";
 import type { GameSummary } from "./bindings/GameSummary";
 import type { ImportPgnResult } from "./bindings/ImportPgnResult";
@@ -24,11 +23,13 @@ export const startGame = async (
     });
 };
 
+// Resolves to the game's final state — the same shape a game-ending move
+// returns, human's score included.
 export const endGame = (
   reason: TerminationReason,
   losingSide?: PieceColor,
-): Promise<GameResult> => {
-  return invoke<GameResult>("end_game", { reason, losingSide });
+): Promise<GameStateView> => {
+  return invoke<GameStateView>("end_game", { reason, losingSide });
 };
 
 export const makeMove = (
