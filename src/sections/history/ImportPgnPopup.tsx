@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import Popup from "../../components/popup/Popup";
+import DialogCard, { WIDE_DIALOG_PX } from "../../components/DialogCard";
+import { GhostButton, PrimaryButton } from "../../components/buttons";
+import { NOTATION_TEXTAREA_CLASS } from "../../components/controlStyles";
 import { importPgn } from "../../api/game";
 import type { ImportPgnResult } from "../../api/bindings/ImportPgnResult";
+
+// Tall enough that a whole game's PGN fits in the box without scrolling.
+const DIALOG_HEIGHT_PX = 480;
 
 interface ImportPgnPopupProps {
   open: boolean;
@@ -86,34 +92,31 @@ const ImportPgnPopup = ({ open, onClose, onImported }: ImportPgnPopupProps) => {
 
   return (
     <Popup open={open}>
-      <div className="flex w-[min(480px,92vw)] h-120 flex-col gap-4 rounded-lg border border-border bg-card p-6 shadow-xl">
-        <h2 className="text-xl font-medium text-foreground/90">Import PGN</h2>
+      <DialogCard
+        title="Import PGN"
+        widthPx={WIDE_DIALOG_PX}
+        heightPx={DIALOG_HEIGHT_PX}
+      >
         <textarea
           value={pgn}
           onChange={(e) => setPgn(e.target.value)}
           placeholder="Paste your PGN here…"
           spellCheck={false}
-          className="h-full min-h-[140px] w-full resize-y rounded-md border border-border bg-input/30 p-2 text-sm text-foreground outline-none focus:border-primary"
+          className={`${NOTATION_TEXTAREA_CLASS} flex-1`}
         />
         {outcome && <OutcomeNote outcome={outcome} />}
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-border/60"
-          >
+          <GhostButton onClick={close}>
             {outcome && outcome.kind !== "error" ? "Done" : "Cancel"}
-          </button>
-          <button
-            type="button"
+          </GhostButton>
+          <PrimaryButton
             onClick={handleImport}
             disabled={!pgn.trim() || importing}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40"
           >
             {importing ? "Importing…" : "Import"}
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </DialogCard>
     </Popup>
   );
 };

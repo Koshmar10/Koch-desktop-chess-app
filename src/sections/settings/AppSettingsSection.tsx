@@ -2,6 +2,7 @@ import { Moon, Sun } from "lucide-react";
 import { useAppContext } from "../../app/AppContext";
 import type { AppSettings } from "../../api/bindings/AppSettings";
 import { Section, SettingRow } from "./Section";
+import { OutlineButton } from "../../components/buttons";
 import { SecretInput } from "../../components/controls";
 import { TEXT_INPUT_CLASS } from "../../components/controlStyles";
 import { isDirty, useDraft, type SectionState } from "./draft";
@@ -30,14 +31,10 @@ export const AppSettingsSection = ({
         label="Change Theme"
         hint="Light or dark colour scheme for the whole app. Applied instantly and remembered the next time you launch."
       >
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-sm hover:bg-border/60"
-        >
+        <OutlineButton onClick={toggleTheme}>
           {theme === "dark" ? <Moon size={14} /> : <Sun size={14} />}
           {theme === "dark" ? "Dark" : "Light"}
-        </button>
+        </OutlineButton>
       </SettingRow>
       <SettingRow
         label="Koch Username"

@@ -6,9 +6,15 @@ import {
   getScoreCardStyle,
   resultToken,
 } from "../../../api/gameSummary";
+import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
+import DialogCard, { WIDE_DIALOG_PX } from "../../../components/DialogCard";
 
 // Stand-in for a date the game didn't record, same as the Game tab's.
 const UNKNOWN = "—";
+
+// Most of the board's height: a fixed height is what lets the list scroll
+// inside the card, and leaving a margin keeps the board visible around it.
+const PICKER_HEIGHT_PX = BOARD_PIXEL_SIZE * 0.8;
 
 interface GameListCardProps {
   game: GameSummary;
@@ -77,9 +83,11 @@ const GameSelectOverlay = ({
   }, []);
 
   return (
-    <div className="flex h-[80%] w-[60%] flex-col items-center gap-4 rounded-lg bg-card p-4">
-      <h1 className="text-card-foreground/90">Choose a game</h1>
-
+    <DialogCard
+      title="Choose a game"
+      widthPx={WIDE_DIALOG_PX}
+      heightPx={PICKER_HEIGHT_PX}
+    >
       {games?.length === 0 ? (
         <p className="text-sm text-card-foreground/50">No saved games yet</p>
       ) : (
@@ -95,7 +103,7 @@ const GameSelectOverlay = ({
           ))}
         </ul>
       )}
-    </div>
+    </DialogCard>
   );
 };
 

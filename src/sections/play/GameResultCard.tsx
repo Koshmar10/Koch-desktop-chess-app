@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Microscope, Play as PlayIcon, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Microscope, Play as PlayIcon } from "lucide-react";
+import { OutlineButton } from "../../components/buttons";
+import DialogCard, { NARROW_DIALOG_PX } from "../../components/DialogCard";
 import PostGameStats from "./PostGameStats";
 import { useGameContext } from "./GameContext";
 import type { GameScore } from "../../api/bindings/GameScore";
@@ -57,21 +59,6 @@ const randomMessage = (exclude?: string): string => {
   return choices[Math.floor(Math.random() * choices.length)];
 };
 
-interface CloseButtonProps {
-  onClick: () => void;
-}
-
-const CloseButton = ({ onClick }: CloseButtonProps) => (
-  <button
-    type="button"
-    aria-label="Close"
-    onClick={onClick}
-    className="absolute top-3 right-3 p-1 rounded-md text-foreground/40 hover:text-foreground/80 hover:bg-primary/10 transition-colors"
-  >
-    <X size={18} />
-  </button>
-);
-
 interface ResultHeaderProps {
   message: string;
 }
@@ -118,35 +105,21 @@ const AnalyzingSpinner = () => {
   );
 };
 
-interface ActionButtonProps {
-  icon: ReactNode;
-  label: string;
-  onClick?: () => void;
-}
-
-const ActionButton = ({ icon, label, onClick }: ActionButtonProps) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="flex items-center justify-center gap-2 w-34 px-2 py-2 rounded-md border-[1px] border-primary/40 text-foreground/90 text-md hover:bg-primary/10 transition-colors"
-  >
-    {icon}
-    {label}
-  </button>
-);
-
 interface ResultActionsProps {
   onNewGame: () => void;
 }
 
+// Two equal choices for what's next, so neither is drawn as the primary.
 const ResultActions = ({ onNewGame }: ResultActionsProps) => (
-  <div className="flex items-center gap-3 mt-auto">
-    <ActionButton
-      icon={<PlayIcon size={ICON_SIZE} />}
-      label="New Game"
-      onClick={onNewGame}
-    />
-    <ActionButton icon={<Microscope size={ICON_SIZE} />} label="Analyze" />
+  <div className="flex items-center gap-3">
+    <OutlineButton onClick={onNewGame}>
+      <PlayIcon size={ICON_SIZE} />
+      New Game
+    </OutlineButton>
+    <OutlineButton>
+      <Microscope size={ICON_SIZE} />
+      Analyze
+    </OutlineButton>
   </div>
 );
 
@@ -156,30 +129,31 @@ const GameResultCard = () => {
 
   if (!game) return null;
 
+  // No title: the verdict below is the card's heading.
   return (
-    <div className="relative h-[80%] flex flex-col items-center gap-4 py-6 px-8 rounded-xl bg-card border-[1px] border-border/80 shadow-lg">
-      <CloseButton onClick={dismissResult} />
-
-      <ResultHeader
-        message={
-          game.state.human_score
-            ? RESULT_MESSAGE[game.state.human_score]
-            : NO_SCORE_MESSAGE
-        }
-      />
-
-      {analysis ? (
-        <PostGameStats
-          analysis={analysis}
-          moveHistory={game.state.move_history}
-          humanColor={humanColor}
+    <DialogCard onClose={dismissResult} widthPx={NARROW_DIALOG_PX}>
+      <div className="flex flex-col items-center gap-4">
+        <ResultHeader
+          message={
+            game.state.human_score
+              ? RESULT_MESSAGE[game.state.human_score]
+              : NO_SCORE_MESSAGE
+          }
         />
-      ) : (
-        <AnalyzingSpinner />
-      )}
 
-      <ResultActions onNewGame={startGame} />
-    </div>
+        {analysis ? (
+          <PostGameStats
+            analysis={analysis}
+            moveHistory={game.state.move_history}
+            humanColor={humanColor}
+          />
+        ) : (
+          <AnalyzingSpinner />
+        )}
+
+        <ResultActions onNewGame={startGame} />
+      </div>
+    </DialogCard>
   );
 };
 

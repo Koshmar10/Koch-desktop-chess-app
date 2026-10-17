@@ -11,8 +11,18 @@ const arrowPositionCls =
   "absolute left-1/2 bottom-0 translate-y-1 -translate-x-1/2";
 const arrowShapeCls = "w-2 h-2 rotate-45 z-10";
 
+type TooltipColor = "primary" | "secondary";
+
+// Written out whole rather than built as `bg-${color}`: Tailwind only
+// generates classes it finds spelled out in the source, so a built one
+// works only by luck — while some other file happens to use it.
+const TOOLTIP_BG_CLASS: Record<TooltipColor, string> = {
+  primary: "bg-primary",
+  secondary: "bg-secondary",
+};
+
 interface TooltipProps {
-  color?: string;
+  color?: TooltipColor;
   label: string | null;
   children: ReactNode;
 }
@@ -22,8 +32,9 @@ export function Tooltip({
   label,
   children,
 }: TooltipProps) {
-  const tooltipCls = `${tooltipPositionCls} ${tooltipShapeCls} bg-${color} ${tooltipTextCls} ${tooltipRevealCls}`;
-  const arrowCls = `${arrowPositionCls} ${arrowShapeCls} bg-${color}`;
+  const bgCls = TOOLTIP_BG_CLASS[color];
+  const tooltipCls = `${tooltipPositionCls} ${tooltipShapeCls} ${bgCls} ${tooltipTextCls} ${tooltipRevealCls}`;
+  const arrowCls = `${arrowPositionCls} ${arrowShapeCls} ${bgCls}`;
 
   return (
     <div className="group relative flex flex-col items-center w-fit h-fit">
