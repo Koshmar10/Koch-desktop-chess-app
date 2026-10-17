@@ -1,4 +1,5 @@
 import type { PieceColor } from "../../api/bindings/PieceColor";
+import EmptyNote from "../../components/EmptyNote";
 
 // The graph's vertical range is derived per-game from the actual eval
 // swing (see `displayRangeCp` below), bounded by these two — a floor so a
@@ -13,6 +14,14 @@ const GRAPH_VIEWBOX_HEIGHT = 40;
 const AXIS_LABEL_CLASS = "text-[13px] leading-none text-foreground/40";
 const GRAPH_TITLE_CLASS =
   "text-xs font-medium text-foreground/60 uppercase tracking-wide self-start";
+
+// Holds the graph's place, at roughly its height, so the stat page doesn't
+// jump when a game too short to graph comes up.
+const NothingToGraph = () => (
+  <div className="flex h-16 items-center justify-center">
+    <EmptyNote>Not enough moves to graph</EmptyNote>
+  </div>
+);
 
 interface CentipawnGraphProps {
   history: number[];
@@ -29,11 +38,7 @@ export const CentipawnGraph = ({
   humanColor,
 }: CentipawnGraphProps) => {
   if (history.length < 2) {
-    return (
-      <div className="h-16 flex items-center justify-center text-foreground/40 text-sm">
-        Not enough moves to graph
-      </div>
-    );
+    return <NothingToGraph />;
   }
 
   const playerRelative =
@@ -127,11 +132,7 @@ interface TimeGraphProps {
 // human's own per-move times only (not the engine's).
 export const TimeGraph = ({ moveTimesMs }: TimeGraphProps) => {
   if (moveTimesMs.length === 0) {
-    return (
-      <div className="h-16 flex items-center justify-center text-foreground/40 text-sm">
-        Not enough moves to graph
-      </div>
-    );
+    return <NothingToGraph />;
   }
 
   const maxSeconds = Math.max(...moveTimesMs) / 1000;

@@ -6,10 +6,11 @@ import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameCard from "./GameCard";
 import AnalyzeSidePopup from "./AnalyzeSidePopup";
 import { useAnalyzerContext } from "../analyzer/AnalyzerContext";
+import EmptyNote from "../../components/EmptyNote";
 
 const MissingGames = () => (
-  <div className="text-sm text-foreground/50 px-6 py-8 text-center">
-    No existing games to retrieve
+  <div className="px-6 py-8 text-center">
+    <EmptyNote>No saved games yet</EmptyNote>
   </div>
 );
 

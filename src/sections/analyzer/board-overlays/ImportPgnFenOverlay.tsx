@@ -4,7 +4,6 @@ import DialogCard, { NARROW_DIALOG_PX } from "../../../components/DialogCard";
 import { TooltipButton } from "../../../components/TooltipButton";
 import NotationField from "./NotationField";
 
-const ICON_SIZE = 18;
 const NOTATION_ROWS = 14;
 
 interface ImportPgnFenOverlayProps {
@@ -46,7 +45,7 @@ const ImportPgnFenOverlay = ({ onLoad }: ImportPgnFenOverlayProps) => {
 
       <div className="flex justify-end">
         <TooltipButton
-          icon={<ClipboardPaste size={ICON_SIZE} />}
+          icon={ClipboardPaste}
           tooltip="Load into the sandbox"
           onClick={load}
           disabled={isLoading || notation.trim() === ""}

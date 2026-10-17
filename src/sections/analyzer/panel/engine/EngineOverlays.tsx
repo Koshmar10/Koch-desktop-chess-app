@@ -2,9 +2,10 @@ import { Flame, Lightbulb, MoveRight, type LucideIcon } from "lucide-react";
 import { pieceAt } from "../../../../components/chessboard/lib/pieces";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import { parseUciMove } from "../../../../components/chessboard/lib/uci";
+import EmptyNote from "../../../../components/EmptyNote";
+import PanelSection from "../../../../components/PanelSection";
 import { maskIdFor } from "../../overlays/masks";
 import { PlainRow } from "../InteractiveRow";
-import PanelSection from "../PanelSection";
 import { IconLabel, PieceChip, TileChip } from "../chips";
 
 interface MoveRowProps {
@@ -49,9 +50,7 @@ const MoveRow = ({
         // Switching it on still works with nothing to show: the arrow
         // appears as soon as the engine reports one, rather than the row
         // refusing until then.
-        <span className="text-xs text-foreground/35 italic">
-          waiting for the engine
-        </span>
+        <EmptyNote>waiting for the engine</EmptyNote>
       )}
     </PlainRow>
   );

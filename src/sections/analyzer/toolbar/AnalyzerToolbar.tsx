@@ -22,7 +22,8 @@ import MoveNavigation from "./MoveNavigation";
 import { useAnalyzerContext } from "../AnalyzerContext";
 import type { AnalyzerMode } from "../AnalyzerProvider";
 
-const ICON_SIZE = 18;
+// For the mode menu's rows. The buttons size their own icons.
+const MENU_ICON_SIZE = 18;
 
 // Game shares the side panel's Game-tab icon, so the two read as one idea.
 const MODES: AnalyzerMode[] = ["game", "sandbox"];
@@ -77,19 +78,19 @@ const GameButtons = ({
   return (
     <>
       <TooltipButton
-        icon={<RefreshCw size={ICON_SIZE} />}
+        icon={RefreshCw}
         tooltip={reanalyzeTooltip(analysisStage, onReanalyze !== null)}
         onClick={onReanalyze ?? undefined}
         disabled={onReanalyze === null || isAnalysing}
       />
       <TooltipButton
-        icon={<GitBranch size={ICON_SIZE} />}
+        icon={GitBranch}
         tooltip="Try from here in the sandbox"
         onClick={onTryInSandbox ?? undefined}
         disabled={onTryInSandbox === null}
       />
       <TooltipButton
-        icon={<TriangleAlert size={ICON_SIZE} />}
+        icon={TriangleAlert}
         tooltip={onNextMistake ? "Next mistake" : "No mistakes after this move"}
         onClick={onNextMistake ?? undefined}
         disabled={onNextMistake === null}
@@ -105,18 +106,18 @@ const SandboxButtons = ({ onReset, onUndo }: SandboxActions) => {
       {/* A toggle, like the copy button: the overlay closes by itself
           once something loads, and this closes it without loading. */}
       <TooltipButton
-        icon={<ClipboardPaste size={ICON_SIZE} />}
+        icon={ClipboardPaste}
         tooltip="Import a FEN or PGN"
         active={isImportOverlayOpen}
         onClick={() => setIsImportOverlayOpen((open) => !open)}
       />
       <TooltipButton
-        icon={<RotateCcw size={ICON_SIZE} />}
+        icon={RotateCcw}
         tooltip="Reset to the starting position"
         onClick={onReset}
       />
       <TooltipButton
-        icon={<Undo2 size={ICON_SIZE} />}
+        icon={Undo2}
         tooltip={onUndo ? "Undo move" : "No move to undo"}
         onClick={onUndo ?? undefined}
         disabled={onUndo === null}
@@ -189,7 +190,7 @@ const AnalyzerToolbar = ({
           <Dropdown
             trigger={({ open, toggle }) => (
               <TooltipButton
-                icon={<ModeIcon size={ICON_SIZE} />}
+                icon={ModeIcon}
                 tooltip={`Mode: ${analyzerMode}`}
                 active={open}
                 onClick={toggle}
@@ -213,7 +214,7 @@ const AnalyzerToolbar = ({
                         close();
                       }}
                     >
-                      <Icon size={ICON_SIZE} />
+                      <Icon size={MENU_ICON_SIZE} />
                       {mode}
                     </button>
                   );
@@ -245,19 +246,19 @@ const AnalyzerToolbar = ({
               overlay has no close button of its own, so this is how it
               goes away again. */}
           <TooltipButton
-            icon={<Copy size={ICON_SIZE} />}
+            icon={Copy}
             tooltip="Copy PGN / FEN"
             active={isCopyOverlayOpen}
             onClick={() => setIsCopyOverlayOpen((open) => !open)}
           />
           <TooltipButton
-            icon={<FlipVertical size={ICON_SIZE} />}
+            icon={FlipVertical}
             tooltip="Flip board"
             active={isFlipped}
             onClick={onFlip}
           />
           <TooltipButton
-            icon={<EyeOff size={ICON_SIZE} />}
+            icon={EyeOff}
             tooltip={
               hasOverlays ? "Clear overlays" : "Nothing drawn on the board"
             }
@@ -265,7 +266,7 @@ const AnalyzerToolbar = ({
             disabled={!hasOverlays}
           />
           <TooltipButton
-            icon={<MessageSquareText size={ICON_SIZE} />}
+            icon={MessageSquareText}
             tooltip={isChatOpen ? "Hide assistant" : "Show assistant"}
             active={isChatOpen}
             onClick={onToggleChat}

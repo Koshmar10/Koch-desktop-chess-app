@@ -1,4 +1,4 @@
-import type { MoveQuality } from "../../api/bindings/MoveQuality";
+import type { MoveQuality } from "../api/bindings/MoveQuality";
 
 /**
  * One colour per grade, ordered so the set reads as a scale rather than
@@ -7,7 +7,7 @@ import type { MoveQuality } from "../../api/bindings/MoveQuality";
  * so a run of dots down the move list shows where a game went wrong
  * without reading a single label.
  *
- * Shared at the analyzer's root rather than kept in the move list, since
+ * Kept outside any one screen: the shared move list draws these dots, and
  * the timeline strip's per-ply markers are meant to use the same colours.
  * A `Record` over the binding's union, so a grade added in the backend
  * fails to compile here until it has a colour.

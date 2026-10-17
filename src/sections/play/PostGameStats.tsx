@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Target, Clock3, ListChecks } from "lucide-react";
+import { Target, Clock3, ListChecks, type LucideIcon } from "lucide-react";
+import PanelSection from "../../components/PanelSection";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { MoveQuality } from "../../api/bindings/MoveQuality";
 import type { PieceColor } from "../../api/bindings/PieceColor";
@@ -42,7 +43,7 @@ interface StatEntry {
 interface StatSection {
   id: string;
   label: string;
-  icon: ReactNode;
+  icon: LucideIcon;
   graph?: ReactNode;
   stats: StatEntry[];
 }
@@ -75,7 +76,7 @@ const buildAccuracySection = (
   return {
     id: "accuracy",
     label: "Accuracy",
-    icon: <Target size={16} className="text-primary" />,
+    icon: Target,
     stats: [
       { label: "Accuracy", value: `${analysis.accuracy_percent.toFixed(1)}%` },
       {
@@ -93,7 +94,7 @@ const buildAccuracySection = (
 const buildTimeSection = (analysis: GameAnalysis): StatSection => ({
   id: "time",
   label: "Time",
-  icon: <Clock3 size={16} className="text-primary" />,
+  icon: Clock3,
   graph: <TimeGraph moveTimesMs={analysis.human_move_times_ms} />,
   stats: [
     {
@@ -130,7 +131,7 @@ const buildSummarySection = (
   return {
     id: "summary",
     label: "Summary",
-    icon: <ListChecks size={16} className="text-primary" />,
+    icon: ListChecks,
     graph: (
       <CentipawnGraph
         history={analysis.centipawn_history}
@@ -247,16 +248,11 @@ const PostGameStats = ({
             : "none",
         }}
       >
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground/60 uppercase tracking-wide">
-          {active.icon}
-          {active.label}
-        </h3>
-
-        <div className="flex flex-col gap-2">
+        <PanelSection title={active.label} icon={active.icon}>
           {active.stats.map((stat: StatEntry) => (
             <StatRow key={stat.label} {...stat} />
           ))}
-        </div>
+        </PanelSection>
         {active.graph}
       </div>
     </div>

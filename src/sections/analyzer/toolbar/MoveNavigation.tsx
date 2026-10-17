@@ -7,8 +7,6 @@ import {
 import { TooltipButton } from "../../../components/TooltipButton";
 import { START_POSITION_PLY } from "../types";
 
-const ICON_SIZE = 18;
-
 interface MoveNavigationProps {
   // START_POSITION_PLY (-1) means "before the first move".
   viewedPly: number;
@@ -36,13 +34,13 @@ const MoveNavigation = ({
   return (
     <div className="flex w-fit flex-row items-center gap-2 py-2 shadow-sm">
       <TooltipButton
-        icon={<ChevronFirst size={ICON_SIZE} />}
+        icon={ChevronFirst}
         tooltip="Start"
         onClick={onFirst}
         disabled={isAtStart}
       />
       <TooltipButton
-        icon={<ChevronLeft size={ICON_SIZE} />}
+        icon={ChevronLeft}
         tooltip="Previous move"
         onClick={onPrev}
         disabled={isAtStart}
@@ -51,13 +49,13 @@ const MoveNavigation = ({
         {viewedPly + 1}
       </div>
       <TooltipButton
-        icon={<ChevronRight size={ICON_SIZE} />}
+        icon={ChevronRight}
         tooltip="Next move"
         onClick={onNext}
         disabled={isAtEnd}
       />
       <TooltipButton
-        icon={<ChevronLast size={ICON_SIZE} />}
+        icon={ChevronLast}
         tooltip="Latest move"
         onClick={onLast}
         disabled={isAtEnd}
