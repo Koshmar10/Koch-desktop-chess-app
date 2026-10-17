@@ -5,6 +5,7 @@ use koch_engine::{MoveStruct, PieceColor, PieceType, Square};
 
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
+use crate::app::error::AppError;
 use crate::app::rating::{self, stockfish_elo_for};
 use crate::db::{
     self,
@@ -66,12 +67,10 @@ pub async fn start_game(
     app: tauri::AppHandle,
     human_color: PieceColor,
     time_control: TimeControl,
-) -> Result<GameCreateResponse, String> {
+) -> Result<GameCreateResponse, AppError> {
     let human_elo = {
-        let conn = db.lock().map_err(|e| e.to_string())?;
-        PlayerRatingService::new(&conn)
-            .current_rating(i64::from(rating::DEFAULT_RATING))
-            .map_err(|e| e.to_string())? as u32
+        let conn = db.lock()?;
+        PlayerRatingService::new(&conn).current_rating(i64::from(rating::DEFAULT_RATING))? as u32
     };
 
     let human = PlayerInfo {
@@ -95,8 +94,7 @@ pub async fn start_game(
         human_color,
         time_control,
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     let response = GameCreateResponse {
         state: game.state_view(),
@@ -109,7 +107,7 @@ pub async fn start_game(
     // make the opening move itself, same as after any other move that
     // leaves it the engine's turn.
     if game.board.turn == human_color {
-        restore_active_game(&state, game);
+        restore_active_game(&state, game)?;
     } else {
         spawn_engine_reply(app, game);
     }
@@ -124,8 +122,8 @@ pub async fn end_game(
     app: tauri::AppHandle,
     reason: TerminationReason,
     losing_side: Option<PieceColor>,
-) -> Result<GameResult, String> {
-    let mut game = take_active_game(&state).ok_or("no active game to end")?;
+) -> Result<GameResult, AppError> {
+    let mut game = take_active_game(&state)?.ok_or("no active game to end")?;
 
     let result = match reason {
         TerminationReason::Resignation | TerminationReason::Timeout => {
@@ -147,7 +145,12 @@ pub async fn end_game(
     game.result = result;
     // Saved regardless of ANALYSIS_ENABLED — that flag only decides whether
     // analysis *runs*, not whether the game itself is worth keeping.
-    let game_id = GameService::new(&db.lock().unwrap()).save(&game, &SaveMeta::koch());
+    // Scoped so the guard is gone before the `.await` below — one held
+    // across it would make this command's future non-`Send`.
+    let game_id = {
+        let conn = db.lock()?;
+        GameService::new(&conn).save(&game, &SaveMeta::koch())
+    };
     if let Some(game_id) = game_id {
         record_rating_for_finished_game(&db, &game, game_id);
         if ANALYSIS_ENABLED {
@@ -167,24 +170,31 @@ pub async fn make_move(
     from: Square,
     to: Square,
     promotion: Option<PieceType>,
-) -> Result<GameStateView, String> {
-    let mut game = take_active_game(&state).ok_or("no active game to move in")?;
+) -> Result<GameStateView, AppError> {
+    let mut game = take_active_game(&state)?.ok_or("no active game to move in")?;
 
     let mover = game.board.turn;
     let mv = match game.board.move_piece(from, to, promotion) {
         Ok(mv) => mv,
         Err(err) => {
-            restore_active_game(&state, game);
-            return Err(format!("{err:?}"));
+            restore_active_game(&state, game)?;
+            return Err(format!("{err:?}").into());
         }
     };
 
     let game_ended = apply_move(&mut game, mover, mv);
-    update_opening(&mut game, &db.lock().unwrap());
+    // Each lock in its own block, gone before the next `.await`.
+    {
+        let conn = db.lock()?;
+        update_opening(&mut game, &conn);
+    }
 
     if game_ended {
         let response = game.state_view();
-        let game_id = GameService::new(&db.lock().unwrap()).save(&game, &SaveMeta::koch());
+        let game_id = {
+            let conn = db.lock()?;
+            GameService::new(&conn).save(&game, &SaveMeta::koch())
+        };
         if let Some(game_id) = game_id {
             record_rating_for_finished_game(&db, &game, game_id);
             analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
@@ -205,7 +215,7 @@ pub async fn make_move(
     // so a future bug in `move_piece`'s turn handling fails loudly instead
     // of silently letting the engine move on the human's behalf.
     if game.board.turn == game.human_color {
-        restore_active_game(&state, game);
+        restore_active_game(&state, game)?;
     } else {
         spawn_engine_reply(app, game);
     }
@@ -214,12 +224,10 @@ pub async fn make_move(
 }
 
 #[tauri::command]
-pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, AppError> {
+    let conn = db.lock()?;
 
-    let games = GameService::new(&conn)
-        .get_games()
-        .map_err(|e| e.to_string())?;
+    let games = GameService::new(&conn).get_games()?;
 
     Ok(games
         .iter()
@@ -228,11 +236,9 @@ pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, Strin
 }
 
 #[tauri::command]
-pub fn delete_game(db: tauri::State<'_, db::Db>, game_id: u32) -> Result<(), String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    GameService::new(&conn)
-        .delete_game(game_id)
-        .map_err(|e| e.to_string())?;
+pub fn delete_game(db: tauri::State<'_, db::Db>, game_id: u32) -> Result<(), AppError> {
+    let conn = db.lock()?;
+    GameService::new(&conn).delete_game(game_id)?;
     Ok(())
 }
 
@@ -248,15 +254,12 @@ pub fn analyze_game(
     app: tauri::AppHandle,
     game_id: u32,
     human_color: Option<PieceColor>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let job = {
-        let conn = db.lock().map_err(|e| e.to_string())?;
+        let conn = db.lock()?;
         let service = GameService::new(&conn);
 
-        let (human_color, time_control) = match service
-            .find_imported_game(game_id)
-            .map_err(|e| e.to_string())?
-        {
+        let (human_color, time_control) = match service.find_imported_game(game_id)? {
             // Imports: the side comes from the popup (or a previous pick),
             // and the clock may just not be there.
             Some(imported) => {
@@ -264,17 +267,14 @@ pub fn analyze_game(
                     .or(imported.human_color)
                     .ok_or("pick which side you played to analyse this game")?;
                 if imported.human_color != Some(side) {
-                    service
-                        .set_human_color(game_id, &side.to_string().to_lowercase())
-                        .map_err(|e| e.to_string())?;
+                    service.set_human_color(game_id, &side.to_string().to_lowercase())?;
                 }
                 (side, imported.time_control)
             }
             // Koch-played games always carry both.
             None => {
                 let game = service
-                    .find_game(game_id)
-                    .map_err(|e| e.to_string())?
+                    .find_game(game_id)?
                     .ok_or_else(|| format!("no game with id {game_id}"))?;
                 let side = match game.human_color.as_deref() {
                     Some("white") => PieceColor::White,
@@ -287,7 +287,7 @@ pub fn analyze_game(
             }
         };
 
-        let moves = service.game_moves(game_id).map_err(|e| e.to_string())?;
+        let moves = service.game_moves(game_id)?;
         if moves.is_empty() {
             return Err("game has no moves to analyse".into());
         }

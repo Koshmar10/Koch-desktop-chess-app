@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+use crate::app::error::AppError;
 use crate::db::{self, schemas::session::Session, services::session::SessionService};
 
 #[derive(Serialize)]
@@ -41,12 +42,10 @@ impl TryFrom<&Session> for SessionDuration {
 }
 
 #[tauri::command]
-pub fn get_sessions(db: tauri::State<'_, db::Db>) -> Result<Vec<SessionDuration>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn get_sessions(db: tauri::State<'_, db::Db>) -> Result<Vec<SessionDuration>, AppError> {
+    let conn = db.lock()?;
 
-    let sessions = SessionService::new(&conn)
-        .get_sessions()
-        .map_err(|e| e.to_string())?;
+    let sessions = SessionService::new(&conn).get_sessions()?;
 
     let totals: BTreeMap<String, i64> = sessions
         .iter()

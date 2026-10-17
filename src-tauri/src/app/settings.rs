@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::app::error::AppError;
 use crate::db::schemas::app_settings::AppSettings as AppSettingsRow;
 use crate::db::schemas::engine_settings::EngineSettings;
 use crate::db::{self, services::settings::SettingsService};
@@ -212,33 +213,26 @@ impl From<PlayerEngineSettings> for EngineSettings {
 #[tauri::command]
 pub fn get_analyzer_engine_settings(
     db: tauri::State<'_, db::Db>,
-) -> Result<Option<AnalyzerEngineSettings>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    SettingsService::new(&conn)
-        .get_latest_analyzer_engine_settings()
-        .map_err(|e| e.to_string())?
-        .map(AnalyzerEngineSettings::try_from)
-        .transpose()
+) -> Result<Option<AnalyzerEngineSettings>, AppError> {
+    let conn = db.lock()?;
+    let row = SettingsService::new(&conn).get_latest_analyzer_engine_settings()?;
+    Ok(row.map(AnalyzerEngineSettings::try_from).transpose()?)
 }
 
 #[tauri::command]
 pub fn get_player_engine_settings(
     db: tauri::State<'_, db::Db>,
-) -> Result<Option<PlayerEngineSettings>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    SettingsService::new(&conn)
-        .get_latest_player_engine_settings()
-        .map_err(|e| e.to_string())?
-        .map(PlayerEngineSettings::try_from)
-        .transpose()
+) -> Result<Option<PlayerEngineSettings>, AppError> {
+    let conn = db.lock()?;
+    let row = SettingsService::new(&conn).get_latest_player_engine_settings()?;
+    Ok(row.map(PlayerEngineSettings::try_from).transpose()?)
 }
 
 #[tauri::command]
-pub fn get_app_settings(db: tauri::State<'_, db::Db>) -> Result<Option<AppSettings>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn get_app_settings(db: tauri::State<'_, db::Db>) -> Result<Option<AppSettings>, AppError> {
+    let conn = db.lock()?;
     Ok(SettingsService::new(&conn)
-        .get_latest_app_settings()
-        .map_err(|e| e.to_string())?
+        .get_latest_app_settings()?
         .map(AppSettings::from))
 }
 
@@ -252,11 +246,9 @@ pub fn get_app_settings(db: tauri::State<'_, db::Db>) -> Result<Option<AppSettin
 pub fn save_analyzer_engine_settings(
     db: tauri::State<'_, db::Db>,
     settings: AnalyzerEngineSettings,
-) -> Result<(), String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    SettingsService::new(&conn)
-        .insert_engine_settings(&EngineSettings::from(settings))
-        .map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    let conn = db.lock()?;
+    SettingsService::new(&conn).insert_engine_settings(&EngineSettings::from(settings))?;
     Ok(())
 }
 
@@ -264,11 +256,9 @@ pub fn save_analyzer_engine_settings(
 pub fn save_player_engine_settings(
     db: tauri::State<'_, db::Db>,
     settings: PlayerEngineSettings,
-) -> Result<(), String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    SettingsService::new(&conn)
-        .insert_engine_settings(&EngineSettings::from(settings))
-        .map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    let conn = db.lock()?;
+    SettingsService::new(&conn).insert_engine_settings(&EngineSettings::from(settings))?;
     Ok(())
 }
 
@@ -276,11 +266,9 @@ pub fn save_player_engine_settings(
 pub fn save_app_settings(
     db: tauri::State<'_, db::Db>,
     settings: AppSettings,
-) -> Result<(), String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
-    SettingsService::new(&conn)
-        .insert_app_settings(&AppSettingsRow::from(settings))
-        .map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    let conn = db.lock()?;
+    SettingsService::new(&conn).insert_app_settings(&AppSettingsRow::from(settings))?;
     Ok(())
 }
 

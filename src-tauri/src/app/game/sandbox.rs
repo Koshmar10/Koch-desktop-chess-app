@@ -9,6 +9,7 @@ use ts_rs::TS;
 
 use crate::app::{
     app_state::AppState,
+    error::AppError,
     game::{
         live::legal_moves_view,
         replay::{fen_of, pieces_of, start_position, ReplayPosition},
@@ -184,15 +185,15 @@ fn started(sandbox: &Sandbox) -> SandboxStarted {
 pub fn sandbox_new(
     fen: Option<String>,
     state: tauri::State<'_, AppState>,
-) -> Result<SandboxStarted, String> {
+) -> Result<SandboxStarted, AppError> {
     let start_fen = match fen {
-        Some(fen) => FenString::try_from(fen).map_err(|err| format!("invalid FEN: {err:?}"))?,
+        Some(fen) => FenString::try_from(fen)?,
         None => default_fen(),
     };
     let sandbox = sandbox_from(start_fen, &[])?;
     let started = started(&sandbox);
     // `*slot = …` writes *through* the guard, which is allowed; moving out wasn't.
-    *state.sandbox_game.lock().unwrap() = Some(sandbox);
+    *state.sandbox_game.lock()? = Some(sandbox);
     Ok(started)
 }
 
@@ -202,10 +203,10 @@ pub fn sandbox_new(
 pub fn sandbox_load(
     notation: String,
     state: tauri::State<'_, AppState>,
-) -> Result<SandboxStarted, String> {
+) -> Result<SandboxStarted, AppError> {
     let sandbox = sandbox_from_notation(&notation)?;
     let started = started(&sandbox);
-    *state.sandbox_game.lock().unwrap() = Some(sandbox);
+    *state.sandbox_game.lock()? = Some(sandbox);
     Ok(started)
 }
 
@@ -217,11 +218,9 @@ pub fn sandbox_move(
     to: Square,
     promotion: Option<PieceType>,
     state: tauri::State<'_, AppState>,
-) -> Result<SandboxMoved, String> {
-    let mut slot = state.sandbox_game.lock().unwrap();
-    let Some(sandbox) = slot.as_mut() else {
-        return Err("no sandbox open".to_string());
-    };
+) -> Result<SandboxMoved, AppError> {
+    let mut slot = state.sandbox_game.lock()?;
+    let sandbox = slot.as_mut().ok_or("no sandbox open")?;
 
     // Checks legality itself, and hands back the move's SAN and UCI.
     let played = sandbox
@@ -242,11 +241,9 @@ pub fn sandbox_move(
 
 /// Takes back the open sandbox's last move.
 #[tauri::command]
-pub fn sandbox_undo(state: tauri::State<'_, AppState>) -> Result<SandboxStarted, String> {
-    let mut slot = state.sandbox_game.lock().unwrap();
-    let Some(sandbox) = slot.as_mut() else {
-        return Err("no sandbox open".to_string());
-    };
+pub fn sandbox_undo(state: tauri::State<'_, AppState>) -> Result<SandboxStarted, AppError> {
+    let mut slot = state.sandbox_game.lock()?;
+    let sandbox = slot.as_mut().ok_or("no sandbox open")?;
     undo_last_move(sandbox)?;
     Ok(started(sandbox))
 }

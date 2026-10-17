@@ -9,6 +9,7 @@ use koch_engine::{Board, MoveStruct, PieceColor, Square};
 use koch_uci::{Engine, UciError};
 
 use crate::app::app_state::AppState;
+use crate::app::error::AppError;
 use crate::db;
 
 use super::view::{GameResult, GameStateView, LastMove, PieceView, PlayerInfo, TimeControl};
@@ -152,10 +153,11 @@ pub(super) fn legal_moves_view(board: &Board) -> HashMap<u32, Vec<Square>> {
         .collect()
 }
 
-pub(super) fn take_active_game(state: &AppState) -> Option<Game> {
-    state.pve_game.lock().unwrap().take()
+pub(super) fn take_active_game(state: &AppState) -> Result<Option<Game>, AppError> {
+    Ok(state.pve_game.lock()?.take())
 }
 
-pub(super) fn restore_active_game(state: &AppState, game: Game) {
-    *state.pve_game.lock().unwrap() = Some(game);
+pub(super) fn restore_active_game(state: &AppState, game: Game) -> Result<(), AppError> {
+    *state.pve_game.lock()? = Some(game);
+    Ok(())
 }
