@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { formatDatePlayed } from "../../api/gameSummary";
+import { formatDatePlayed, getScoreCardStyle } from "../../api/gameSummary";
 import {
   Flame,
   Zap,
@@ -58,23 +58,6 @@ const PLAYER_DOT_CLASS: Record<PieceColor, string> = {
   white: "bg-neutral-100 border border-white",
   black: "bg-neutral-900 border border-white",
 };
-const WIN_SCORE_CARD_COLOR =
-  "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-const LOSE_SCORE_CARD_COLOR =
-  "bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30"
-const DRAW_SCORE_CARD_COLOR =
-  "bg-muted/40 text-muted-foreground border border-border"
-
-// A null `human_color` (self-play, imports) is deliberately neutral, like a draw.
-const getScoreCardStyle = (game: GameSummary): string => {
-  if (game.human_color === null || game.result === "1/2-1/2") {
-    return DRAW_SCORE_CARD_COLOR
-  }
-  const humanWon =
-    (game.result === "1-0" && game.human_color === "white") ||
-    (game.result === "0-1" && game.human_color === "black")
-  return humanWon ? WIN_SCORE_CARD_COLOR : LOSE_SCORE_CARD_COLOR
-}
 const CardSeparator = () => <hr className="border-border my-[1px]" />
 
 const ANALYSIS_ICON_SIZE = 18

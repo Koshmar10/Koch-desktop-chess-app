@@ -40,10 +40,19 @@ export const useLiveEngine = (): EngineSnapshot | null => {
 /**
  * Loads a saved game for the analyzer, and keeps the live engine session
  * on that game. `null` means sandbox: nothing to load.
+ *
+ * `isAnalysisDone` turning true loads the game again, so a re-analysis
+ * shows its new evals and grades once it finishes. Until the new load
+ * arrives the old one stays on screen, rather than flashing a spinner.
  */
-export const useGameReplay = (gameId: number | null) => {
+export const useGameReplay = (
+  gameId: number | null,
+  isAnalysisDone: boolean,
+) => {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
+  // `isAnalysisDone` isn't read inside — it's a dependency only so the
+  // load runs again when it changes.
   useEffect(() => {
     if (gameId === null) return;
     let isCurrent = true;
@@ -57,7 +66,7 @@ export const useGameReplay = (gameId: number | null) => {
     return () => {
       isCurrent = false;
     };
-  }, [gameId]);
+  }, [gameId, isAnalysisDone]);
 
   useEffect(() => {
     refreshLiveEngineSession(gameId).catch(console.error);

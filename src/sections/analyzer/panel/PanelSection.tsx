@@ -4,6 +4,12 @@ interface PanelSectionProps {
   title: string;
   children: ReactNode;
   /**
+   * A control at the right end of the title row, for an action on the
+   * section as a whole — the Game section's "Change" — rather than on any
+   * one row inside it.
+   */
+  action?: ReactNode;
+  /**
    * Take the column's leftover height and scroll internally, instead of
    * sizing to content. At most one section per tab should fill — two
    * competing for the slack is how a panel ends up with two scrollbars.
@@ -27,6 +33,7 @@ interface PanelSectionProps {
 const PanelSection = ({
   title,
   children,
+  action,
   fill = false,
   divided = false,
 }: PanelSectionProps) => {
@@ -35,9 +42,12 @@ const PanelSection = ({
 
   return (
     <section className={`flex flex-col gap-2 ${sizing} ${rule}`}>
-      <h3 className="shrink-0 text-sm font-semibold tracking-wide text-foreground/60 uppercase">
-        {title}
-      </h3>
+      <div className="flex shrink-0 items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold tracking-wide text-foreground/60 uppercase">
+          {title}
+        </h3>
+        {action}
+      </div>
       {fill ? (
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       ) : (

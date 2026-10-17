@@ -57,7 +57,9 @@ pub fn run() {
             app::live_engine::commands::apply_live_engine_settings,
             app::live_engine::commands::get_live_engine_settings,
             app::game::sandbox::sandbox_new,
-            app::game::sandbox::sandbox_move
+            app::game::sandbox::sandbox_load,
+            app::game::sandbox::sandbox_move,
+            app::game::sandbox::sandbox_undo
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

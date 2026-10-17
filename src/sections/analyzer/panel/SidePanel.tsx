@@ -57,6 +57,8 @@ interface SidePanelProps {
   pieces: PlacedPiece[];
   bestMove: string | null;
   threatMove: string | null;
+  // The route's mode — only the Game tab's picker cares, for its label.
+  isGameMode: boolean;
 }
 
 const SidePanel = ({
@@ -77,6 +79,7 @@ const SidePanel = ({
   pieces,
   bestMove,
   threatMove,
+  isGameMode,
 }: SidePanelProps) => {
   // Which tab is open is panel-local: nothing outside this column cares,
   // and KOCH-11's reducer only needs it if something ever has to open the
@@ -84,7 +87,11 @@ const SidePanel = ({
   //
   // Opens on Game when there's a game to show and Engine otherwise, so
   // sandbox mode never lands you on the one tab that has nothing in it.
-  const { game: { selectedTab, setSelectedTab } } = useAnalyzerContext();
+  const {
+    game: { selectedTab, setSelectedTab },
+    isGameSelectOverlayOpen,
+    setIsGameSelectOverlayOpen,
+  } = useAnalyzerContext();
 
   return (
     <div
@@ -131,6 +138,11 @@ const SidePanel = ({
             blackAccuracy={blackAccuracy}
             viewedPly={viewedPly}
             onSelectPly={onSelectPly}
+            isGameMode={isGameMode}
+            isGameSelectOpen={isGameSelectOverlayOpen}
+            onToggleGameSelect={() =>
+              setIsGameSelectOverlayOpen((open) => !open)
+            }
           />
         )}
         {selectedTab === "position" && (

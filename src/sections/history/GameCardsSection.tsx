@@ -16,7 +16,7 @@ const MissingGames = () => (
 const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
   const [gameData, setGameData] = useState<GameSummary[] | null>(null)
   const [sideNeeded, setSideNeeded] = useState<GameSummary | null>(null)
-  const { setLoadedGameId } = useAnalyzerContext();
+  const { openGame } = useAnalyzerContext();
   const navigate = useNavigate()
   useEffect(() => {
     getGames().then(setGameData).catch(console.error)
@@ -46,7 +46,7 @@ const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
   // Steps through the game in the analyzer — works whether or not it's
   // been analysed; an unanalysed game just has no evals or move grades.
   const handleOpen = (game: GameSummary) => {
-    setLoadedGameId(game.game_id)
+    openGame(game.game_id)
     navigate(`/analysis/${game.game_id}`)
   }
 

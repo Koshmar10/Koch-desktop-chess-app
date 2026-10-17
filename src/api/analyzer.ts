@@ -25,6 +25,21 @@ export const sandboxNew = (fen: string | null): Promise<SandboxStarted> =>
   invoke<SandboxStarted>("sandbox_new", { fen });
 
 /**
+ * Starts a fresh sandbox on a pasted FEN, or on a PGN with its moves already
+ * played, replacing any open one. Rejects with a message to show the user
+ * if it reads as neither.
+ */
+export const sandboxLoad = (notation: string): Promise<SandboxStarted> =>
+  invoke<SandboxStarted>("sandbox_load", { notation });
+
+/**
+ * Takes back the sandbox's last move. Resolves to the whole sandbox, the
+ * same shape a fresh one comes back in.
+ */
+export const sandboxUndo = (): Promise<SandboxStarted> =>
+  invoke<SandboxStarted>("sandbox_undo");
+
+/**
  * Plays a move in the open sandbox. Resolves to the position it leads to —
  * only that one, to append to the list — and what can move from there;
  * rejects on an illegal move. With no `promotion`, a pawn queens.
@@ -43,15 +58,17 @@ export const refreshLiveEngineSession = (
 ): Promise<void> => invoke("refresh_live_engine_session", { gameId });
 
 /**
- * Searches the position `moves` lead to from the start. `positionKey` comes
- * back on every snapshot of this search.
+ * Searches the position `moves` lead to from `startingPosition` (a FEN; the
+ * standard start when null). `positionKey` comes back on every snapshot of
+ * this search.
  */
 export const updateLiveEnginePosition = (
   positionKey: string,
+  startingPosition: string | null,
   moves: string[],
 ): Promise<void> =>
   invoke("update_live_engine_position", {
-    startingPosition: null,
+    startingPosition,
     moves,
     positionKey,
   });

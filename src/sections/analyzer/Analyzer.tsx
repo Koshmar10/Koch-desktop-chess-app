@@ -5,7 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import Chessboard from "../../components/chessboard/Chessboard";
@@ -19,7 +19,11 @@ import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
 import { stopLiveEngine, updateLiveEnginePosition } from "../../api/analyzer";
 import SidePanel from "./panel/SidePanel";
 import { MaskSelectionContext } from "./panel/maskSelection";
-import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
+import AnalyzerToolbar, {
+  type GameActions,
+  type SandboxActions,
+} from "./toolbar/AnalyzerToolbar";
+import { nextMistakePly } from "./toolbar/nextMistake";
 import PanelPlaceholder from "./PanelPlaceholder";
 import TimelinePlaceholder from "./board/TimelinePlaceholder";
 import EvalBar from "./board/EvalBar";
@@ -38,8 +42,13 @@ import {
   type MaskSelection,
 } from "./types";
 import { MoveQuality } from "../../api/bindings/MoveQuality";
+import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import { GameAnalyzerContextValue, useAnalyzerContext } from "./AnalyzerContext";
+import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
+import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
+import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
+import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 
 const CHAT_PANEL_WIDTH_PX = 320;
 const PLACEHOLDER_ICON_SIZE = 28;
@@ -74,8 +83,18 @@ const GameLoadError = ({ message }: { message: string }) => (
  * `useState` calls in one component (KOCH-HANDOFF.md §8).
  */
 const Analyzer = ({ gameId }: { gameId: number | null }) => {
-  const { game: saved, sandbox } = useAnalyzerContext();
+  const {
+    game: saved,
+    sandbox,
+    openGame,
+    isCopyOverlayOpen,
+    isGameSelectOverlayOpen,
+    setIsGameSelectOverlayOpen,
+    isImportOverlayOpen,
+    setIsImportOverlayOpen,
+  } = useAnalyzerContext();
   const liveSnapshot = useLiveEngine();
+  const navigate = useNavigate();
   const isGameMode = gameId !== null;
 
   // ---- The source: what's on screen, from whichever mode this is ----
@@ -144,18 +163,28 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const qualities = positions.slice(1).map((p) => p.quality);
 
   // ---- The live engine (KOCH-10) ----
-  // Its name for a position: which game, and how far into it.
-  const positionKeyAt = (ply: number) => `${gameId}:${ply}`;
+  // What its search is for: this game, or this sandbox. The sandbox's
+  // generation is in it, so once the sandbox is replaced or rewound the
+  // search starts over (the effect below), and a late snapshot for its old
+  // positions can't be shown against the new ones.
+  const searchId = isGameMode
+    ? `game-${gameId}`
+    : `sandbox-${sandbox.generation}`;
+  // Its name for a position: which search, and how far into it.
+  const positionKeyAt = (ply: number) => `${searchId}:${ply}`;
+  // Where the moves are played from — a sandbox can start on any position.
+  const startFen = positions[0]?.fen ?? null;
   // Same function across renders, so `goToPly` below can be too. The key
   // is spelled out rather than calling `positionKeyAt`, which is a new
   // function every render and would defeat the point.
   const searchPosition = useCallback(
     (ply: number) =>
       updateLiveEnginePosition(
-        `${gameId}:${ply}`,
+        `${searchId}:${ply}`,
+        startFen,
         uciMoves.slice(0, ply + 1),
       ).catch(console.error),
-    [gameId, uciMoves],
+    [searchId, startFen, uciMoves],
   );
 
   // The search starts on the position the screen opens on — after a
@@ -174,7 +203,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     return () => {
       stopLiveEngine().catch(console.error);
     };
-  }, [gameId]);
+  }, [searchId]);
 
   // Stopping the engine clears the lines rather than leaving stale ones on
   // screen attributed to a search that's no longer happening.
@@ -276,7 +305,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
       .then((played) => {
         setPreviewMaskId(null);
         if (engineStatus !== "running") return;
-        updateLiveEnginePosition(positionKeyAt(ply), [
+        updateLiveEnginePosition(positionKeyAt(ply), startFen, [
           ...uciMoves,
           played.uci ?? "",
         ]).catch(console.error);
@@ -287,6 +316,58 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const clearOverlays = () => {
     setShownMasks(new Set());
     setPreviewMaskId(null);
+  };
+
+  // ---- Toolbar actions ----
+  // Replacing or rewinding the sandbox moves the view, and the search
+  // follows on its own: the sandbox's generation changes `searchId`.
+  // Like a move, it drops the preview — its row may not exist any more.
+  const replaceSandbox = (replace: Promise<void>) =>
+    replace.then(() => setPreviewMaskId(null));
+
+  // In a game you played, the mistakes worth jumping to are your own.
+  const nextMistake = nextMistakePly(
+    qualities,
+    viewedPly,
+    (game?.human_color ?? null) as PieceColor | null,
+  );
+  const gameActions: GameActions = {
+    analysisStage: saved.analysisStage,
+    onReanalyze:
+      game !== null && game.human_color === null
+        ? null
+        : () => saved.reanalyze().catch(console.error),
+    // Waits for the new sandbox before switching to it, so the old one
+    // never flashes up first.
+    onTryInSandbox: position
+      ? () =>
+          sandbox
+            .start(position.fen)
+            .then(() => navigate("/analysis"))
+            .catch(console.error)
+      : null,
+    onNextMistake: nextMistake === null ? null : () => goToPly(nextMistake),
+  };
+  const sandboxActions: SandboxActions = {
+    onReset: () => replaceSandbox(sandbox.start(null)).catch(console.error),
+    onUndo:
+      moves.length > 0
+        ? () => replaceSandbox(sandbox.undo()).catch(console.error)
+        : null,
+  };
+  // The overlay shows the error itself, so this one is passed on, not
+  // logged; only a load that worked closes it.
+  const loadIntoSandbox = (notation: string) =>
+    replaceSandbox(sandbox.load(notation)).then(() =>
+      setIsImportOverlayOpen(false),
+    );
+  // The same two steps as opening one from History. The new route remounts
+  // this screen, but the overlay's open flag lives in the provider and
+  // would survive that — so it's closed here too.
+  const openPickedGame = (pickedId: number) => {
+    openGame(pickedId);
+    navigate(`/analysis/${pickedId}`);
+    setIsGameSelectOverlayOpen(false);
   };
 
   const maskSelection: MaskSelection = {
@@ -322,6 +403,8 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
               onClearOverlays={clearOverlays}
               isChatOpen={isChatOpen}
               onToggleChat={() => setIsChatOpen((open) => !open)}
+              gameActions={gameActions}
+              sandboxActions={sandboxActions}
             />
 
             <div className="col-start-1 row-start-2">
@@ -355,6 +438,35 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                     <GameLoadError message={saved.error} />
                   </BoardOverlay>
                 )}
+                {isCopyOverlayOpen && (
+                  <BoardOverlay>
+                    {/* A saved game's PGN has nothing in it until the game
+                        has loaded; the sandbox's is whatever's been played. */}
+                    <CopyPgnFenOverlay
+                      pgn={
+                        isGameMode
+                          ? ((replay && buildSavedGamePgn(replay)) ?? "")
+                          : buildSandboxPgn(positions)
+                      }
+                      fen={position?.fen ?? ""}
+                    />
+                  </BoardOverlay>
+                )}
+                {/* Only the sandbox imports — its toolbar has the button. */}
+                {!isGameMode && isImportOverlayOpen && (
+                  <BoardOverlay>
+                    <ImportPgnFenOverlay onLoad={loadIntoSandbox} />
+                  </BoardOverlay>
+                )}
+                {/* Either mode — the Game tab's button opens it from both. */}
+                {isGameSelectOverlayOpen && (
+                  <BoardOverlay>
+                    <GameSelectOverlay
+                      currentGameId={gameId}
+                      onPick={openPickedGame}
+                    />
+                  </BoardOverlay>
+                )}
               </Chessboard>
             </div>
 
@@ -379,6 +491,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                   engineStatus={engineStatus}
                   onToggleEngine={toggleEngine}
                   onEngineSettingsApplied={resumeSearch}
+                  isGameMode={isGameMode}
                 />
               </MaskSelectionContext>
             </div>

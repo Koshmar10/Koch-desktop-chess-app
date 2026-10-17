@@ -58,6 +58,35 @@ const PlayerRow = ({ color, name, elo, isHuman, accuracy }: PlayerRowProps) => (
   </div>
 );
 
+interface GameSelectButtonProps {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+// Text rather than an icon: it's a one-off action with no symbol that reads
+// unambiguously — History's icon would look like a link to that screen. It
+// has the toolbar toggles' on/off look because it is one: the overlay has
+// no close button, so this is also how it goes away.
+const GameSelectButton = ({
+  label,
+  isOpen,
+  onToggle,
+}: GameSelectButtonProps) => (
+  <button
+    type="button"
+    aria-pressed={isOpen}
+    onClick={onToggle}
+    className={`cursor-pointer rounded-md border-[1px] px-2 py-px text-xs text-foreground/90 transition-colors duration-150 ${
+      isOpen
+        ? "border-primary bg-primary/60"
+        : "border-primary/20 bg-card hover:bg-primary/50"
+    }`}
+  >
+    {label}
+  </button>
+);
+
 const Fact = ({ label, value }: { label: string; value: string }) => (
   <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-2">
     <span className="text-xs text-foreground/45">{label}</span>
@@ -74,14 +103,20 @@ interface GamePanelProps {
   blackAccuracy: SideAccuracy | null;
   viewedPly: number;
   onSelectPly: (ply: number) => void;
+  // The mode, rather than whether `game` is set: a game that's still
+  // loading has no summary yet, but it's already the one you'd be changing.
+  isGameMode: boolean;
+  isGameSelectOpen: boolean;
+  onToggleGameSelect: () => void;
 }
 
 /**
- * Who played, when, and how it ended.
+ * Who played, when, and how it ended — and the way to pick another.
  *
  * With no game behind it — the sandbox, or a game still loading — it keeps
  * the same layout with stand-in values rather than swapping to an empty
- * state, so the tab looks the same whichever mode you're in.
+ * state, so the tab looks the same whichever mode you're in. That includes
+ * the game picker: from the sandbox it's how you get to a game at all.
  */
 const GamePanel = ({
   game,
@@ -92,6 +127,9 @@ const GamePanel = ({
   blackAccuracy,
   viewedPly,
   onSelectPly,
+  isGameMode,
+  isGameSelectOpen,
+  onToggleGameSelect,
 }: GamePanelProps) => (
   // The header sections keep their natural height and the move list takes
   // what's left, scrolling on its own — so who played and how it ended
@@ -114,7 +152,17 @@ const GamePanel = ({
       />
     </PanelSection>
 
-    <PanelSection title="Game" divided>
+    <PanelSection
+      title="Game"
+      divided
+      action={
+        <GameSelectButton
+          label={isGameMode ? "Change" : "Open"}
+          isOpen={isGameSelectOpen}
+          onToggle={onToggleGameSelect}
+        />
+      }
+    >
       <Fact label="Result" value={game?.result ?? UNKNOWN} />
       <Fact
         label="Played"

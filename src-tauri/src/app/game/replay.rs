@@ -15,7 +15,7 @@
 //! and a copy that could fall out of step with the analyzer.
 
 use koch_engine::analyzer::PositionFindings;
-use koch_engine::Board;
+use koch_engine::{Board, FenString};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -37,6 +37,9 @@ use super::view::{GameSummary, LastMove, PieceView};
 #[ts(export)]
 pub struct ReplayPosition {
     pub pieces: Vec<PieceView>,
+    /// The full position — side to move, castling rights, en passant and
+    /// move counters included, none of which `pieces` can say.
+    pub fen: String,
     pub findings: PositionFindings,
     pub last_move: Option<LastMove>,
     pub san: Option<String>,
@@ -75,9 +78,14 @@ pub(crate) fn pieces_of(board: &Board) -> Vec<PieceView> {
         .collect()
 }
 
+pub(crate) fn fen_of(board: &Board) -> String {
+    FenString::from(board).as_str().to_string()
+}
+
 pub(crate) fn start_position(board: &Board) -> ReplayPosition {
     ReplayPosition {
         pieces: pieces_of(board),
+        fen: fen_of(board),
         findings: PositionFindings::from(board),
         last_move: None,
         san: None,
@@ -91,6 +99,7 @@ pub(crate) fn start_position(board: &Board) -> ReplayPosition {
 fn position_after(board: &Board, played: &GameMoveRow, last_move: LastMove) -> ReplayPosition {
     ReplayPosition {
         pieces: pieces_of(board),
+        fen: fen_of(board),
         findings: PositionFindings::from(board),
         last_move: Some(last_move),
         san: Some(played.san.clone()),
@@ -216,6 +225,21 @@ mod tests {
         // e2 → e4: rank 6 → rank 4 on the e-file (rank 0 is the eighth).
         assert_eq!((last.from.rank, last.from.file), (6, 4));
         assert_eq!((last.to.rank, last.to.file), (4, 4));
+    }
+
+    #[test]
+    fn each_position_carries_its_fen() {
+        let positions = replay_positions(&scholars_mate()).unwrap();
+
+        assert_eq!(
+            positions[0].fen,
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        );
+        // After 1. e4: Black to move, with an en passant square behind the pawn.
+        assert_eq!(
+            positions[1].fen,
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        );
     }
 
     #[test]

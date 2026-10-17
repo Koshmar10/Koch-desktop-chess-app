@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { AnalysisStage } from "../../../api/bindings/AnalysisStage";
 import Dropdown from "../../../components/Dropdown";
 import { TooltipButton } from "../../../components/TooltipButton";
 import { START_POSITION_PLY } from "../types";
@@ -39,37 +40,90 @@ const Group = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-// Not wired up yet — these are here to see the layout.
-const GameButtons = () => (
-  <>
-    <TooltipButton
-      icon={<RefreshCw size={ICON_SIZE} />}
-      tooltip="Re-analyze game"
-    />
-    <TooltipButton
-      icon={<GitBranch size={ICON_SIZE} />}
-      tooltip="Try from here in the sandbox"
-    />
-    <TooltipButton
-      icon={<TriangleAlert size={ICON_SIZE} />}
-      tooltip="Next mistake"
-    />
-  </>
-);
+// A null handler means the action has nothing to act on right now, and its
+// button shows disabled.
+export interface GameActions {
+  analysisStage: AnalysisStage | undefined;
+  // Null for an import that's never been analysed: it has no side to grade
+  // yet, and History is where that gets picked.
+  onReanalyze: (() => void) | null;
+  onTryInSandbox: (() => void) | null;
+  onNextMistake: (() => void) | null;
+}
 
-const SandboxButtons = () => (
-  <>
-    <TooltipButton
-      icon={<ClipboardPaste size={ICON_SIZE} />}
-      tooltip="Import a FEN or PGN"
-    />
-    <TooltipButton
-      icon={<RotateCcw size={ICON_SIZE} />}
-      tooltip="Reset to the starting position"
-    />
-    <TooltipButton icon={<Undo2 size={ICON_SIZE} />} tooltip="Undo move" />
-  </>
-);
+export interface SandboxActions {
+  onReset: () => void;
+  onUndo: (() => void) | null;
+}
+
+const reanalyzeTooltip = (
+  stage: AnalysisStage | undefined,
+  canReanalyze: boolean,
+): string => {
+  if (!canReanalyze) return "Analyse it from History first, to pick your side";
+  if (stage?.kind === "Queued") return "Analysis queued";
+  if (stage?.kind === "Running") return `Analysing… ${stage.percent}%`;
+  return "Re-analyze game";
+};
+
+const GameButtons = ({
+  analysisStage,
+  onReanalyze,
+  onTryInSandbox,
+  onNextMistake,
+}: GameActions) => {
+  const isAnalysing =
+    analysisStage?.kind === "Queued" || analysisStage?.kind === "Running";
+  return (
+    <>
+      <TooltipButton
+        icon={<RefreshCw size={ICON_SIZE} />}
+        tooltip={reanalyzeTooltip(analysisStage, onReanalyze !== null)}
+        onClick={onReanalyze ?? undefined}
+        disabled={onReanalyze === null || isAnalysing}
+      />
+      <TooltipButton
+        icon={<GitBranch size={ICON_SIZE} />}
+        tooltip="Try from here in the sandbox"
+        onClick={onTryInSandbox ?? undefined}
+        disabled={onTryInSandbox === null}
+      />
+      <TooltipButton
+        icon={<TriangleAlert size={ICON_SIZE} />}
+        tooltip={onNextMistake ? "Next mistake" : "No mistakes after this move"}
+        onClick={onNextMistake ?? undefined}
+        disabled={onNextMistake === null}
+      />
+    </>
+  );
+};
+
+const SandboxButtons = ({ onReset, onUndo }: SandboxActions) => {
+  const { isImportOverlayOpen, setIsImportOverlayOpen } = useAnalyzerContext();
+  return (
+    <>
+      {/* A toggle, like the copy button: the overlay closes by itself
+          once something loads, and this closes it without loading. */}
+      <TooltipButton
+        icon={<ClipboardPaste size={ICON_SIZE} />}
+        tooltip="Import a FEN or PGN"
+        active={isImportOverlayOpen}
+        onClick={() => setIsImportOverlayOpen((open) => !open)}
+      />
+      <TooltipButton
+        icon={<RotateCcw size={ICON_SIZE} />}
+        tooltip="Reset to the starting position"
+        onClick={onReset}
+      />
+      <TooltipButton
+        icon={<Undo2 size={ICON_SIZE} />}
+        tooltip={onUndo ? "Undo move" : "No move to undo"}
+        onClick={onUndo ?? undefined}
+        disabled={onUndo === null}
+      />
+    </>
+  );
+};
 
 interface AnalyzerToolbarProps {
   // START_POSITION_PLY (-1) means "before the first move".
@@ -90,6 +144,9 @@ interface AnalyzerToolbarProps {
   onClearOverlays: () => void;
   isChatOpen: boolean;
   onToggleChat: () => void;
+  // Both always given; the mode decides which set of buttons shows.
+  gameActions: GameActions;
+  sandboxActions: SandboxActions;
 }
 
 const AnalyzerToolbar = ({
@@ -102,13 +159,16 @@ const AnalyzerToolbar = ({
   onClearOverlays,
   isChatOpen,
   onToggleChat,
+  gameActions,
+  sandboxActions,
 }: AnalyzerToolbarProps) => {
   // The mode is the route, so it can't disagree with what's on screen:
   // `/analysis/:gameId` is a game, `/analysis` the sandbox. Switching
   // navigates — to the last game opened, or to the sandbox.
   const { gameId } = useParams();
   const navigate = useNavigate();
-  const { loadedGameId } = useAnalyzerContext();
+  const { loadedGameId, isCopyOverlayOpen, setIsCopyOverlayOpen } =
+    useAnalyzerContext();
   const analyzerMode: AnalyzerMode = gameId === undefined ? "sandbox" : "game";
   const ModeIcon = MODE_ICON[analyzerMode];
 
@@ -161,7 +221,11 @@ const AnalyzerToolbar = ({
               </div>
             )}
           </Dropdown>
-          {analyzerMode === "game" ? <GameButtons /> : <SandboxButtons />}
+          {analyzerMode === "game" ? (
+            <GameButtons {...gameActions} />
+          ) : (
+            <SandboxButtons {...sandboxActions} />
+          )}
         </div>
 
         <div className="flex justify-center">
@@ -177,9 +241,14 @@ const AnalyzerToolbar = ({
 
         {/* Fixed utility: the same in every mode. */}
         <div className="flex flex-row justify-end gap-2">
+          {/* A toggle, like the flip and chat buttons beside it — the
+              overlay has no close button of its own, so this is how it
+              goes away again. */}
           <TooltipButton
             icon={<Copy size={ICON_SIZE} />}
             tooltip="Copy PGN / FEN"
+            active={isCopyOverlayOpen}
+            onClick={() => setIsCopyOverlayOpen((open) => !open)}
           />
           <TooltipButton
             icon={<FlipVertical size={ICON_SIZE} />}

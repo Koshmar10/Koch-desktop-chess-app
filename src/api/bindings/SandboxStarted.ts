@@ -4,7 +4,9 @@ import type { ReplayPosition } from "./ReplayPosition";
 import type { Square } from "./Square";
 
 /**
- * A fresh sandbox: its positions so far (just the start, `positions[0]`),
- * and what can move from there.
+ * The whole sandbox: every position so far (`positions[0]` the start), and
+ * what can move from the last. Sent whenever the sandbox is replaced or
+ * rewound rather than moved forward — started, loaded, or a move taken
+ * back.
  */
 export type SandboxStarted = { positions: Array<ReplayPosition>, turn: PieceColor, legal_moves: { [key in number]?: Array<Square> }, };

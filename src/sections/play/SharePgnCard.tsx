@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { useGameContext } from "./GameContext";
-import { buildPgn } from "./buildPgn";
+import { buildLiveGamePgn } from "./buildPgn";
 
 interface CloseButtonProps {
   onClick: () => void;
@@ -27,7 +27,7 @@ const SharePgnCard = () => {
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
   // Hooks run unconditionally above the `!game` guard below, so this falls
   // back to "" rather than skipping the effect/render on a null game.
-  const pgn = game ? buildPgn(game) : "";
+  const pgn = game ? buildLiveGamePgn(game) : "";
   const copied = copiedFor === pgn;
 
   useEffect(() => {
