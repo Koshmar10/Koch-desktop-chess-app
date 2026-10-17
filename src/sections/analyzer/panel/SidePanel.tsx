@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Cpu, Search, Swords } from "lucide-react";
 import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
 import type { PlacedPiece } from "../../../components/chessboard/lib/types";
@@ -36,10 +35,6 @@ const TAB_OPTIONS: { tab: PanelTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 interface SidePanelProps {
-  // Which tab to open on. Left out, it's Game when there's a game and
-  // Engine when there isn't — but a game that's still loading has no
-  // summary yet, so the caller says so explicitly.
-  initialTab?: PanelTab;
   game: GameSummary | null;
   moves: string[];
   clocks?: (string | null)[];
@@ -62,7 +57,6 @@ interface SidePanelProps {
 }
 
 const SidePanel = ({
-  initialTab,
   game,
   moves,
   clocks,
@@ -81,12 +75,8 @@ const SidePanel = ({
   threatMove,
   isGameMode,
 }: SidePanelProps) => {
-  // Which tab is open is panel-local: nothing outside this column cares,
-  // and KOCH-11's reducer only needs it if something ever has to open the
-  // panel *to* a tab (a timeline blunder marker jumping to Position, say).
-  //
-  // Opens on Game when there's a game to show and Engine otherwise, so
-  // sandbox mode never lands you on the one tab that has nothing in it.
+  // Which tab is open lives in the analyzer's context, so it survives
+  // leaving the screen; opening a different game puts it back on Game.
   const {
     game: { selectedTab, setSelectedTab },
     isGameSelectOverlayOpen,
@@ -114,10 +104,11 @@ const SidePanel = ({
               role="tab"
               aria-selected={isActive}
               onClick={() => setSelectedTab(value)}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors duration-150 ${isActive
-                ? "border-[1px] border-b-0 border-border/80 bg-secondary/40 font-semibold text-foreground"
-                : "border-b-[1px] border-border/80 bg-secondary/15 text-foreground/55 hover:bg-secondary/30 hover:text-foreground/80"
-                }`}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors duration-150 ${
+                isActive
+                  ? "border-[1px] border-b-0 border-border/80 bg-secondary/40 font-semibold text-foreground"
+                  : "border-b-[1px] border-border/80 bg-secondary/15 text-foreground/55 hover:bg-secondary/30 hover:text-foreground/80"
+              }`}
             >
               {icon}
               {label}

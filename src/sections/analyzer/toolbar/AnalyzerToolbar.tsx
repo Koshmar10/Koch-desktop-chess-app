@@ -20,7 +20,7 @@ import { TooltipButton } from "../../../components/TooltipButton";
 import { START_POSITION_PLY } from "../types";
 import MoveNavigation from "./MoveNavigation";
 import { useAnalyzerContext } from "../AnalyzerContext";
-import { AnalyzerMode } from "../AnalyzerProvider";
+import type { AnalyzerMode } from "../AnalyzerProvider";
 
 const ICON_SIZE = 18;
 

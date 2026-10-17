@@ -10,9 +10,7 @@ export const flipCoords = (
   col: number,
   isFlipped: boolean,
 ): [number, number] =>
-  isFlipped
-    ? [BOARD_SIZE - 1 - row, BOARD_SIZE - 1 - col]
-    : [row, col];
+  isFlipped ? [BOARD_SIZE - 1 - row, BOARD_SIZE - 1 - col] : [row, col];
 
 // Value equality for the [row, col]/[rank, file] tuples this whole board
 // subsystem uses (ChessboardContext's `selectedSquare`, PieceLayer's

@@ -36,8 +36,10 @@ export const isGameOngoing = (game: GameCreateResponse | null): boolean =>
 // starting position), so `color === "white"` is the fallback rather than
 // `false` for both — that asymmetry is what a plain `game?.state.turn ===
 // color` would lose.
-export const isTurn = (game: GameCreateResponse | null, color: PieceColor): boolean =>
-  game ? game.state.turn === color : color === "white";
+export const isTurn = (
+  game: GameCreateResponse | null,
+  color: PieceColor,
+): boolean => (game ? game.state.turn === color : color === "white");
 
 export interface GameContextValue {
   game: GameCreateResponse | null;
@@ -75,7 +77,10 @@ export interface GameContextValue {
   // losingSide defaults to humanColor (Resignation is always the human
   // clicking the button) but Timeout can hit either side, so callers can
   // override it explicitly.
-  endGame: (reason?: TerminationReason, losingSide?: PieceColor) => Promise<void>;
+  endGame: (
+    reason?: TerminationReason,
+    losingSide?: PieceColor,
+  ) => Promise<void>;
   makeMove: (from: Square, to: Square) => Promise<void>;
 }
 

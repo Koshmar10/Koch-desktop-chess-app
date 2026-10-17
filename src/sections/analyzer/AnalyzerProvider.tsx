@@ -1,4 +1,5 @@
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   sandboxLoad,
   sandboxMove,
@@ -7,23 +8,23 @@ import {
 } from "../../api/analyzer";
 import { analyzeGame } from "../../api/game";
 import { useAppContext } from "../../app/AppContext";
-import { PieceColor } from "../../api/bindings/PieceColor";
-import { ReplayPosition } from "../../api/bindings/ReplayPosition";
-import { SandboxStarted } from "../../api/bindings/SandboxStarted";
-import { Square } from "../../api/bindings/Square";
-import {
-  AnalyzerContext,
+import type { PieceColor } from "../../api/bindings/PieceColor";
+import type { ReplayPosition } from "../../api/bindings/ReplayPosition";
+import type { SandboxStarted } from "../../api/bindings/SandboxStarted";
+import type { Square } from "../../api/bindings/Square";
+import type {
   GameAnalyzerContextValue,
   SandboxAnalyzerContextValue,
 } from "./AnalyzerContext";
-import { PanelTab } from "./panel/SidePanel";
+import { AnalyzerContext } from "./AnalyzerContext";
+import type { PanelTab } from "./panel/SidePanel";
 import { START_POSITION_PLY } from "./types";
 import { useGameReplay } from "./useGameReplay";
 
 export type AnalyzerMode = "game" | "sandbox";
 
 export interface AnalyzerProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 /**
@@ -35,8 +36,10 @@ export interface AnalyzerProviderProps {
 export function AnalyzerProvider({ children }: AnalyzerProviderProps) {
   const [loadedGameId, setLoadedGameId] = useState<number | null>(null);
   const [isCopyOverlayOpen, setIsCopyOverlayOpen] = useState<boolean>(false);
-  const [isGameSelectOverlayOpen, setIsGameSelectOverlayOpen] = useState<boolean>(false);
-  const [isImportOverlayOpen, setIsImportOverlayOpen] = useState<boolean>(false);
+  const [isGameSelectOverlayOpen, setIsGameSelectOverlayOpen] =
+    useState<boolean>(false);
+  const [isImportOverlayOpen, setIsImportOverlayOpen] =
+    useState<boolean>(false);
 
   const { analysisStages } = useAppContext();
   const analysisStage =
@@ -164,10 +167,20 @@ export function AnalyzerProvider({ children }: AnalyzerProviderProps) {
     undo: undoSandboxMove,
   };
 
-
   return (
     <AnalyzerContext.Provider
-      value={{ loadedGameId, openGame, game, sandbox, isCopyOverlayOpen, setIsCopyOverlayOpen, isGameSelectOverlayOpen, setIsGameSelectOverlayOpen, isImportOverlayOpen, setIsImportOverlayOpen }}
+      value={{
+        loadedGameId,
+        openGame,
+        game,
+        sandbox,
+        isCopyOverlayOpen,
+        setIsCopyOverlayOpen,
+        isGameSelectOverlayOpen,
+        setIsGameSelectOverlayOpen,
+        isImportOverlayOpen,
+        setIsImportOverlayOpen,
+      }}
     >
       {children}
     </AnalyzerContext.Provider>

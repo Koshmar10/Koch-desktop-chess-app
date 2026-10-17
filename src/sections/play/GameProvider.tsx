@@ -29,7 +29,6 @@ interface GameProviderProps {
   children: ReactNode;
 }
 
-
 export function GameProvider({ children }: GameProviderProps) {
   const [game, setGame] = useState<GameCreateResponse | null>(null);
   const [gameReceivedAt, setGameReceivedAt] = useState<number | null>(null);
@@ -100,7 +99,10 @@ export function GameProvider({ children }: GameProviderProps) {
     try {
       const color =
         colorPreference === "random" ? randomColor() : colorPreference;
-      const response = await apiStartGame(color, MODE_TIME_CONTROL[selectedMode]);
+      const response = await apiStartGame(
+        color,
+        MODE_TIME_CONTROL[selectedMode],
+      );
       setHumanColor(color);
       setGame(response);
       setGameReceivedAt(Date.now());
@@ -120,7 +122,10 @@ export function GameProvider({ children }: GameProviderProps) {
     losingSide?: PieceColor,
   ) => {
     try {
-      const result = await apiEndGame(reason, losingSide ?? humanColor ?? undefined);
+      const result = await apiEndGame(
+        reason,
+        losingSide ?? humanColor ?? undefined,
+      );
       // Keep `game` around with its terminal result rather than clearing
       // it — the result card reads `game.state.result` to know the game
       // ended, and the final position/clocks/orientation should stay on

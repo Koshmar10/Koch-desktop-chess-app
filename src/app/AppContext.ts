@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { AnalysisStage } from "../api/bindings/AnalysisStage";
+import type { AnalysisStage } from "../api/bindings/AnalysisStage";
 
 export type Theme = "light" | "dark";
 

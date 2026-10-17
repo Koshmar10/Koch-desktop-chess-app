@@ -82,7 +82,8 @@ const getStartButtonIcon = (
   isStartingGame: boolean,
 ): React.ReactNode => {
   if (isOngoing) return <Swords size={ICON_SIZE} className="animate-pulse" />;
-  if (isStartingGame) return <Loader2 size={ICON_SIZE} className="animate-spin" />;
+  if (isStartingGame)
+    return <Loader2 size={ICON_SIZE} className="animate-spin" />;
   return <Play size={ICON_SIZE} />;
 };
 
@@ -156,7 +157,13 @@ const PlayControls = () => {
 
       <TooltipButton
         icon={getStartButtonIcon(isGameOngoing(game), isStartingGame)}
-        tooltip={isGameOngoing(game) ? "Ongoing game" : isStartingGame ? "Starting…" : "Start game"}
+        tooltip={
+          isGameOngoing(game)
+            ? "Ongoing game"
+            : isStartingGame
+              ? "Starting…"
+              : "Start game"
+        }
         onClick={startGame}
         disabled={isStartingGame || isGameOngoing(game)}
       />

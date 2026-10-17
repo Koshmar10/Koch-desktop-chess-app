@@ -9,7 +9,6 @@ const SIDEBAR_ITEMS = [
   { to: "/analysis", icon: LineChart },
   { to: "/history", icon: History },
   { to: "/puzzle", icon: Puzzle },
-  // { to: "/settings", icon: Settings },
 ];
 
 const LogoSection = () => (
@@ -48,7 +47,7 @@ const Sidebar = () => {
       <LogoSection />
       <ButtonSection />
       <div className="flex flex-row justify-center py-4 items-center border-t-[1px] border-sidebar-border">
-        <SidebarButton key={'/settings'} to={'/settings'} icon={Settings} />
+        <SidebarButton to="/settings" icon={Settings} />
       </div>
     </div>
   );

@@ -225,10 +225,11 @@ const PostGameStats = ({
             type="button"
             aria-label={`Show ${section.label} stats`}
             onClick={() => goTo(idx)}
-            className={`rounded-full transition-all duration-150 ${idx === displayedIndex
-              ? "w-2.5 h-2.5 bg-primary"
-              : "w-2 h-2 bg-foreground/20 hover:bg-foreground/40"
-              }`}
+            className={`rounded-full transition-all duration-150 ${
+              idx === displayedIndex
+                ? "w-2.5 h-2.5 bg-primary"
+                : "w-2 h-2 bg-foreground/20 hover:bg-foreground/40"
+            }`}
           />
         ))}
       </div>

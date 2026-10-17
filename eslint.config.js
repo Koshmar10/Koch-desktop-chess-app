@@ -24,6 +24,10 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      // `import type` for anything only used as a type, so it's clear at the
+      // import which names exist at runtime — and autofixable, so the codebase
+      // can't drift back to a mix.
+      "@typescript-eslint/consistent-type-imports": "error",
     },
   },
   prettier,

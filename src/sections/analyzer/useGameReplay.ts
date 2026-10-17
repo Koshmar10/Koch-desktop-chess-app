@@ -72,8 +72,6 @@ export const useGameReplay = (
     refreshLiveEngineSession(gameId).catch(console.error);
   }, [gameId]);
 
-
-
   const isForThisGame = loaded !== null && loaded.gameId === gameId;
   return {
     replay: isForThisGame ? loaded.replay : null,

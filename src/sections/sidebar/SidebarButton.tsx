@@ -1,4 +1,4 @@
-import { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const ICON_SIZE_PX = 24;
@@ -18,7 +18,6 @@ const SidebarButton = ({ to, icon: Icon }: SidebarButtonProps) => {
           isActive ? "bg-accent/80" : "hover:bg-accent/50"
         }`
       }
-      onClick={() => console.log(window.location.pathname)}
       data-testid="sidebar-button"
     >
       <Icon size={ICON_SIZE_PX} />

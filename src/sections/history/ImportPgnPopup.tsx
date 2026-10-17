@@ -1,26 +1,26 @@
-import { useState } from "react"
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
-import Popup from "../../components/popup/Popup"
-import { importPgn } from "../../api/game"
-import { ImportPgnResult } from "../../api/bindings/ImportPgnResult"
+import { useState } from "react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import Popup from "../../components/popup/Popup";
+import { importPgn } from "../../api/game";
+import type { ImportPgnResult } from "../../api/bindings/ImportPgnResult";
 
 interface ImportPgnPopupProps {
-  open: boolean
-  onClose: () => void
-  onImported?: () => void
+  open: boolean;
+  onClose: () => void;
+  onImported?: () => void;
 }
 
 type Outcome =
   | { kind: "error"; text: string }
   | { kind: "duplicate" }
   | { kind: "partial"; result: ImportPgnResult }
-  | { kind: "ok"; result: ImportPgnResult }
+  | { kind: "ok"; result: ImportPgnResult };
 
 const outcomeFor = (result: ImportPgnResult): Outcome => {
-  if (result.game_id === null) return { kind: "duplicate" }
-  if (result.truncated_at_ply !== null) return { kind: "partial", result }
-  return { kind: "ok", result }
-}
+  if (result.game_id === null) return { kind: "duplicate" };
+  if (result.truncated_at_ply !== null) return { kind: "partial", result };
+  return { kind: "ok", result };
+};
 
 const OutcomeNote = ({ outcome }: { outcome: Outcome }) => {
   switch (outcome.kind) {
@@ -30,14 +30,14 @@ const OutcomeNote = ({ outcome }: { outcome: Outcome }) => {
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {outcome.text}
         </p>
-      )
+      );
     case "duplicate":
       return (
         <p className="flex items-center gap-2 text-sm text-foreground/60">
           <Info className="h-4 w-4 shrink-0" />
           This game is already in your library.
         </p>
-      )
+      );
     case "partial":
       return (
         <p className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
@@ -45,44 +45,44 @@ const OutcomeNote = ({ outcome }: { outcome: Outcome }) => {
           Imported {outcome.result.imported_plies} moves — couldn't read move{" "}
           {outcome.result.truncated_at_ply} ({outcome.result.truncated_token}).
         </p>
-      )
+      );
     case "ok":
       return (
         <p className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           Imported {outcome.result.imported_plies} moves.
         </p>
-      )
+      );
   }
-}
+};
 
 const ImportPgnPopup = ({ open, onClose, onImported }: ImportPgnPopupProps) => {
-  const [pgn, setPgn] = useState("")
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
-  const [importing, setImporting] = useState(false)
+  const [pgn, setPgn] = useState("");
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const close = () => {
-    setPgn("")
-    setOutcome(null)
-    setImporting(false)
-    onClose()
-  }
+    setPgn("");
+    setOutcome(null);
+    setImporting(false);
+    onClose();
+  };
 
   const handleImport = async () => {
-    setImporting(true)
-    setOutcome(null)
+    setImporting(true);
+    setOutcome(null);
     try {
-      const result = await importPgn(pgn.trim())
-      const next = outcomeFor(result)
-      setOutcome(next)
-      if (next.kind !== "duplicate") onImported?.()
-      if (next.kind === "ok") close()
+      const result = await importPgn(pgn.trim());
+      const next = outcomeFor(result);
+      setOutcome(next);
+      if (next.kind !== "duplicate") onImported?.();
+      if (next.kind === "ok") close();
     } catch (e) {
-      setOutcome({ kind: "error", text: String(e) })
+      setOutcome({ kind: "error", text: String(e) });
     } finally {
-      setImporting(false)
+      setImporting(false);
     }
-  }
+  };
 
   return (
     <Popup open={open}>
@@ -115,7 +115,7 @@ const ImportPgnPopup = ({ open, onClose, onImported }: ImportPgnPopupProps) => {
         </div>
       </div>
     </Popup>
-  )
-}
+  );
+};
 
-export default ImportPgnPopup
+export default ImportPgnPopup;

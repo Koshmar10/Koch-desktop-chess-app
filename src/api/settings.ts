@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import { AppSettings } from "./bindings/AppSettings";
-import { AnalyzerEngineSettings } from "./bindings/AnalyzerEngineSettings";
-import { PlayerEngineSettings } from "./bindings/PlayerEngineSettings";
+import type { AppSettings } from "./bindings/AppSettings";
+import type { AnalyzerEngineSettings } from "./bindings/AnalyzerEngineSettings";
+import type { PlayerEngineSettings } from "./bindings/PlayerEngineSettings";
 
 // Each returns null when nothing has been saved yet — the caller falls
 // back to its own defaults.

@@ -24,7 +24,10 @@ interface CentipawnGraphProps {
 // position. Playing Black, that reads inverted — the line would dip when
 // the player is winning — so it gets negated here to make "up" always mean
 // "the player is better", which is what the axis labels below claim.
-export const CentipawnGraph = ({ history, humanColor }: CentipawnGraphProps) => {
+export const CentipawnGraph = ({
+  history,
+  humanColor,
+}: CentipawnGraphProps) => {
   if (history.length < 2) {
     return (
       <div className="h-16 flex items-center justify-center text-foreground/40 text-sm">
@@ -142,7 +145,9 @@ export const TimeGraph = ({ moveTimesMs }: TimeGraphProps) => {
         <span className={`absolute left-0 top-0 ${AXIS_LABEL_CLASS}`}>
           {maxSeconds.toFixed(1)}s
         </span>
-        <span className={`absolute left-0 bottom-0 ${AXIS_LABEL_CLASS}`}>0s</span>
+        <span className={`absolute left-0 bottom-0 ${AXIS_LABEL_CLASS}`}>
+          0s
+        </span>
 
         <div className="h-full flex items-end gap-[3px]">
           {moveTimesMs.map((ms, idx) => (

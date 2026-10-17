@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AppContext, type Theme } from "./AppContext";
-import { AnalysisStage } from "../api/bindings/AnalysisStage";
-import { AnalysisStatus } from "../api/bindings/AnalysisStatus";
+import type { AnalysisStage } from "../api/bindings/AnalysisStage";
+import type { AnalysisStatus } from "../api/bindings/AnalysisStatus";
 
 const THEME_STORAGE_KEY = "koch-theme";
 
