@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { ClipboardPaste } from "lucide-react";
+import DialogCard, { NARROW_DIALOG_PX } from "../../../components/DialogCard";
 import { TooltipButton } from "../../../components/TooltipButton";
+import NotationField from "./NotationField";
 
 const ICON_SIZE = 18;
+const NOTATION_ROWS = 14;
 
 interface ImportPgnFenOverlayProps {
   // Loads a pasted FEN or PGN into the sandbox. Rejects with a message to
@@ -29,37 +32,27 @@ const ImportPgnFenOverlay = ({ onLoad }: ImportPgnFenOverlayProps) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start gap-4 p-4 bg-card rounded-lg w-[50%] h-[72%]">
-      <h1 className="text-card-foreground/90">Import a FEN or PGN</h1>
-
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="import-textarea"
-          className="text-sm text-card-foreground/80 ml-1"
-        >
-          FEN or PGN
-        </label>
-        <textarea
-          className="bg-secondary/30 rounded-md text-sm p-1"
-          id="import-textarea"
-          cols={35}
-          rows={14}
-          value={notation}
-          onChange={(e) => setNotation(e.target.value)}
-          spellCheck={false}
-          autoFocus
-        ></textarea>
-      </div>
+    <DialogCard title="Import a FEN or PGN" widthPx={NARROW_DIALOG_PX}>
+      <NotationField
+        id="import-textarea"
+        label="FEN or PGN"
+        value={notation}
+        rows={NOTATION_ROWS}
+        onChange={setNotation}
+        autoFocus
+      />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <TooltipButton
-        icon={<ClipboardPaste size={ICON_SIZE} />}
-        tooltip="Load into the sandbox"
-        onClick={load}
-        disabled={isLoading || notation.trim() === ""}
-      />
-    </div>
+      <div className="flex justify-end">
+        <TooltipButton
+          icon={<ClipboardPaste size={ICON_SIZE} />}
+          tooltip="Load into the sandbox"
+          onClick={load}
+          disabled={isLoading || notation.trim() === ""}
+        />
+      </div>
+    </DialogCard>
   );
 };
 

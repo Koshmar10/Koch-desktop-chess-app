@@ -1,4 +1,6 @@
 import Popup from "../../components/popup/Popup";
+import DialogCard, { NARROW_DIALOG_PX } from "../../components/DialogCard";
+import { GhostButton } from "../../components/buttons";
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 
@@ -37,10 +39,7 @@ const SideButton = ({
 
 const AnalyzeSidePopup = ({ game, onPick, onClose }: AnalyzeSidePopupProps) => (
   <Popup open={game !== null}>
-    <div className="flex w-[min(360px,92vw)] flex-col gap-4 rounded-lg border border-border bg-card p-6 shadow-xl">
-      <h2 className="text-lg font-medium text-foreground/90">
-        Analyse which side?
-      </h2>
+    <DialogCard title="Analyse which side?" widthPx={NARROW_DIALOG_PX}>
       <div className="flex gap-2">
         <SideButton
           color="white"
@@ -55,14 +54,10 @@ const AnalyzeSidePopup = ({ game, onPick, onClose }: AnalyzeSidePopupProps) => (
           onClick={() => onPick("black")}
         />
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="self-end rounded-md px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-border/60"
-      >
-        Cancel
-      </button>
-    </div>
+      <div className="flex justify-end">
+        <GhostButton onClick={onClose}>Cancel</GhostButton>
+      </div>
+    </DialogCard>
   </Popup>
 );
 

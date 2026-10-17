@@ -1,22 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import { PrimaryButton } from "../../components/buttons";
+import { NOTATION_TEXTAREA_CLASS } from "../../components/controlStyles";
+import DialogCard, { WIDE_DIALOG_PX } from "../../components/DialogCard";
 import { useGameContext } from "./GameContext";
 import { buildLiveGamePgn } from "./buildPgn";
 
-interface CloseButtonProps {
-  onClick: () => void;
-}
-
-const CloseButton = ({ onClick }: CloseButtonProps) => (
-  <button
-    type="button"
-    aria-label="Close"
-    onClick={onClick}
-    className="absolute top-3 right-3 p-1 rounded-md text-foreground/40 hover:text-foreground/80 hover:bg-primary/10 transition-colors"
-  >
-    <X size={18} />
-  </button>
-);
+const ICON_SIZE = 16;
+const PGN_ROWS = 14;
 
 const SharePgnCard = () => {
   const { game, closeSharePgn } = useGameContext();
@@ -49,29 +40,28 @@ const SharePgnCard = () => {
   };
 
   return (
-    <div className="relative flex w-[min(480px,92vw)] flex-col gap-4 rounded-xl bg-card border-[1px] border-border/80 p-6 shadow-lg">
-      <CloseButton onClick={closeSharePgn} />
-
-      <h2 className="text-xl font-medium text-foreground/90">Share game</h2>
-
+    <DialogCard
+      title="Share game"
+      onClose={closeSharePgn}
+      widthPx={WIDE_DIALOG_PX}
+    >
       <textarea
         ref={textareaRef}
         value={pgn}
         readOnly
+        rows={PGN_ROWS}
         onFocus={(e) => e.currentTarget.select()}
         spellCheck={false}
-        className="h-56 w-full resize-none rounded-md border border-border bg-input/30 p-2 font-mono text-xs text-foreground outline-none focus:border-primary"
+        className={NOTATION_TEXTAREA_CLASS}
       />
 
-      <button
-        type="button"
-        onClick={copy}
-        className="flex items-center justify-center gap-2 self-end rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-      >
-        {copied ? <Check size={16} /> : <Copy size={16} />}
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
+      <div className="flex justify-end">
+        <PrimaryButton onClick={copy}>
+          {copied ? <Check size={ICON_SIZE} /> : <Copy size={ICON_SIZE} />}
+          {copied ? "Copied" : "Copy"}
+        </PrimaryButton>
+      </div>
+    </DialogCard>
   );
 };
 

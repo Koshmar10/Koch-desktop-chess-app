@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { GhostButton, PrimaryButton } from "../../components/buttons";
 
 // Two columns: label + `* hint` stacked on the left, the control on a
 // fixed right rail so every control shares the same right edge and the
@@ -46,22 +47,12 @@ export const Section = ({
     <p className="mt-0.5 text-sm text-foreground/50">{subtitle}</p>
     <div className="mt-2 divide-y divide-border/40">{children}</div>
     <div className="mt-6 flex justify-end gap-2">
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={!dirty}
-        className="rounded-md px-3 py-1.5 text-sm text-foreground/70 transition-colors hover:bg-border/60 disabled:pointer-events-none disabled:opacity-40"
-      >
+      <GhostButton onClick={onCancel} disabled={!dirty}>
         Cancel
-      </button>
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={!dirty}
-        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40"
-      >
+      </GhostButton>
+      <PrimaryButton onClick={onSave} disabled={!dirty}>
         Save
-      </button>
+      </PrimaryButton>
     </div>
   </section>
 );
