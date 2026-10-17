@@ -1,10 +1,11 @@
 //! Live-game mechanics shared by the human's move and the engine's reply:
 //! applying an already-legal move (clocks, game-over check), re-resolving
-//! the opening, and running the engine's own move in the background.
+//! the opening, running the engine's own move in the background, and the
+//! two ways a turn ends — the game going on, or the game being over.
 
 use koch_engine::{MoveStruct, PieceColor, PieceMove};
 use koch_uci::{Engine, GoLimits, SearchEvent, UciError};
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
@@ -26,6 +27,10 @@ use super::view::GameResult;
 // clock-aware for now — the engine doesn't yet budget its own remaining
 // time against `time_control`.
 const ENGINE_MOVETIME_MS: u64 = 1000;
+
+// Whether a finished game gets its post-game analysis pass. The game is
+// saved either way — this only decides whether analysis *runs*.
+const ANALYSIS_ENABLED: bool = true;
 
 /// Records an already-legal move and its bookkeeping — clock deduction,
 /// the game's result — shared between the human's move (`make_move`) and
@@ -64,12 +69,7 @@ pub(super) fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> 
 /// the first time (`GameService::save` returns `None` on a re-save, so
 /// this can't double-count). Best-effort: a rating write failing must not
 /// fail the move / end-game command, so errors are only logged.
-///
-/// Lives here with the other end-of-game mechanics because all three ways
-/// a game ends call it — `end_game`, the human's final move, and the
-/// engine's final move. The engine's path used to skip it, so a game the
-/// engine finished never changed the rating.
-pub(super) fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
+fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
     let (human_elo, opponent_elo) = match game.human_color {
         PieceColor::White => (game.white_player.elo, game.black_player.elo),
         PieceColor::Black => (game.black_player.elo, game.white_player.elo),
@@ -118,16 +118,21 @@ pub(super) fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id:
 /// from `apply_move` (which stays DB-free) but called right after it from
 /// the same two places, for the same reason `apply_move` itself is
 /// shared — both the human's move and the engine's own reply need it.
-pub(super) fn update_opening(game: &mut Game, db_conn: &rusqlite::Connection) {
+///
+/// Takes the lock itself. A sync function can't still be holding the guard
+/// at an `.await`, so the async callers need no lock scope of their own.
+pub(super) fn update_opening(game: &mut Game, db: &db::Db) -> Result<(), AppError> {
     let played_uci: String = game
         .move_list
         .iter()
         .map(|m| m.uci.as_str())
         .collect::<Vec<_>>()
         .join(" ");
-    if let Ok(Some(opening)) = OpeningService::new(db_conn).find_by_uci_prefix(&played_uci) {
+    let conn = db.lock()?;
+    if let Ok(Some(opening)) = OpeningService::new(&conn).find_by_uci_prefix(&played_uci) {
         game.opening = Some(opening);
     }
+    Ok(())
 }
 
 /// Runs a fixed-time search on the engine's current position and returns
@@ -146,7 +151,7 @@ async fn search_best_move(engine: &mut Engine, limits: &GoLimits) -> Result<Stri
 
 /// Builds the analysis job for a game that was just saved — clones the
 /// move data out of the live `Game` so the background worker owns it.
-pub(super) fn analysis_job_for(game_id: u32, game: &Game) -> AnalysisJob {
+fn analysis_job_for(game_id: u32, game: &Game) -> AnalysisJob {
     AnalysisJob {
         game_id,
         human_color: game.human_color,
@@ -156,11 +161,45 @@ pub(super) fn analysis_job_for(game_id: u32, game: &Game) -> AnalysisJob {
     }
 }
 
+/// Gets a game that goes on ready for its next move: what can move now,
+/// and the engine told the position so it can search from it.
+pub(super) async fn prepare_next_move(game: &mut Game) {
+    game.board.refresh_legal_moves();
+    let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
+    let _ = game.engine.set_position_startpos(&uci_moves).await;
+}
+
+/// The one way a game ends, whichever of `end_game`, the human's last move
+/// or the engine's last move got it there: save it, and — the first time
+/// it's saved — move the human's rating and queue its analysis, then shut
+/// the engine down. Each of the three used to spell this out itself, and
+/// they had already drifted: only `end_game` checked `ANALYSIS_ENABLED`.
+pub(super) async fn finish_game(app: &AppHandle, game: Game) -> Result<(), AppError> {
+    let db = app.state::<db::Db>();
+    // Scoped so the guard is gone before the `.await` below — one held
+    // across it would make this future non-`Send`.
+    let game_id = {
+        let conn = db.lock()?;
+        GameService::new(&conn).save(&game, &SaveMeta::koch())
+    };
+    // `None` when nothing new was saved — the game was already in the
+    // library, or the insert failed — so there's no rating or analysis to
+    // add for it.
+    if let Some(game_id) = game_id {
+        record_rating_for_finished_game(&db, &game, game_id);
+        if ANALYSIS_ENABLED {
+            analysis::enqueue_analysis(app, analysis_job_for(game_id, &game));
+        }
+    }
+    let _ = game.engine.quit().await;
+    Ok(())
+}
+
 /// Runs the engine's reply in the background and emits
 /// `engine-move-complete` with the result once done — the counterpart to
 /// `make_move` returning right after the human's own move, so the frontend
 /// isn't blocked waiting on the engine to think.
-pub(super) fn spawn_engine_reply(app: tauri::AppHandle, game: Game) {
+pub(super) fn spawn_engine_reply(app: AppHandle, game: Game) {
     tauri::async_runtime::spawn(async move {
         // A background task has no caller to hand an error back to, so this
         // is the one place its failures end up.
@@ -173,7 +212,7 @@ pub(super) fn spawn_engine_reply(app: tauri::AppHandle, game: Game) {
 /// The engine's reply itself, written like a command so `?` works. A
 /// failure before the move is played puts the game back first, so it's
 /// still there for the next `make_move`.
-async fn play_engine_reply(app: &tauri::AppHandle, mut game: Game) -> Result<(), AppError> {
+async fn play_engine_reply(app: &AppHandle, mut game: Game) -> Result<(), AppError> {
     let state = app.state::<AppState>();
     let db = app.state::<db::Db>();
     let mover = game.board.turn;
@@ -209,32 +248,16 @@ async fn play_engine_reply(app: &tauri::AppHandle, mut game: Game) -> Result<(),
     };
 
     let game_ended = apply_move(&mut game, mover, mv);
-    // Each lock lives in its own block: a guard still alive at an `.await`
-    // would make this future non-`Send`, and it couldn't be spawned.
-    {
-        let conn = db.lock()?;
-        update_opening(&mut game, &conn);
-    }
+    update_opening(&mut game, &db)?;
 
     if game_ended {
         let response = game.state_view();
-        let game_id = {
-            let conn = db.lock()?;
-            GameService::new(&conn).save(&game, &SaveMeta::koch())
-        };
-        if let Some(game_id) = game_id {
-            record_rating_for_finished_game(&db, &game, game_id);
-            analysis::enqueue_analysis(app, analysis_job_for(game_id, &game));
-        }
-        let _ = game.engine.quit().await;
+        finish_game(app, game).await?;
         let _ = app.emit("engine-move-complete", response);
         return Ok(());
     }
 
-    game.board.refresh_legal_moves();
-    let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
-    let _ = game.engine.set_position_startpos(&uci_moves).await;
-
+    prepare_next_move(&mut game).await;
     let response = game.state_view();
     restore_active_game(&state, game)?;
     let _ = app.emit("engine-move-complete", response);
