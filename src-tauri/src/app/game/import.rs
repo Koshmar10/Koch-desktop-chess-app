@@ -6,6 +6,7 @@ use koch_engine::{PgnError, PgnGame, PgnMove, PgnTags};
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::app::error::AppError;
 use crate::db::{
     self,
     services::{
@@ -29,22 +30,23 @@ pub struct ImportPgnResult {
 }
 
 #[tauri::command]
-pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgnResult, String> {
+pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgnResult, AppError> {
     let parse = PgnGame::parse(&pgn).map_err(|err| match err {
-        PgnError::Empty => "The PGN is empty.".to_string(),
-        PgnError::NoMoves => "The PGN has no moves to import.".to_string(),
+        PgnError::Empty => "The PGN is empty.",
+        PgnError::NoMoves => "The PGN has no moves to import.",
     })?;
 
     if parse.game.moves.is_empty() {
-        return Err(match parse.truncated {
+        let message = match parse.truncated {
             Some(truncation) => {
                 format!("Couldn't read the first move ({}).", truncation.token)
             }
             None => "The PGN has no moves to import.".to_string(),
-        });
+        };
+        return Err(message.into());
     }
 
-    let conn = db.lock().map_err(|e| e.to_string())?;
+    let conn = db.lock()?;
 
     let uci_line = parse
         .game
@@ -54,8 +56,7 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         .collect::<Vec<_>>()
         .join(" ");
     let opening_id = OpeningService::new(&conn)
-        .find_by_uci_prefix(&uci_line)
-        .map_err(|e| e.to_string())?
+        .find_by_uci_prefix(&uci_line)?
         .map(|opening| opening.opening_id);
 
     // Normalise the PGN's seconds-based `[TimeControl]` to the millisecond

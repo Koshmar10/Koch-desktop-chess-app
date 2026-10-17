@@ -8,6 +8,7 @@ use tauri::{Emitter, Manager};
 
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
+use crate::app::error::AppError;
 use crate::app::rating::{self, GameScore};
 use crate::db::{
     self,
@@ -159,65 +160,83 @@ pub(super) fn analysis_job_for(game_id: u32, game: &Game) -> AnalysisJob {
 /// `engine-move-complete` with the result once done — the counterpart to
 /// `make_move` returning right after the human's own move, so the frontend
 /// isn't blocked waiting on the engine to think.
-pub(super) fn spawn_engine_reply(app: tauri::AppHandle, mut game: Game) {
+pub(super) fn spawn_engine_reply(app: tauri::AppHandle, game: Game) {
     tauri::async_runtime::spawn(async move {
-        let mover = game.board.turn;
-        let limits = GoLimits {
-            movetime_ms: Some(ENGINE_MOVETIME_MS),
-            ..Default::default()
-        };
-
-        let best_move = match search_best_move(&mut game.engine, &limits).await {
-            Ok(mv) => mv,
-            Err(err) => {
-                eprintln!("engine search failed: {err}");
-                restore_active_game(&app.state::<AppState>(), game);
-                return;
-            }
-        };
-
-        let Some(PieceMove {
-            from,
-            to,
-            promotion,
-        }) = game.board.decode_uci_move(&best_move)
-        else {
-            eprintln!("engine returned an undecodable move: {best_move}");
-            restore_active_game(&app.state::<AppState>(), game);
-            return;
-        };
-
-        let mv = match game.board.move_piece(from, to, promotion) {
-            Ok(mv) => mv,
-            Err(err) => {
-                eprintln!("engine's own move was rejected: {err:?}");
-                restore_active_game(&app.state::<AppState>(), game);
-                return;
-            }
-        };
-
-        let game_ended = apply_move(&mut game, mover, mv);
-        update_opening(&mut game, &app.state::<db::Db>().lock().unwrap());
-
-        if game_ended {
-            let response = game.state_view();
-            let game_id = GameService::new(&app.state::<db::Db>().lock().unwrap())
-                .save(&game, &SaveMeta::koch());
-            if let Some(game_id) = game_id {
-                record_rating_for_finished_game(&app.state::<db::Db>(), &game, game_id);
-                analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
-            }
-            let _ = game.engine.quit().await;
-            let _ = app.emit("engine-move-complete", response);
-            return;
+        // A background task has no caller to hand an error back to, so this
+        // is the one place its failures end up.
+        if let Err(err) = play_engine_reply(&app, game).await {
+            eprintln!("engine reply failed: {err}");
         }
-
-        game.board.refresh_legal_moves();
-        let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
-        let _ = game.engine.set_position_startpos(&uci_moves).await;
-
-        let response = game.state_view();
-        restore_active_game(&app.state::<AppState>(), game);
-        let _ = app.emit("engine-move-complete", response);
     });
+}
+
+/// The engine's reply itself, written like a command so `?` works. A
+/// failure before the move is played puts the game back first, so it's
+/// still there for the next `make_move`.
+async fn play_engine_reply(app: &tauri::AppHandle, mut game: Game) -> Result<(), AppError> {
+    let state = app.state::<AppState>();
+    let db = app.state::<db::Db>();
+    let mover = game.board.turn;
+    let limits = GoLimits {
+        movetime_ms: Some(ENGINE_MOVETIME_MS),
+        ..Default::default()
+    };
+
+    let best_move = match search_best_move(&mut game.engine, &limits).await {
+        Ok(mv) => mv,
+        Err(err) => {
+            restore_active_game(&state, game)?;
+            return Err(err.into());
+        }
+    };
+
+    let Some(PieceMove {
+        from,
+        to,
+        promotion,
+    }) = game.board.decode_uci_move(&best_move)
+    else {
+        restore_active_game(&state, game)?;
+        return Err(format!("engine returned an undecodable move: {best_move}").into());
+    };
+
+    let mv = match game.board.move_piece(from, to, promotion) {
+        Ok(mv) => mv,
+        Err(err) => {
+            restore_active_game(&state, game)?;
+            return Err(format!("engine's own move was rejected: {err:?}").into());
+        }
+    };
+
+    let game_ended = apply_move(&mut game, mover, mv);
+    // Each lock lives in its own block: a guard still alive at an `.await`
+    // would make this future non-`Send`, and it couldn't be spawned.
+    {
+        let conn = db.lock()?;
+        update_opening(&mut game, &conn);
+    }
+
+    if game_ended {
+        let response = game.state_view();
+        let game_id = {
+            let conn = db.lock()?;
+            GameService::new(&conn).save(&game, &SaveMeta::koch())
+        };
+        if let Some(game_id) = game_id {
+            record_rating_for_finished_game(&db, &game, game_id);
+            analysis::enqueue_analysis(app, analysis_job_for(game_id, &game));
+        }
+        let _ = game.engine.quit().await;
+        let _ = app.emit("engine-move-complete", response);
+        return Ok(());
+    }
+
+    game.board.refresh_legal_moves();
+    let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
+    let _ = game.engine.set_position_startpos(&uci_moves).await;
+
+    let response = game.state_view();
+    restore_active_game(&state, game)?;
+    let _ = app.emit("engine-move-complete", response);
+    Ok(())
 }

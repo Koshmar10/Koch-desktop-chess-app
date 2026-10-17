@@ -1,6 +1,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::app::error::AppError;
 use crate::app::rating;
 use crate::app::sessions::SessionDuration;
 use crate::db::{
@@ -62,16 +63,13 @@ fn longest_win_streak(results: &[(String, String)]) -> u32 {
 }
 
 #[tauri::command]
-pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, AppError> {
+    let conn = db.lock()?;
 
-    let current_rating = PlayerRatingService::new(&conn)
-        .current_rating(i64::from(rating::DEFAULT_RATING))
-        .map_err(|e| e.to_string())?;
+    let current_rating =
+        PlayerRatingService::new(&conn).current_rating(i64::from(rating::DEFAULT_RATING))?;
 
-    let results = GameService::new(&conn)
-        .human_game_results()
-        .map_err(|e| e.to_string())?;
+    let results = GameService::new(&conn).human_game_results()?;
     let games_played = results.len() as u32;
     let wins = results.iter().filter(|(r, c)| human_won(r, c)).count() as u32;
     let win_rate = if games_played == 0 {
@@ -82,13 +80,11 @@ pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, Str
     let best_streak = longest_win_streak(&results);
 
     let avg_accuracy = AnalysisService::new(&conn)
-        .average_human_accuracy()
-        .map_err(|e| e.to_string())?
+        .average_human_accuracy()?
         .unwrap_or(0.0) as f32;
 
     let total_seconds: i64 = SessionService::new(&conn)
-        .get_sessions()
-        .map_err(|e| e.to_string())?
+        .get_sessions()?
         .iter()
         .filter_map(|s| SessionDuration::try_from(s).ok())
         .map(|d| d.duration)
@@ -105,11 +101,10 @@ pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, Str
 }
 
 #[tauri::command]
-pub fn get_rating_history(db: tauri::State<'_, db::Db>) -> Result<Vec<RatingPoint>, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn get_rating_history(db: tauri::State<'_, db::Db>) -> Result<Vec<RatingPoint>, AppError> {
+    let conn = db.lock()?;
     Ok(PlayerRatingService::new(&conn)
-        .history()
-        .map_err(|e| e.to_string())?
+        .history()?
         .into_iter()
         .map(|e| RatingPoint {
             rating: e.rating as i32,

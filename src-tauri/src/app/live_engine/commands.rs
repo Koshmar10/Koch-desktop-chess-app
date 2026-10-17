@@ -7,6 +7,7 @@ use super::session::{
     spawn_live_engine_session, EngineCommand, LiveEngineHandle, LiveEngineSettings,
 };
 use crate::app::app_state::AppState;
+use crate::app::error::AppError;
 
 #[tauri::command]
 pub fn update_live_engine_position(
@@ -14,14 +15,14 @@ pub fn update_live_engine_position(
     moves: Vec<String>,
     position_key: String,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     // Validated before taking the lock: no reason to hold it while parsing.
     let fen = match starting_position {
-        Some(fen) => FenString::try_from(fen).map_err(|err| format!("invalid FEN: {err:?}"))?,
+        Some(fen) => FenString::try_from(fen)?,
         None => FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is valid"),
     };
 
-    let mut slot = state.live_engine_handle.lock().unwrap();
+    let mut slot = state.live_engine_handle.lock()?;
 
     let Some(handle) = slot.as_mut() else {
         return Ok(());
@@ -33,15 +34,13 @@ pub fn update_live_engine_position(
     if let Some(previous) = handle.cancel.replace(cancel.clone()) {
         previous.cancel();
     }
-    handle
-        .engine_tx
-        .send(EngineCommand::Go {
-            fen,
-            moves,
-            position_key,
-            cancel,
-        })
-        .map_err(|err| err.to_string())
+    handle.engine_tx.send(EngineCommand::Go {
+        fen,
+        moves,
+        position_key,
+        cancel,
+    })?;
+    Ok(())
 }
 
 /// Applies new options to the running session. The search stops for them,
@@ -51,8 +50,8 @@ pub fn update_live_engine_position(
 pub fn apply_live_engine_settings(
     settings: LiveEngineSettings,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
-    let mut slot = state.live_engine_handle.lock().unwrap();
+) -> Result<(), AppError> {
+    let mut slot = state.live_engine_handle.lock()?;
     let Some(handle) = slot.as_mut() else {
         return Ok(());
     };
@@ -61,25 +60,27 @@ pub fn apply_live_engine_settings(
         cancel.cancel();
     }
     handle.settings = settings;
-    handle
-        .engine_tx
-        .send(EngineCommand::SetOptions(settings))
-        .map_err(|err| err.to_string())
+    handle.engine_tx.send(EngineCommand::SetOptions(settings))?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn get_live_engine_settings(state: tauri::State<'_, AppState>) -> LiveEngineSettings {
-    let slot = state.live_engine_handle.lock().unwrap();
-    slot.as_ref()
-        .map_or_else(LiveEngineSettings::default, |handle| handle.settings)
+pub fn get_live_engine_settings(
+    state: tauri::State<'_, AppState>,
+) -> Result<LiveEngineSettings, AppError> {
+    let slot = state.live_engine_handle.lock()?;
+    Ok(slot
+        .as_ref()
+        .map_or_else(LiveEngineSettings::default, |handle| handle.settings))
 }
 
 #[tauri::command]
-pub fn stop_live_engine(state: tauri::State<'_, AppState>) {
-    let slot = state.live_engine_handle.lock().unwrap();
+pub fn stop_live_engine(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
+    let slot = state.live_engine_handle.lock()?;
     if let Some(cancel) = slot.as_ref().and_then(|handle| handle.cancel.as_ref()) {
         cancel.cancel();
     }
+    Ok(())
 }
 
 #[tauri::command]
@@ -87,14 +88,14 @@ pub fn refresh_live_engine_session(
     game_id: Option<u32>,
     state: tauri::State<'_, AppState>,
     app: AppHandle,
-) {
-    let mut slot = state.live_engine_handle.lock().unwrap();
+) -> Result<(), AppError> {
+    let mut slot = state.live_engine_handle.lock()?;
 
     if slot
         .as_ref()
         .is_some_and(|handle| handle.game_id == game_id)
     {
-        return;
+        return Ok(());
     }
     // The old session is stuck inside its search until that's cancelled —
     // only then does it see its sender dropped below and quit.
@@ -114,4 +115,5 @@ pub fn refresh_live_engine_session(
             eprintln!("live engine session ended: {err}");
         }
     });
+    Ok(())
 }

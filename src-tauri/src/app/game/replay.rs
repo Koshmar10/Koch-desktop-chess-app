@@ -20,6 +20,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::app::analysis::{MoveQuality, SideAccuracy};
+use crate::app::error::AppError;
 use crate::db::{
     self,
     schemas::game::GameMoveRow,
@@ -150,18 +151,18 @@ pub(crate) fn replay_positions(moves: &[GameMoveRow]) -> Result<Vec<ReplayPositi
 
 /// A saved game, every position of it, ready for the analyzer to scrub.
 #[tauri::command]
-pub fn load_game_replay(db: tauri::State<'_, db::Db>, game_id: u32) -> Result<GameReplay, String> {
-    let conn = db.lock().map_err(|e| e.to_string())?;
+pub fn load_game_replay(
+    db: tauri::State<'_, db::Db>,
+    game_id: u32,
+) -> Result<GameReplay, AppError> {
+    let conn = db.lock()?;
     let service = GameService::new(&conn);
 
     let game = service
-        .find_game(game_id)
-        .map_err(|e| e.to_string())?
+        .find_game(game_id)?
         .ok_or_else(|| format!("no saved game with id {game_id}"))?;
-    let moves = service.game_moves(game_id).map_err(|e| e.to_string())?;
-    let accuracies = AnalysisService::new(&conn)
-        .side_accuracies(game_id)
-        .map_err(|e| e.to_string())?;
+    let moves = service.game_moves(game_id)?;
+    let accuracies = AnalysisService::new(&conn).side_accuracies(game_id)?;
 
     Ok(GameReplay {
         summary: game_summary_from(&game, &conn),

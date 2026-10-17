@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod app_state;
+pub mod error;
 pub mod game;
 pub mod live_engine;
 pub mod rating;
