@@ -8,6 +8,7 @@ import {
 } from "../../../api/gameSummary";
 import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
 import DialogCard, { WIDE_DIALOG_PX } from "../../../components/DialogCard";
+import EmptyNote from "../../../components/EmptyNote";
 
 // Stand-in for a date the game didn't record, same as the Game tab's.
 const UNKNOWN = "—";
@@ -89,7 +90,7 @@ const GameSelectOverlay = ({
       heightPx={PICKER_HEIGHT_PX}
     >
       {games?.length === 0 ? (
-        <p className="text-sm text-card-foreground/50">No saved games yet</p>
+        <EmptyNote>No saved games yet</EmptyNote>
       ) : (
         <ul className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-auto">
           {games?.map((game) => (

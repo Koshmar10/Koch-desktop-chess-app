@@ -79,10 +79,10 @@ const HistoryToolbar = ({ onImported }: { onImported?: () => void }) => {
     <div className="gap-4 text-foreground border-b-2 border-border flex flex-row items-center p-3">
       <SearchBox />
       <MonthSelect />
-      <TooltipButton icon={<RefreshCcw />} tooltip={"Sync with chess.com"} />
+      <TooltipButton icon={RefreshCcw} tooltip="Sync with chess.com" />
       <TooltipButton
-        icon={<Upload />}
-        tooltip={"Import PGN"}
+        icon={Upload}
+        tooltip="Import PGN"
         onClick={() => setImportOpen(true)}
       />
       <ImportPgnPopup

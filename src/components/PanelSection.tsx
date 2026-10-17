@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+
+const TITLE_ICON_SIZE = 16;
 
 interface PanelSectionProps {
   title: string;
+  // Drawn before the title, in the accent colour — for sections that
+  // stand alone, like the post-game stat pages, rather than sit in a tab.
+  icon?: LucideIcon;
   children: ReactNode;
   /**
    * A control at the right end of the title row, for an action on the
@@ -23,15 +29,17 @@ interface PanelSectionProps {
 }
 
 /**
- * One titled block inside a side-panel tab.
+ * One titled block of a side panel — the analyzer's tabs, the play
+ * screen's panel, a post-game stat page.
  *
- * All three tabs were growing their own copy of the same `<section>` plus
+ * Each of those was growing its own copy of the same `<section>` plus
  * uppercase `<h3>`, which had already drifted on spacing. Keeping it in
- * one place is what makes switching tabs feel like moving within a panel
- * rather than between three of them.
+ * one place is what makes every panel in the app read as the same kind of
+ * thing, rather than each screen having its own.
  */
 const PanelSection = ({
   title,
+  icon: Icon,
   children,
   action,
   fill = false,
@@ -43,7 +51,8 @@ const PanelSection = ({
   return (
     <section className={`flex flex-col gap-2 ${sizing} ${rule}`}>
       <div className="flex shrink-0 items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold tracking-wide text-foreground/60 uppercase">
+        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-foreground/60 uppercase">
+          {Icon && <Icon size={TITLE_ICON_SIZE} className="text-primary" />}
           {title}
         </h3>
         {action}

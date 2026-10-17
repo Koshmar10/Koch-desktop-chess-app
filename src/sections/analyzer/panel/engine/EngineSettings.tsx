@@ -1,7 +1,7 @@
 import type { LiveEngineSettings } from "../../../../api/bindings/LiveEngineSettings";
 import { MAX_THREADS } from "../../../../api/settings";
 import { NumberSetting } from "../../../../components/controls";
-import PanelSection from "../PanelSection";
+import PanelSection from "../../../../components/PanelSection";
 
 const MIN_LINES = 1;
 const MAX_LINES = 5;

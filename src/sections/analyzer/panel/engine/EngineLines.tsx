@@ -1,4 +1,5 @@
 import { Layers, LoaderCircle } from "lucide-react";
+import EmptyNote from "../../../../components/EmptyNote";
 import {
   EVAL_UNKNOWN_LABEL,
   evalBarWhiteFraction,
@@ -108,7 +109,7 @@ const EngineLines = ({
             <PvLineRow key={rank} line={line} />
           ))
         ) : (
-          <span className="text-foreground/40 italic">No lines yet</span>
+          <EmptyNote>No lines yet</EmptyNote>
         )}
       </div>
     </div>

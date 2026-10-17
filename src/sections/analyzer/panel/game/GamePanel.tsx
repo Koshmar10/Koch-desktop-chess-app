@@ -9,8 +9,8 @@ import {
   resultToken,
 } from "../../../../api/gameSummary";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
-import PanelSection from "../PanelSection";
-import MoveTimeline from "./MoveTimeline";
+import MoveTimeline from "../../../../components/MoveTimeline";
+import PanelSection from "../../../../components/PanelSection";
 
 // The same king tile the play screen's player cards use, at roughly half
 // the size — enough to read the side at a glance without the row turning

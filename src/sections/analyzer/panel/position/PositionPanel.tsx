@@ -31,7 +31,8 @@ import {
 } from "../../../../components/chessboard/lib/squareName";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import { CardRow, PlainRow } from "../InteractiveRow";
-import PanelSection from "../PanelSection";
+import EmptyNote from "../../../../components/EmptyNote";
+import PanelSection from "../../../../components/PanelSection";
 import { PieceChip, SquareChip } from "../chips";
 import { maskIdFor } from "../../overlays/masks";
 import { controlColor, controlCounts, type ControlSide } from "./controlTint";
@@ -50,10 +51,6 @@ const SIDE_NAME: Record<PieceColor, string> = {
   white: "White",
   black: "Black",
 };
-
-const Empty = ({ label }: { label: string }) => (
-  <p className="text-xs text-foreground/40 italic">{label}</p>
-);
 
 // ---------------------------------------------------------------- king
 
@@ -326,7 +323,7 @@ const PawnStructureRow = ({
       </span>
 
       {flags.length === 0 ? (
-        <span className="text-xs text-foreground/40 italic">nothing weak</span>
+        <EmptyNote>nothing weak</EmptyNote>
       ) : (
         // A row per weakness, so you can light up the isolated pawns
         // without the backward ones coming too.
@@ -494,7 +491,7 @@ interface PositionPanelProps {
  */
 const PositionPanel = ({ findings, pieces }: PositionPanelProps) => {
   if (findings === null) {
-    return <Empty label="No position loaded" />;
+    return <EmptyNote>No position loaded</EmptyNote>;
   }
 
   return (
@@ -523,7 +520,7 @@ const PositionPanel = ({ findings, pieces }: PositionPanelProps) => {
 
       <PanelSection title="Pins">
         {findings.pins.length === 0 ? (
-          <Empty label="No pins" />
+          <EmptyNote>No pins</EmptyNote>
         ) : (
           findings.pins.map((pin) => (
             <PinRow key={maskIdFor.pin(pin)} pin={pin} pieces={pieces} />
@@ -533,7 +530,7 @@ const PositionPanel = ({ findings, pieces }: PositionPanelProps) => {
 
       <PanelSection title="Forks">
         {findings.forks.length === 0 ? (
-          <Empty label="No forks" />
+          <EmptyNote>No forks</EmptyNote>
         ) : (
           findings.forks.map((fork) => (
             <ForkRow key={maskIdFor.fork(fork)} fork={fork} pieces={pieces} />

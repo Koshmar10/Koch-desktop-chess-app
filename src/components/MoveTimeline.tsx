@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
-import { MOVE_QUALITY_COLOR } from "../../moveQuality";
-import { START_POSITION_PLY } from "../../types";
+import type { MoveQuality } from "../api/bindings/MoveQuality";
+import { MOVE_QUALITY_COLOR } from "../lib/moveQuality";
+import EmptyNote from "./EmptyNote";
 
 const ROW_HEIGHT_CLASS = "h-7";
 
@@ -32,7 +32,8 @@ interface MoveCellProps {
   quality: MoveQuality | null | undefined;
   ply: number;
   isViewed: boolean;
-  onSelect: (ply: number) => void;
+  // Left out where there's nowhere to jump to — a game still being played.
+  onSelect?: (ply: number) => void;
 }
 
 const MoveCell = ({
@@ -46,9 +47,9 @@ const MoveCell = ({
   const ref = useRef<HTMLButtonElement>(null);
 
   // Keeps the viewed move in sight however it got there — the toolbar, the
-  // timeline chart, the keyboard. `nearest` only scrolls when the move is
-  // out of view, and only as far as it takes, so clicking a move that's
-  // already visible never jumps the list.
+  // timeline chart, the keyboard, or a new move during play. `nearest` only
+  // scrolls when the move is out of view, and only as far as it takes, so
+  // clicking a move that's already visible never jumps the list.
   useEffect(() => {
     if (isViewed) ref.current?.scrollIntoView({ block: "nearest" });
   }, [isViewed]);
@@ -60,15 +61,20 @@ const MoveCell = ({
     return <div className={ROW_HEIGHT_CLASS} />;
   }
 
+  // A move you can't jump to doesn't pretend you can: no pointer cursor,
+  // no hover wash.
+  const interaction = onSelect ? "cursor-pointer hover:bg-primary/15" : "";
+
   return (
     <button
       ref={ref}
       type="button"
-      onClick={() => onSelect(ply)}
-      className={`${ROW_HEIGHT_CLASS} flex cursor-pointer items-center justify-between gap-2 rounded px-2 text-sm font-medium transition-colors duration-100 ${
+      onClick={onSelect && (() => onSelect(ply))}
+      disabled={!onSelect}
+      className={`${ROW_HEIGHT_CLASS} flex items-center justify-between gap-2 rounded px-2 text-sm font-medium transition-colors duration-100 ${
         isViewed
           ? "bg-primary/30 text-foreground"
-          : "text-foreground/80 hover:bg-primary/15"
+          : `text-foreground/80 ${interaction}`
       }`}
     >
       <span className="flex items-center gap-1.5">
@@ -97,8 +103,11 @@ interface MoveTimelineProps {
    * are graded.
    */
   qualities?: (MoveQuality | null)[];
+  // The highlighted move. -1, before the first move, highlights nothing.
   viewedPly: number;
-  onSelectPly: (ply: number) => void;
+  // Clicking a move jumps to it. Left out, the list is read-only — the
+  // play screen's, where the board always shows the latest move.
+  onSelectPly?: (ply: number) => void;
 }
 
 /**
@@ -106,6 +115,9 @@ interface MoveTimelineProps {
  * "Move Timeline" laid them out, rather than one row per pair. Keeping
  * each side in its own column means a long SAN on one side never shifts
  * the other side's moves out of alignment.
+ *
+ * Shared by the analyzer's Game tab and the play screen, so a game's moves
+ * look the same while it's played and when it's looked back on.
  */
 const MoveTimeline = ({
   moves,
@@ -115,7 +127,7 @@ const MoveTimeline = ({
   onSelectPly,
 }: MoveTimelineProps) => {
   if (moves.length === 0) {
-    return <p className="text-xs text-foreground/40 italic">No moves yet</p>;
+    return <EmptyNote>No moves yet</EmptyNote>;
   }
 
   // Grade slots only appear once there's at least one grade to show — an
@@ -153,7 +165,7 @@ const MoveTimeline = ({
                   showsQualities ? (qualities?.[ply] ?? null) : undefined
                 }
                 ply={ply}
-                isViewed={viewedPly === ply && viewedPly !== START_POSITION_PLY}
+                isViewed={viewedPly === ply}
                 onSelect={onSelectPly}
               />
             );

@@ -9,6 +9,7 @@ import {
   Share2,
   Swords,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { TooltipButton } from "../../components/TooltipButton";
 import Dropdown from "../../components/Dropdown";
@@ -19,7 +20,8 @@ import {
   type GameMode,
 } from "./GameContext";
 
-const ICON_SIZE = 24;
+// For the mode menu's rows. The buttons size their own icons.
+const MENU_ICON_SIZE = 24;
 
 // One icon (a circle split into a filled half + an outline half), rotated
 // per state instead of swapping to a different icon each time — 180° flips
@@ -48,43 +50,44 @@ const MODE_OPTIONS: ModeOption[] = [
     mode: "Bullet",
     label: "bullet",
     time: "1 min",
-    icon: <Flame size={ICON_SIZE} className="text-primary" />,
+    icon: <Flame size={MENU_ICON_SIZE} className="text-primary" />,
   },
   {
     mode: "Blitz",
     label: "blitz",
     time: "3 min",
-    icon: <Zap size={ICON_SIZE} className="text-primary" />,
+    icon: <Zap size={MENU_ICON_SIZE} className="text-primary" />,
   },
   {
     mode: "Rapid",
     label: "rapid",
     time: "10 min",
-    icon: <Clock size={ICON_SIZE} className="text-primary" />,
+    icon: <Clock size={MENU_ICON_SIZE} className="text-primary" />,
   },
   {
     mode: "Classical",
     label: "classical",
     time: "30 min",
-    icon: <ChessKnight size={ICON_SIZE} className="text-primary" />,
+    icon: <ChessKnight size={MENU_ICON_SIZE} className="text-primary" />,
   },
 ];
 
-const MODE_TRIGGER_ICON: Record<GameMode, React.ReactNode> = {
-  Classical: <ChessKnight size={ICON_SIZE} />,
-  Rapid: <Clock size={ICON_SIZE} />,
-  Blitz: <Zap size={ICON_SIZE} />,
-  Bullet: <Flame size={ICON_SIZE} />,
+const MODE_TRIGGER_ICON: Record<GameMode, LucideIcon> = {
+  Classical: ChessKnight,
+  Rapid: Clock,
+  Blitz: Zap,
+  Bullet: Flame,
 };
 
-const getStartButtonIcon = (
+// What the start button shows: swords while a game is on, a spinner while
+// one starts, play otherwise.
+const startButtonIcon = (
   isOngoing: boolean,
   isStartingGame: boolean,
-): React.ReactNode => {
-  if (isOngoing) return <Swords size={ICON_SIZE} className="animate-pulse" />;
-  if (isStartingGame)
-    return <Loader2 size={ICON_SIZE} className="animate-spin" />;
-  return <Play size={ICON_SIZE} />;
+): { icon: LucideIcon; className?: string } => {
+  if (isOngoing) return { icon: Swords, className: "animate-pulse" };
+  if (isStartingGame) return { icon: Loader2, className: "animate-spin" };
+  return { icon: Play };
 };
 
 interface ModeDropdownMenuProps {
@@ -145,18 +148,20 @@ const PlayControls = () => {
     setSelectedMode,
     openSharePgn,
   } = useGameContext();
+  const startIcon = startButtonIcon(isGameOngoing(game), isStartingGame);
 
   return (
     <div className="flex flex-row gap-4 items-center self-center mt-4">
       <TooltipButton
-        icon={<Flag size={ICON_SIZE} />}
+        icon={Flag}
         tooltip="Surrender"
         onClick={() => endGame()}
         disabled={!isGameOngoing(game)}
       />
 
       <TooltipButton
-        icon={getStartButtonIcon(isGameOngoing(game), isStartingGame)}
+        icon={startIcon.icon}
+        iconClassName={startIcon.className}
         tooltip={
           isGameOngoing(game)
             ? "Ongoing game"
@@ -169,12 +174,8 @@ const PlayControls = () => {
       />
 
       <TooltipButton
-        icon={
-          <Contrast
-            size={ICON_SIZE}
-            className={`transition-transform duration-150 ${COLOR_PREFERENCE_ROTATION[colorPreference]}`}
-          />
-        }
+        icon={Contrast}
+        iconClassName={`transition-transform duration-150 ${COLOR_PREFERENCE_ROTATION[colorPreference]}`}
         tooltip={COLOR_PREFERENCE_TOOLTIP[colorPreference]}
         onClick={cycleColorPreference}
         disabled={isGameOngoing(game)}
@@ -202,7 +203,7 @@ const PlayControls = () => {
       </Dropdown>
 
       <TooltipButton
-        icon={<Share2 size={ICON_SIZE} />}
+        icon={Share2}
         tooltip="Share game"
         onClick={openSharePgn}
         disabled={isStartingGame || !game}

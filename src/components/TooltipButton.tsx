@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { Tooltip } from "./Tooltip";
+
+// One size for every icon button in the app, so a toolbar, the play
+// controls and the history bar read as the same kind of control.
+const ICON_SIZE = 18;
 
 const buttonCls =
   "relative text-foreground/90 transition-all duration-150 ease-out p-2 rounded-md border-[1px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
@@ -11,7 +15,12 @@ const inactiveCls =
   "border-primary/20 bg-card hover:bg-primary/50 disabled:hover:bg-card";
 
 interface TooltipButtonProps {
-  icon: ReactNode;
+  // The icon component itself, not an element: the button draws it, at
+  // the one size every icon button shares.
+  icon: LucideIcon;
+  // For an icon that moves or turns to show state — a spinner, the
+  // half-circle that rotates to show which colour you'll play.
+  iconClassName?: string;
   tooltip: string | null;
   onClick?: () => void;
   disabled?: boolean;
@@ -23,7 +32,8 @@ interface TooltipButtonProps {
 }
 
 export const TooltipButton = ({
-  icon,
+  icon: Icon,
+  iconClassName,
   tooltip,
   onClick,
   disabled,
@@ -37,7 +47,7 @@ export const TooltipButton = ({
         onClick={onClick}
         disabled={disabled}
       >
-        {icon}
+        <Icon size={ICON_SIZE} className={iconClassName} />
       </button>
     </Tooltip>
   );
