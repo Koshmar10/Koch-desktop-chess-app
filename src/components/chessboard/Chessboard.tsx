@@ -63,9 +63,9 @@ const Chessboard: React.FC<ChessboardProps> = ({
     }
   }
 
-  const [selectedSquare, setSelectedSquare] = useState<
-    [number, number] | null
-  >(null);
+  const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(
+    null,
+  );
 
   const selectSquare = (row: number, col: number) => {
     setSelectedSquare([row, col]);

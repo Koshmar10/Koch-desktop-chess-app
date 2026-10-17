@@ -1,9 +1,16 @@
 import { memo, useMemo } from "react";
-import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceDot, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
-import { BOARD_PIXEL_SIZE, BOARD_SIZE, SQUARE_SIZE } from "../../../components/chessboard/lib/constants";
-import { TimelineMove } from "../Analyzer";
+import {
+  Area,
+  AreaChart,
+  ReferenceDot,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
+import type { TimelineMove } from "../Analyzer";
 import { evalBarWhiteFraction, formatEvalScore } from "./evalBar";
-import { Divide } from "lucide-react";
 
 const TIMELINE_HEIGHT_PX = 152;
 
@@ -17,11 +24,11 @@ const TIMELINE_HEIGHT_PX = 152;
  * and there's no way to load one into this screen yet.
  */
 interface TimelinePlaceholderProps {
-  moves: TimelineMove[]
+  moves: TimelineMove[];
   // The ply on the board, marked on the curve.
-  viewedPly: number
+  viewedPly: number;
   // Clicking the chart jumps the board to the move under the cursor.
-  onSelectPly: (ply: number) => void
+  onSelectPly: (ply: number) => void;
 }
 const TimelinePlaceholder = ({
   moves,
@@ -47,9 +54,6 @@ const TimelinePlaceholder = ({
       className="flex shrink-0 items-center justify-center rounded-lg border-[1px] border-border/80 bg-secondary/40"
       style={{ height: TIMELINE_HEIGHT_PX }}
     >
-      {/* <span className="text-xs font-semibold tracking-wide text-foreground/30 uppercase">
-      Timeline
-    </span> */}
       <AreaChart
         width={BOARD_PIXEL_SIZE * 0.95}
         height={TIMELINE_HEIGHT_PX * 0.9}
@@ -64,7 +68,8 @@ const TimelinePlaceholder = ({
         }}
       >
         <XAxis dataKey="index" />
-        <YAxis domain={[0, 1]} hide />                      {/* fixed, so 0.5 is always the middle */}
+        <YAxis domain={[0, 1]} hide />{" "}
+        {/* fixed, so 0.5 is always the middle */}
         {/* Theme tokens from App.css, so the chart follows light and dark
             mode like everything else. */}
         <ReferenceLine
@@ -81,7 +86,11 @@ const TimelinePlaceholder = ({
           strokeWidth={1.5}
           fill="var(--primary)"
           fillOpacity={0.25}
-          activeDot={{ r: 3, fill: "var(--primary)", stroke: "var(--background)" }}
+          activeDot={{
+            r: 3,
+            fill: "var(--primary)",
+            stroke: "var(--background)",
+          }}
           isAnimationActive={false}
         />
         {/* Where the board is: a faint line down the chart and a dot on the
@@ -121,9 +130,8 @@ const TimelinePlaceholder = ({
           ]}
         />
       </AreaChart>
-
-    </div >
-  )
+    </div>
+  );
 };
 // Memoised: engine snapshots re-render the analyzer several times a second,
 // and with stable props (memoised moves, a `useCallback` `onSelectPly`) the

@@ -11,19 +11,19 @@ import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
 import { getTakenPieces } from "../../components/chessboard/lib/takenPieces";
 import PlayControls from "./PlayControls";
 import GameSidePanel from "./GameSidePanel";
+import type { GameMode } from "./GameContext";
 import {
   useGameContext,
   MODE_TIME_CONTROL,
   formatClock,
   isGameOngoing,
   isTurn,
-  GameMode,
 } from "./GameContext";
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameResultCard from "./GameResultCard";
 import SharePgnCard from "./SharePgnCard";
-import { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
+import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
 
 const PLACEHOLDER_BLACK: PlayerInfo = { name: "Black", elo: 0 };
 const PLACEHOLDER_WHITE: PlayerInfo = { name: "White", elo: 0 };
@@ -46,7 +46,10 @@ const liveRemainingMs = (
   if (game.state.turn !== color) return baseline;
 
   const sinceReceived = gameReceivedAt ? now - gameReceivedAt : 0;
-  return Math.max(0, baseline - game.state.elapsed_this_turn_ms - sinceReceived);
+  return Math.max(
+    0,
+    baseline - game.state.elapsed_this_turn_ms - sinceReceived,
+  );
 };
 
 // Reads GameContext. GameProvider is mounted at the app root (App.tsx), not
@@ -75,13 +78,27 @@ const Play = () => {
   const isBlackTurn = isTurn(game, "black");
   const isWhiteTurn = isTurn(game, "white");
   const canShowTurnIndicator = hasGame && !isStartingGame;
-  const showResultCard = !isStartingGame && hasGame && !isOngoing && !isResultDismissed;
+  const showResultCard =
+    !isStartingGame && hasGame && !isOngoing && !isResultDismissed;
   // Now that `humanColor` is fixed rather than tracking whoever's turn it
   // is (self-play testing is over — the engine replies on its own), this
   // has to check whose turn it actually is, not just whether a game exists.
-  const canPlayerMove = isOngoing && humanColor !== null && isTurn(game, humanColor);
-  const whiteRemainingMs = liveRemainingMs(game, gameReceivedAt, "white", selectedMode, now);
-  const blackRemainingMs = liveRemainingMs(game, gameReceivedAt, "black", selectedMode, now);
+  const canPlayerMove =
+    isOngoing && humanColor !== null && isTurn(game, humanColor);
+  const whiteRemainingMs = liveRemainingMs(
+    game,
+    gameReceivedAt,
+    "white",
+    selectedMode,
+    now,
+  );
+  const blackRemainingMs = liveRemainingMs(
+    game,
+    gameReceivedAt,
+    "black",
+    selectedMode,
+    now,
+  );
 
   const blackCard = {
     color: "black" as const,

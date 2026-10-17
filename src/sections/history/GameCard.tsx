@@ -18,9 +18,9 @@ import {
   TriangleAlert,
   Import,
 } from "lucide-react";
-import { GameSummary } from "../../api/bindings/GameSummary";
-import { PieceColor } from "../../api/bindings/PieceColor";
-import { AnalysisStage } from "../../api/bindings/AnalysisStage";
+import type { GameSummary } from "../../api/bindings/GameSummary";
+import type { PieceColor } from "../../api/bindings/PieceColor";
+import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
 import { useAnalysisStage } from "../../app/AppContext";
 import { MODE_TIME_CONTROL, type GameMode } from "../play/GameContext";
 import Dropdown from "../../components/Dropdown";
@@ -49,8 +49,9 @@ const modeForTimeControl = (timeControl: string | null): GameMode | null => {
   const initialMs = parseInt(timeControl, 10);
   if (Number.isNaN(initialMs)) return null;
   return (
-    MODE_ORDER.find((mode) => initialMs <= MODE_TIME_CONTROL[mode].initial_ms) ??
-    "Classical"
+    MODE_ORDER.find(
+      (mode) => initialMs <= MODE_TIME_CONTROL[mode].initial_ms,
+    ) ?? "Classical"
   );
 };
 
@@ -58,13 +59,13 @@ const PLAYER_DOT_CLASS: Record<PieceColor, string> = {
   white: "bg-neutral-100 border border-white",
   black: "bg-neutral-900 border border-white",
 };
-const CardSeparator = () => <hr className="border-border my-[1px]" />
+const CardSeparator = () => <hr className="border-border my-[1px]" />;
 
-const ANALYSIS_ICON_SIZE = 18
+const ANALYSIS_ICON_SIZE = 18;
 
 const AnalysisRing = ({ percent }: { percent: number }) => {
-  const radius = 8
-  const circumference = 2 * Math.PI * radius
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
   return (
     <span
       title={`Analysing… ${percent}%`}
@@ -100,26 +101,27 @@ const AnalysisRing = ({ percent }: { percent: number }) => {
         {percent}
       </span>
     </span>
-  )
-}
+  );
+};
 
 // A `Done` event counts as analysed straight away, before the list refetches.
 const AnalysisIndicator = ({
   hasAnalysis,
   stage,
 }: {
-  hasAnalysis: boolean
-  stage: AnalysisStage | undefined
+  hasAnalysis: boolean;
+  stage: AnalysisStage | undefined;
 }) => {
-  if (stage?.kind === "Running") return <AnalysisRing percent={stage.percent} />
+  if (stage?.kind === "Running")
+    return <AnalysisRing percent={stage.percent} />;
   if (stage?.kind === "Queued") {
     return (
       <span title="Analysis queued">
         <Hourglass size={ANALYSIS_ICON_SIZE} className="text-foreground/50" />
       </span>
-    )
+    );
   }
-  const analysed = hasAnalysis || stage?.kind === "Done"
+  const analysed = hasAnalysis || stage?.kind === "Done";
   return (
     <span title={analysed ? "Analysed" : "Not analysed"}>
       <ChartSpline
@@ -127,8 +129,8 @@ const AnalysisIndicator = ({
         className={analysed ? "text-primary" : "text-foreground/25"}
       />
     </span>
-  )
-}
+  );
+};
 
 interface GameActionsMenuProps {
   close: () => void;
@@ -139,8 +141,8 @@ interface GameActionsMenuProps {
 }
 
 const MENU_ITEM_CLASS =
-  "flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 cursor-pointer"
-const MENU_ICONS_SIZE = 14
+  "flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 cursor-pointer";
+const MENU_ICONS_SIZE = 14;
 
 // Delete is two-step: the row swaps to a confirm/cancel pair before it runs.
 const GameActionsMenu = ({
@@ -218,7 +220,7 @@ const GameActionsMenu = ({
       )}
     </div>
   );
-}
+};
 
 interface PlayerRowProps {
   color: PieceColor;
@@ -308,7 +310,9 @@ const GameCard = ({
       <CardSeparator />
       <div className="flex flex-row items-center gap-2">
         <ChessKing className="text-primary" />
-        <span className="text-sm text-muted-foreground">{gameSummary.opening_name}</span>
+        <span className="text-sm text-muted-foreground">
+          {gameSummary.opening_name}
+        </span>
       </div>
       <CardSeparator />
       <div className="flex justify-between items-center">
@@ -317,7 +321,9 @@ const GameCard = ({
         >
           {gameSummary.result}
         </span>
-        <span className="text-sm text-foreground/60">{formatDatePlayed(gameSummary.date_played)}</span>
+        <span className="text-sm text-foreground/60">
+          {formatDatePlayed(gameSummary.date_played)}
+        </span>
       </div>
     </div>
   );

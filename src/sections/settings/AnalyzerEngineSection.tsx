@@ -1,5 +1,5 @@
-import { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings";
-import { SearchLimitMode } from "../../api/bindings/SearchLimitMode";
+import type { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings";
+import type { SearchLimitMode } from "../../api/bindings/SearchLimitMode";
 import { Section, SettingRow } from "./Section";
 import { NumberSetting, SelectSetting } from "../../components/controls";
 import { MAX_THREADS } from "../../api/settings";

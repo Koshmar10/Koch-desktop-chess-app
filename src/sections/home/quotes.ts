@@ -2,8 +2,8 @@
 // cosmetic content, so it lives client-side rather than behind a command.
 
 export interface ChessQuote {
-  quote: string
-  name: string
+  quote: string;
+  name: string;
 }
 
 export const CHESS_QUOTES: ChessQuote[] = [
@@ -61,7 +61,7 @@ export const CHESS_QUOTES: ChessQuote[] = [
     quote: "All Chess players should have a hobby.",
     name: "Savielly Tartakower",
   },
-]
+];
 
 export const randomChessQuote = (): ChessQuote =>
-  CHESS_QUOTES[Math.floor(Math.random() * CHESS_QUOTES.length)]
+  CHESS_QUOTES[Math.floor(Math.random() * CHESS_QUOTES.length)];

@@ -60,7 +60,6 @@ const GameSidePanel = () => {
 
   return (
     <div className="flex flex-col gap-4 w-72 h-210 py-1">
-
       <div className="flex flex-col gap-3 p-3 rounded-lg bg-secondary/40 shadow-sm border-[1px] border-border/80">
         <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-wide">
           Session

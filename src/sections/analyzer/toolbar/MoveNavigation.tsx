@@ -62,9 +62,6 @@ const MoveNavigation = ({
         onClick={onLast}
         disabled={isAtEnd}
       />
-      {/* <span className="min-w-24 text-center text-xs tabular-nums text-foreground/50">
-        {isAtStart ? "Start" : `Move ${viewedPly + 1} / ${totalPlies}`}
-      </span> */}
     </div>
   );
 };

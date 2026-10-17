@@ -4,7 +4,7 @@ import { STAT_CARDS } from "./mock";
 import { randomChessQuote } from "./quotes";
 import { getPlayerStats } from "../../api/stats";
 import { getAppSettings } from "../../api/settings";
-import { PlayerStats } from "../../api/bindings/PlayerStats";
+import type { PlayerStats } from "../../api/bindings/PlayerStats";
 
 const GreetMessage = () => {
   // Picked once per mount — lazy state, so it isn't re-rolled on re-render.

@@ -41,10 +41,10 @@ import {
   type EvalScore,
   type MaskSelection,
 } from "./types";
-import { MoveQuality } from "../../api/bindings/MoveQuality";
+import type { MoveQuality } from "../../api/bindings/MoveQuality";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
-import { GameAnalyzerContextValue, useAnalyzerContext } from "./AnalyzerContext";
+import { useAnalyzerContext } from "./AnalyzerContext";
 import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
 import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
 import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
@@ -54,10 +54,10 @@ const CHAT_PANEL_WIDTH_PX = 320;
 const PLACEHOLDER_ICON_SIZE = 28;
 
 export type TimelineMove = {
-  index: number,
-  score: number,
-  quality: MoveQuality
-}
+  index: number;
+  score: number;
+  quality: MoveQuality;
+};
 
 const clampPly = (ply: number, totalPlies: number): number =>
   Math.min(totalPlies - 1, Math.max(START_POSITION_PLY, ply));
@@ -473,9 +473,6 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
             <div className="col-start-3 row-start-2">
               <MaskSelectionContext value={maskSelection}>
                 <SidePanel
-                  // A loaded game opens on its Game tab even though the
-                  // summary hasn't arrived yet on the first render.
-                  initialTab={isGameMode ? "game" : undefined}
                   game={game}
                   moves={moves}
                   qualities={qualities}

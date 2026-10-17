@@ -1,11 +1,11 @@
-import Popup from "../../components/popup/Popup"
-import { GameSummary } from "../../api/bindings/GameSummary"
-import { PieceColor } from "../../api/bindings/PieceColor"
+import Popup from "../../components/popup/Popup";
+import type { GameSummary } from "../../api/bindings/GameSummary";
+import type { PieceColor } from "../../api/bindings/PieceColor";
 
 interface AnalyzeSidePopupProps {
-  game: GameSummary | null
-  onPick: (color: PieceColor) => void
-  onClose: () => void
+  game: GameSummary | null;
+  onPick: (color: PieceColor) => void;
+  onClose: () => void;
 }
 
 const SideButton = ({
@@ -14,10 +14,10 @@ const SideButton = ({
   current,
   onClick,
 }: {
-  color: PieceColor
-  name: string
-  current: boolean
-  onClick: () => void
+  color: PieceColor;
+  name: string;
+  current: boolean;
+  onClick: () => void;
 }) => (
   <button
     type="button"
@@ -33,12 +33,14 @@ const SideButton = ({
     />
     <span className="truncate">{name}</span>
   </button>
-)
+);
 
 const AnalyzeSidePopup = ({ game, onPick, onClose }: AnalyzeSidePopupProps) => (
   <Popup open={game !== null}>
     <div className="flex w-[min(360px,92vw)] flex-col gap-4 rounded-lg border border-border bg-card p-6 shadow-xl">
-      <h2 className="text-lg font-medium text-foreground/90">Analyse which side?</h2>
+      <h2 className="text-lg font-medium text-foreground/90">
+        Analyse which side?
+      </h2>
       <div className="flex gap-2">
         <SideButton
           color="white"
@@ -62,6 +64,6 @@ const AnalyzeSidePopup = ({ game, onPick, onClose }: AnalyzeSidePopupProps) => (
       </button>
     </div>
   </Popup>
-)
+);
 
-export default AnalyzeSidePopup
+export default AnalyzeSidePopup;

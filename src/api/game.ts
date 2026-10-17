@@ -1,16 +1,14 @@
-import { invoke } from "@tauri-apps/api/core"
-import { GameStateView } from "./bindings/GameStateView"
-import { PieceType } from "./bindings/PieceType"
-import { Square } from "./bindings/Square"
-import { PieceColor } from "./bindings/PieceColor"
-import { GameCreateResponse } from "./bindings/GameCreateResponse";
-import { TerminationReason } from "./bindings/TerminationReason";
-import { GameResult } from "./bindings/GameResult";
-import { TimeControl } from "./bindings/TimeControl";
-import { GameSummary } from "./bindings/GameSummary";
-import { ImportPgnResult } from "./bindings/ImportPgnResult";
-
-
+import { invoke } from "@tauri-apps/api/core";
+import type { GameStateView } from "./bindings/GameStateView";
+import type { PieceType } from "./bindings/PieceType";
+import type { Square } from "./bindings/Square";
+import type { PieceColor } from "./bindings/PieceColor";
+import type { GameCreateResponse } from "./bindings/GameCreateResponse";
+import type { TerminationReason } from "./bindings/TerminationReason";
+import type { GameResult } from "./bindings/GameResult";
+import type { TimeControl } from "./bindings/TimeControl";
+import type { GameSummary } from "./bindings/GameSummary";
+import type { ImportPgnResult } from "./bindings/ImportPgnResult";
 
 export const startGame = async (
   humanColor: PieceColor,
@@ -32,8 +30,6 @@ export const endGame = (
 ): Promise<GameResult> => {
   return invoke<GameResult>("end_game", { reason, losingSide });
 };
-
-
 
 export const makeMove = (
   from: Square,

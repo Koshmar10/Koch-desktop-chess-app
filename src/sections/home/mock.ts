@@ -1,13 +1,6 @@
-import {
-  TrendingUp,
-  Trophy,
-  Target,
-  Medal,
-  Zap,
-  Clock,
-  LucideIcon,
-} from "lucide-react";
-import { PlayerStats } from "../../api/bindings/PlayerStats";
+import type { LucideIcon } from "lucide-react";
+import { TrendingUp, Trophy, Target, Medal, Zap, Clock } from "lucide-react";
+import type { PlayerStats } from "../../api/bindings/PlayerStats";
 
 // Layout + presentation for each Home stat card. The value comes from live
 // `PlayerStats` via `format`; the icon / label / grid span are fixed here.

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react"
+import { type ReactNode } from "react";
 
 // Two columns: label + `* hint` stacked on the left, the control on a
 // fixed right rail so every control shares the same right edge and the
@@ -8,9 +8,9 @@ export const SettingRow = ({
   hint,
   children,
 }: {
-  label: string
-  hint?: string
-  children: ReactNode
+  label: string;
+  hint?: string;
+  children: ReactNode;
 }) => (
   <div className="flex items-center justify-between gap-6 py-3">
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -21,7 +21,7 @@ export const SettingRow = ({
     </div>
     <div className="flex w-56 shrink-0 justify-end">{children}</div>
   </div>
-)
+);
 
 // A titled group of related settings — separated by heading and spacing
 // only, no card or fill. The subtitle carries the section's scope so
@@ -34,12 +34,12 @@ export const Section = ({
   onCancel,
   children,
 }: {
-  title: string
-  subtitle: string
-  dirty: boolean
-  onSave: () => void
-  onCancel: () => void
-  children: ReactNode
+  title: string;
+  subtitle: string;
+  dirty: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  children: ReactNode;
 }) => (
   <section>
     <h2 className="text-xl text-foreground/90">{title}</h2>
@@ -64,5 +64,4 @@ export const Section = ({
       </button>
     </div>
   </section>
-)
-
+);

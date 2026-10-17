@@ -141,13 +141,18 @@ interface ResultActionsProps {
 
 const ResultActions = ({ onNewGame }: ResultActionsProps) => (
   <div className="flex items-center gap-3 mt-auto">
-    <ActionButton icon={<PlayIcon size={ICON_SIZE} />} label="New Game" onClick={onNewGame} />
+    <ActionButton
+      icon={<PlayIcon size={ICON_SIZE} />}
+      label="New Game"
+      onClick={onNewGame}
+    />
     <ActionButton icon={<Microscope size={ICON_SIZE} />} label="Analyze" />
   </div>
 );
 
 const GameResultCard = () => {
-  const { analysis, game, humanColor, startGame, dismissResult } = useGameContext();
+  const { analysis, game, humanColor, startGame, dismissResult } =
+    useGameContext();
 
   if (!game) return null;
 

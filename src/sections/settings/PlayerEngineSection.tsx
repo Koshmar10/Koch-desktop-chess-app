@@ -1,4 +1,4 @@
-import { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
+import type { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
 import { Section, SettingRow } from "./Section";
 import { NumberSetting, ToggleSetting } from "../../components/controls";
 import { MAX_THREADS } from "../../api/settings";

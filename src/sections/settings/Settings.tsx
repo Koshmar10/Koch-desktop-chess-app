@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { AppSettings } from "../../api/bindings/AppSettings";
-import { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings";
-import { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
+import type { AppSettings } from "../../api/bindings/AppSettings";
+import type { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSettings";
+import type { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
 import {
   getAppSettings,
   getAnalyzerEngineSettings,

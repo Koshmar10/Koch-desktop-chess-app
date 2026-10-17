@@ -1,6 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { useAppContext } from "../../app/AppContext";
-import { AppSettings } from "../../api/bindings/AppSettings";
+import type { AppSettings } from "../../api/bindings/AppSettings";
 import { Section, SettingRow } from "./Section";
 import { SecretInput } from "../../components/controls";
 import { TEXT_INPUT_CLASS } from "../../components/controlStyles";
