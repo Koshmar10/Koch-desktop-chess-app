@@ -10,24 +10,17 @@ use crate::app::rating::{self, stockfish_elo_for};
 use crate::db::{
     self,
     services::{
-        analysis::AnalysisService,
-        game::{GameService, SaveMeta},
-        opening::OpeningService,
+        analysis::AnalysisService, game::GameService, opening::OpeningService,
         player_rating::PlayerRatingService,
     },
 };
 
 use super::live::{restore_active_game, take_active_game, Game};
-use super::play::{
-    analysis_job_for, apply_move, record_rating_for_finished_game, spawn_engine_reply,
-    update_opening,
-};
+use super::play::{apply_move, finish_game, prepare_next_move, spawn_engine_reply, update_opening};
 use super::view::{
     GameCreateResponse, GameResult, GameStateView, GameSummary, PlayerInfo, TerminationReason,
     TimeControl,
 };
-
-const ANALYSIS_ENABLED: bool = true;
 
 pub(super) fn game_summary_from(
     game: &db::schemas::game::Game,
@@ -118,7 +111,6 @@ pub async fn start_game(
 #[tauri::command]
 pub async fn end_game(
     state: tauri::State<'_, AppState>,
-    db: tauri::State<'_, db::Db>,
     app: tauri::AppHandle,
     reason: TerminationReason,
     losing_side: Option<PieceColor>,
@@ -143,21 +135,7 @@ pub async fn end_game(
     };
 
     game.result = result;
-    // Saved regardless of ANALYSIS_ENABLED — that flag only decides whether
-    // analysis *runs*, not whether the game itself is worth keeping.
-    // Scoped so the guard is gone before the `.await` below — one held
-    // across it would make this command's future non-`Send`.
-    let game_id = {
-        let conn = db.lock()?;
-        GameService::new(&conn).save(&game, &SaveMeta::koch())
-    };
-    if let Some(game_id) = game_id {
-        record_rating_for_finished_game(&db, &game, game_id);
-        if ANALYSIS_ENABLED {
-            analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
-        }
-    }
-    let _ = game.engine.quit().await;
+    finish_game(&app, game).await?;
 
     Ok(result)
 }
@@ -183,31 +161,15 @@ pub async fn make_move(
     };
 
     let game_ended = apply_move(&mut game, mover, mv);
-    // Each lock in its own block, gone before the next `.await`.
-    {
-        let conn = db.lock()?;
-        update_opening(&mut game, &conn);
-    }
+    update_opening(&mut game, &db)?;
 
     if game_ended {
         let response = game.state_view();
-        let game_id = {
-            let conn = db.lock()?;
-            GameService::new(&conn).save(&game, &SaveMeta::koch())
-        };
-        if let Some(game_id) = game_id {
-            record_rating_for_finished_game(&db, &game, game_id);
-            analysis::enqueue_analysis(&app, analysis_job_for(game_id, &game));
-        }
-        let _ = game.engine.quit().await;
+        finish_game(&app, game).await?;
         return Ok(response);
     }
 
-    game.board.refresh_legal_moves();
-
-    let uci_moves: Vec<String> = game.move_list.iter().map(|m| m.uci.clone()).collect();
-    let _ = game.engine.set_position_startpos(&uci_moves).await;
-
+    prepare_next_move(&mut game).await;
     let response = game.state_view();
 
     // The human just moved, so it's necessarily the other color's turn now
