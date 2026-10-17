@@ -1,14 +1,8 @@
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
-import type { GameResult } from "../../api/bindings/GameResult";
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { ReplayPosition } from "../../api/bindings/ReplayPosition";
-
-const RESULT_TOKEN: Record<GameResult, string> = {
-  WhiteWin: "1-0",
-  BlackWin: "0-1",
-  Draw: "1/2-1/2",
-  Unfinished: "*",
-};
+import type { TimeControl } from "../../api/bindings/TimeControl";
+import { resultToken } from "../../api/gameSummary";
 
 // PGN's placeholders for a tag value that isn't known, and for a Round
 // when the game wasn't part of one.
@@ -81,19 +75,8 @@ const pgnDateFromDatePlayed = (datePlayed: string | null): string => {
 };
 
 // PGN's TimeControl is "<initial>+<increment>" in seconds.
-const pgnTimeControl = (initialMs: number, incrementMs: number): string =>
-  `${Math.round(initialMs / MS_PER_SECOND)}+${Math.round(incrementMs / MS_PER_SECOND)}`;
-
-// A saved game stores its clock as "<initial_ms>+<increment_ms>". Null when
-// there's no clock, or it doesn't read as one.
-const pgnTimeControlFromSummary = (
-  timeControl: string | null,
-): string | null => {
-  if (!timeControl) return null;
-  const [initialMs, incrementMs] = timeControl.split("+").map(Number);
-  if (Number.isNaN(initialMs) || Number.isNaN(incrementMs)) return null;
-  return pgnTimeControl(initialMs, incrementMs);
-};
+const pgnTimeControl = ({ initial_ms, increment_ms }: TimeControl): string =>
+  `${Math.round(initial_ms / MS_PER_SECOND)}+${Math.round(increment_ms / MS_PER_SECOND)}`;
 
 // An import with no Elo tag is saved with 0 — leave the tag out rather than
 // claim the player is rated 0.
@@ -170,17 +153,11 @@ export const buildLiveGamePgn = (game: GameCreateResponse): string =>
     date: pgnDate(new Date()),
     white: game.white_player.name,
     black: game.black_player.name,
-    result: RESULT_TOKEN[game.state.result],
+    result: resultToken(game.state.result),
     extraTags: [
       ["WhiteElo", String(game.white_player.elo)],
       ["BlackElo", String(game.black_player.elo)],
-      [
-        "TimeControl",
-        pgnTimeControl(
-          game.time_control.initial_ms,
-          game.time_control.increment_ms,
-        ),
-      ],
+      ["TimeControl", pgnTimeControl(game.time_control)],
       ["Opening", game.state.opening_name],
     ],
     startFen: STANDARD_START_FEN,
@@ -204,12 +181,15 @@ export const buildSavedGamePgn = ({
     date: pgnDateFromDatePlayed(summary.date_played),
     white: summary.white_player,
     black: summary.black_player,
-    // Already a PGN token — the backend stores `GameResult::as_str()`.
-    result: summary.result,
+    result: resultToken(summary.result),
     extraTags: [
       ["WhiteElo", pgnElo(summary.white_elo)],
       ["BlackElo", pgnElo(summary.black_elo)],
-      ["TimeControl", pgnTimeControlFromSummary(summary.time_control)],
+      // No tag at all for an import that came without a clock.
+      [
+        "TimeControl",
+        summary.time_control && pgnTimeControl(summary.time_control),
+      ],
       ["Opening", summary.opening_name],
     ],
     // A saved game is always replayed from the standard start.
@@ -227,7 +207,7 @@ export const buildSandboxPgn = (positions: SandboxPositions): string =>
     date: pgnDate(new Date()),
     white: UNKNOWN,
     black: UNKNOWN,
-    result: RESULT_TOKEN.Unfinished,
+    result: resultToken("Unfinished"),
     extraTags: [],
     startFen: positions[0]?.fen ?? STANDARD_START_FEN,
     moves: sanMoves(positions),

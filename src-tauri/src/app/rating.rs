@@ -1,5 +1,9 @@
 //! Elo rating maths for the human player, and how strong to make the
-//! Stockfish opponent. Pure — no DB, no engine, no Tauri.
+//! Stockfish opponent. Pure — no DB, no engine process, no Tauri.
+
+use koch_engine::{GameResult, PieceColor};
+use serde::Serialize;
+use ts_rs::TS;
 
 /// Rating for a player with no game history yet.
 pub const DEFAULT_RATING: u32 = 600;
@@ -17,7 +21,11 @@ pub const STOCKFISH_ELO_FLOOR: u32 = 1320;
 pub const STOCKFISH_ELO_MARGIN: u32 = 50;
 
 /// A finished game's outcome, from the human player's side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// Sent to the frontend too, so "did you win?" is answered once, here,
+/// rather than by every screen comparing results and colours its own way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub enum GameScore {
     Win,
     Draw,
@@ -25,6 +33,19 @@ pub enum GameScore {
 }
 
 impl GameScore {
+    /// How a game went for whoever played `side`. `None` while it's
+    /// unfinished — there's no score yet.
+    pub fn for_side(result: GameResult, side: PieceColor) -> Option<GameScore> {
+        match (result, side) {
+            (GameResult::Unfinished, _) => None,
+            (GameResult::Draw, _) => Some(GameScore::Draw),
+            (GameResult::WhiteWin, PieceColor::White)
+            | (GameResult::BlackWin, PieceColor::Black) => Some(GameScore::Win),
+            (GameResult::WhiteWin, PieceColor::Black)
+            | (GameResult::BlackWin, PieceColor::White) => Some(GameScore::Loss),
+        }
+    }
+
     fn value(self) -> f64 {
         match self {
             GameScore::Win => 1.0,
@@ -52,6 +73,42 @@ pub fn stockfish_elo_for(player_rating: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_win_is_a_win_only_for_the_side_that_won() {
+        assert_eq!(
+            GameScore::for_side(GameResult::WhiteWin, PieceColor::White),
+            Some(GameScore::Win)
+        );
+        assert_eq!(
+            GameScore::for_side(GameResult::WhiteWin, PieceColor::Black),
+            Some(GameScore::Loss)
+        );
+        assert_eq!(
+            GameScore::for_side(GameResult::BlackWin, PieceColor::Black),
+            Some(GameScore::Win)
+        );
+        assert_eq!(
+            GameScore::for_side(GameResult::BlackWin, PieceColor::White),
+            Some(GameScore::Loss)
+        );
+    }
+
+    #[test]
+    fn a_draw_is_a_draw_for_both_sides_and_unfinished_has_no_score() {
+        assert_eq!(
+            GameScore::for_side(GameResult::Draw, PieceColor::White),
+            Some(GameScore::Draw)
+        );
+        assert_eq!(
+            GameScore::for_side(GameResult::Draw, PieceColor::Black),
+            Some(GameScore::Draw)
+        );
+        assert_eq!(
+            GameScore::for_side(GameResult::Unfinished, PieceColor::White),
+            None
+        );
+    }
 
     #[test]
     fn equal_ratings_draw_is_zero() {

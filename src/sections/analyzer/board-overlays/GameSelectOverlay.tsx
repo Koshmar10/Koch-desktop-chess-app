@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import type { GameSummary } from "../../../api/bindings/GameSummary";
 import { getGames } from "../../../api/game";
-import { formatDatePlayed, getScoreCardStyle } from "../../../api/gameSummary";
+import {
+  formatDatePlayed,
+  getScoreCardStyle,
+  resultToken,
+} from "../../../api/gameSummary";
 
 // Stand-in for a date the game didn't record, same as the Game tab's.
 const UNKNOWN = "—";
@@ -41,9 +45,9 @@ const GameListCard = ({ game, isCurrent, onPick }: GameListCardProps) => (
       {/* History's result colors, at this line's size — tighter padding
           than the history card's chip, so the line doesn't grow taller. */}
       <span
-        className={`shrink-0 rounded-md px-1.5 font-mono text-xs ${getScoreCardStyle(game)}`}
+        className={`shrink-0 rounded-md px-1.5 font-mono text-xs ${getScoreCardStyle(game.human_score)}`}
       >
-        {game.result}
+        {resultToken(game.result)}
       </span>
     </div>
   </button>

@@ -2,8 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Microscope, Play as PlayIcon, X } from "lucide-react";
 import PostGameStats from "./PostGameStats";
 import { useGameContext } from "./GameContext";
-import type { GameResult } from "../../api/bindings/GameResult";
-import type { PieceColor } from "../../api/bindings/PieceColor";
+import type { GameScore } from "../../api/bindings/GameScore";
 
 const ICON_SIZE = 16;
 const MOCK_ELO_DELTA = 18;
@@ -19,16 +18,17 @@ const PERSONALITY_MESSAGES = [
   "Hang on…",
 ];
 
-const getResultMessage = (
-  result: GameResult,
-  humanColor: PieceColor | null,
-): string => {
-  if (result === "Draw") return "Draw";
-  const humanWon =
-    (result === "WhiteWin" && humanColor === "white") ||
-    (result === "BlackWin" && humanColor === "black");
-  return humanWon ? "You Win" : "You Lose";
+// The backend decides how the game went for you (`human_score`); this
+// only words it.
+const RESULT_MESSAGE: Record<GameScore, string> = {
+  Win: "You Win",
+  Draw: "Draw",
+  Loss: "You Lose",
 };
+
+// Only for a game with no score — which the card never shows, since it
+// waits for the game to end.
+const NO_SCORE_MESSAGE = "Game over";
 
 const useCountUp = (target: number, durationMs: number) => {
   const [value, setValue] = useState(0);
@@ -160,7 +160,13 @@ const GameResultCard = () => {
     <div className="relative h-[80%] flex flex-col items-center gap-4 py-6 px-8 rounded-xl bg-card border-[1px] border-border/80 shadow-lg">
       <CloseButton onClick={dismissResult} />
 
-      <ResultHeader message={getResultMessage(game.state.result, humanColor)} />
+      <ResultHeader
+        message={
+          game.state.human_score
+            ? RESULT_MESSAGE[game.state.human_score]
+            : NO_SCORE_MESSAGE
+        }
+      />
 
       {analysis ? (
         <PostGameStats

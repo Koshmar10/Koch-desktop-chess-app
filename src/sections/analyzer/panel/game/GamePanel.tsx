@@ -3,7 +3,11 @@ import type { GameSummary } from "../../../../api/bindings/GameSummary";
 import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
 import type { PieceColor } from "../../../../api/bindings/PieceColor";
 import type { SideAccuracy } from "../../../../api/bindings/SideAccuracy";
-import { formatDatePlayed } from "../../../../api/gameSummary";
+import {
+  formatDatePlayed,
+  formatTimeControl,
+  resultToken,
+} from "../../../../api/gameSummary";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
 import PanelSection from "../PanelSection";
 import MoveTimeline from "./MoveTimeline";
@@ -163,7 +167,7 @@ const GamePanel = ({
         />
       }
     >
-      <Fact label="Result" value={game?.result ?? UNKNOWN} />
+      <Fact label="Result" value={game ? resultToken(game.result) : UNKNOWN} />
       <Fact
         label="Played"
         value={formatDatePlayed(game?.date_played ?? null) || UNKNOWN}
@@ -172,7 +176,12 @@ const GamePanel = ({
         label="Opening"
         value={game ? (game.opening_name ?? "Out of book") : UNKNOWN}
       />
-      <Fact label="Time" value={game?.time_control ?? UNKNOWN} />
+      <Fact
+        label="Time"
+        value={
+          game?.time_control ? formatTimeControl(game.time_control) : UNKNOWN
+        }
+      />
       <Fact label="Source" value={game?.source ?? UNKNOWN} />
     </PanelSection>
 

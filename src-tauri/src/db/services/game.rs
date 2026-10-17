@@ -1,11 +1,12 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use koch_engine::PgnGame;
+use koch_engine::{PgnGame, PieceColor};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::app::analysis::MoveQualityEntry;
-use crate::app::game::{Game, GameResult};
+use crate::app::game::{Game, GameResult, GameSource, TimeControl};
+use crate::db::columns::{color_from_db, color_to_db, parse_text};
 use crate::db::schemas::game::{Game as GameRow, GameMoveRow};
 use crate::db::schemas::imported_game::ImportedGame;
 
@@ -13,7 +14,7 @@ use crate::db::schemas::imported_game::ImportedGame;
 /// live koch game fills these with `SaveMeta::koch()`; an import supplies
 /// the source, the PGN's own date, and whether its movetext was truncated.
 pub struct SaveMeta {
-    pub source: String,
+    pub source: GameSource,
     /// `None` records the current time (`datetime('now')`).
     pub date_played: Option<String>,
     pub partial_import: bool,
@@ -22,7 +23,7 @@ pub struct SaveMeta {
 impl SaveMeta {
     pub fn koch() -> Self {
         Self {
-            source: "koch".to_string(),
+            source: GameSource::Koch,
             date_played: None,
             partial_import: false,
         }
@@ -91,10 +92,6 @@ impl<'a> GameService<'a> {
         }
 
         let game_hash = hash_uci_line(game.move_list.iter().map(|m| m.uci.as_str()));
-        let time_control = format!(
-            "{}+{}",
-            game.time_control.initial_ms, game.time_control.increment_ms
-        );
         let opening_id = game.opening.as_ref().map(|o| o.opening_id);
 
         self.insert_game_row(GameRowValues {
@@ -104,34 +101,30 @@ impl<'a> GameService<'a> {
             black_player: game.black_player.name.clone(),
             white_elo: game.white_player.elo,
             black_elo: game.black_player.elo,
-            result: game.result.to_string(),
+            result: game.result.as_str().to_string(),
             opening_id,
-            time_control: Some(time_control),
+            time_control: Some(game.time_control.to_ms_pair()),
             // Placeholder until a real PGN serializer exists — pgn_data is
             // NOT NULL, so it needs *something* until then.
             pgn_data: String::new(),
-            source: meta.source.clone(),
-            // `Display` gives "White"/"Black" (title case, fine for UI
-            // text) — the column's own convention is lowercase, so lower
-            // it here rather than in koch-engine's shared `PieceColor`.
-            human_color: Some(game.human_color.to_string().to_lowercase()),
+            source: meta.source.as_db_str().to_string(),
+            human_color: Some(color_to_db(game.human_color).to_string()),
             partial_import: meta.partial_import,
         })
     }
 
     /// Persists an imported PGN game: the `games` row from the parsed tags
     /// and `meta`, then one `game_moves` row per replayed ply.
-    /// `time_control` is the canonical `"<initial_ms>+<increment_ms>"`
-    /// string (the caller converts the PGN's seconds), or `None` if the
-    /// PGN had no usable clock. `move_times_ms` is aligned to `game.moves`;
-    /// anything missing is stored as 0. `human_color` stays NULL — an
-    /// import only gains a side when the user picks one to analyse (see
-    /// [`GameService::set_human_color`]).
+    /// `time_control` is `None` if the PGN had no usable clock (the caller
+    /// converts the PGN's seconds). `move_times_ms` is aligned to
+    /// `game.moves`; anything missing is stored as 0. `human_color` stays
+    /// NULL — an import only gains a side when the user picks one to
+    /// analyse (see [`GameService::set_human_color`]).
     pub fn save_pgn(
         &self,
         game: &PgnGame,
         opening_id: Option<i64>,
-        time_control: Option<String>,
+        time_control: Option<TimeControl>,
         move_times_ms: &[u32],
         meta: &SaveMeta,
     ) -> Option<u32> {
@@ -147,9 +140,9 @@ impl<'a> GameService<'a> {
             black_elo: game.tags.black_elo.unwrap_or(0),
             result: game.result.as_str().to_string(),
             opening_id,
-            time_control,
+            time_control: time_control.map(TimeControl::to_ms_pair),
             pgn_data: game.raw.clone(),
-            source: meta.source.clone(),
+            source: meta.source.as_db_str().to_string(),
             human_color: None,
             partial_import: meta.partial_import,
         })?;
@@ -163,11 +156,11 @@ impl<'a> GameService<'a> {
     }
 
     /// Records which side the user played — set when they pick one to
-    /// analyse an imported game. `color` is `'white'` / `'black'`.
-    pub fn set_human_color(&self, game_id: u32, color: &str) -> rusqlite::Result<()> {
+    /// analyse an imported game.
+    pub fn set_human_color(&self, game_id: u32, color: PieceColor) -> rusqlite::Result<()> {
         self.conn.execute(
             "UPDATE games SET human_color = ?1 WHERE game_id = ?2",
-            params![color, game_id],
+            params![color_to_db(color), game_id],
         )?;
         Ok(())
     }
@@ -312,8 +305,8 @@ impl<'a> GameService<'a> {
             .query_row(
                 "SELECT game_id, white_player, black_player, result, opening_id,
                         time_control, source, human_color, partial_import
-                 FROM games WHERE game_id = ?1 AND source <> 'koch'",
-                params![game_id],
+                 FROM games WHERE game_id = ?1 AND source <> ?2",
+                params![game_id, GameSource::Koch.as_db_str()],
                 |row| ImportedGame::try_from(row),
             )
             .optional()
@@ -334,13 +327,18 @@ impl<'a> GameService<'a> {
     /// (imported games with no human side are skipped), oldest first.
     /// Enough to derive games-played, wins, and win streaks without
     /// pulling whole rows.
-    pub fn human_game_results(&self) -> rusqlite::Result<Vec<(String, String)>> {
+    pub fn human_game_results(&self) -> rusqlite::Result<Vec<(GameResult, PieceColor)>> {
         let mut stmt = self.conn.prepare(
             "SELECT result, human_color FROM games
              WHERE human_color IS NOT NULL
              ORDER BY date_played",
         )?;
-        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                parse_text(row, "result", GameResult::parse)?,
+                parse_text(row, "human_color", color_from_db)?,
+            ))
+        })?;
         rows.collect()
     }
 
@@ -580,8 +578,9 @@ mod tests {
             assert_eq!(games.len(), 1);
             assert_eq!(games[0].game_id as u32, game_id);
             assert_eq!(games[0].white_player, "Koshmar");
-            assert_eq!(games[0].result, "1-0");
-            assert_eq!(games[0].human_color.as_deref(), Some("white"));
+            assert_eq!(games[0].result, GameResult::WhiteWin);
+            assert_eq!(games[0].source, GameSource::Koch);
+            assert_eq!(games[0].human_color, Some(PieceColor::White));
 
             quit(game).await;
         });
@@ -674,15 +673,19 @@ mod tests {
         let conn = test_conn();
 
         let meta = SaveMeta {
-            source: "pgn".to_string(),
+            source: GameSource::Pgn,
             date_played: Some("2024-03-15 19:30:00".to_string()),
             partial_import: false,
+        };
+        let time_control = TimeControl {
+            initial_ms: 600_000,
+            increment_ms: 5_000,
         };
         let game_id = GameService::new(&conn)
             .save_pgn(
                 &parsed.game,
                 None,
-                Some("600000+5000".to_string()),
+                Some(time_control),
                 &[10, 20, 30, 40],
                 &meta,
             )
@@ -690,9 +693,10 @@ mod tests {
 
         let row = GameService::new(&conn).find_game(game_id).unwrap().unwrap();
         assert_eq!(row.white_player, "Ada");
-        assert_eq!(row.result, "1-0");
-        assert_eq!(row.source, "pgn");
-        assert_eq!(row.time_control.as_deref(), Some("600000+5000"));
+        assert_eq!(row.result, GameResult::WhiteWin);
+        assert_eq!(row.source, GameSource::Pgn);
+        let tc = row.time_control.unwrap();
+        assert_eq!((tc.initial_ms, tc.increment_ms), (600_000, 5_000));
         assert_eq!(row.date_played.as_deref(), Some("2024-03-15 19:30:00"));
         assert_eq!(
             row.human_color, None,
@@ -746,18 +750,23 @@ mod tests {
             .save_pgn(
                 &parsed.game,
                 None,
-                Some("300000+2000".to_string()),
+                Some(TimeControl {
+                    initial_ms: 300_000,
+                    increment_ms: 2_000,
+                }),
                 &[],
                 &SaveMeta {
-                    source: "pgn".to_string(),
+                    source: GameSource::Pgn,
                     ..SaveMeta::koch()
                 },
             )
             .unwrap();
-        service.set_human_color(import_id, "black").unwrap();
+        service
+            .set_human_color(import_id, PieceColor::Black)
+            .unwrap();
 
         let imported = service.find_imported_game(import_id).unwrap().unwrap();
-        assert_eq!(imported.source, "pgn");
+        assert_eq!(imported.source, GameSource::Pgn);
         assert_eq!(imported.human_color, Some(PieceColor::Black));
         let tc = imported.time_control.unwrap();
         assert_eq!((tc.initial_ms, tc.increment_ms), (300_000, 2_000));
@@ -779,9 +788,47 @@ mod tests {
             .save_pgn(&parsed.game, None, None, &[], &SaveMeta::koch())
             .unwrap();
 
-        service.set_human_color(game_id, "black").unwrap();
+        service.set_human_color(game_id, PieceColor::Black).unwrap();
 
         let row = service.find_game(game_id).unwrap().unwrap();
-        assert_eq!(row.human_color.as_deref(), Some("black"));
+        assert_eq!(row.human_color, Some(PieceColor::Black));
+    }
+
+    // Every value in these columns was written by this app, so one that
+    // doesn't parse is a bad write — and it should say so, not read back
+    // as some default.
+    #[test]
+    fn a_row_with_an_unknown_source_is_an_error_not_a_guess() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO games
+                 (game_hash, white_player, black_player, white_elo, black_elo,
+                  result, pgn_data, source)
+             VALUES ('odd', 'W', 'B', 0, 0, '1-0', '', 'mystery')",
+            [],
+        )
+        .unwrap();
+
+        let Err(err) = GameService::new(&conn).get_games() else {
+            panic!("a row with an unknown source should not read back");
+        };
+
+        assert!(err.to_string().contains("source"), "got {err}");
+    }
+
+    #[test]
+    fn human_game_results_come_back_typed() {
+        let conn = test_conn();
+        let service = GameService::new(&conn);
+        let parsed = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 1-0").unwrap();
+        let game_id = service
+            .save_pgn(&parsed.game, None, None, &[], &SaveMeta::koch())
+            .unwrap();
+        service.set_human_color(game_id, PieceColor::Black).unwrap();
+
+        assert_eq!(
+            service.human_game_results().unwrap(),
+            vec![(GameResult::WhiteWin, PieceColor::Black)]
+        );
     }
 }

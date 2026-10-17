@@ -6,7 +6,7 @@ use koch_engine::{MoveStruct, PieceColor, PieceType, Square};
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
 use crate::app::error::AppError;
-use crate::app::rating::{self, stockfish_elo_for};
+use crate::app::rating::{self, stockfish_elo_for, GameScore};
 use crate::db::{
     self,
     services::{
@@ -42,12 +42,15 @@ pub(super) fn game_summary_from(
         black_player: game.black_player.clone(),
         white_elo: game.white_elo as u32,
         black_elo: game.black_elo as u32,
-        result: game.result.clone(),
+        result: game.result,
         opening_id: game.opening_id.map(|id| id as u32),
         opening_name,
-        time_control: game.time_control.clone(),
-        source: game.source.clone(),
-        human_color: game.human_color.clone(),
+        time_control: game.time_control,
+        source: game.source,
+        human_color: game.human_color,
+        human_score: game
+            .human_color
+            .and_then(|side| GameScore::for_side(game.result, side)),
         has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32),
         partial_import: game.partial_import,
     }
@@ -108,13 +111,17 @@ pub async fn start_game(
     Ok(response)
 }
 
+/// Ends the active game for a reason the board can't see by itself —
+/// resignation, a flag falling. Returns the whole final state, like a move
+/// that ends the game does, so the frontend gets the human's score with
+/// the result instead of patching `result` in and working the rest out.
 #[tauri::command]
 pub async fn end_game(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     reason: TerminationReason,
     losing_side: Option<PieceColor>,
-) -> Result<GameResult, AppError> {
+) -> Result<GameStateView, AppError> {
     let mut game = take_active_game(&state)?.ok_or("no active game to end")?;
 
     let result = match reason {
@@ -135,9 +142,10 @@ pub async fn end_game(
     };
 
     game.result = result;
+    let response = game.state_view();
     finish_game(&app, game).await?;
 
-    Ok(result)
+    Ok(response)
 }
 
 #[tauri::command]
@@ -229,7 +237,7 @@ pub fn analyze_game(
                     .or(imported.human_color)
                     .ok_or("pick which side you played to analyse this game")?;
                 if imported.human_color != Some(side) {
-                    service.set_human_color(game_id, &side.to_string().to_lowercase())?;
+                    service.set_human_color(game_id, side)?;
                 }
                 (side, imported.time_control)
             }
@@ -238,14 +246,10 @@ pub fn analyze_game(
                 let game = service
                     .find_game(game_id)?
                     .ok_or_else(|| format!("no game with id {game_id}"))?;
-                let side = match game.human_color.as_deref() {
-                    Some("white") => PieceColor::White,
-                    Some("black") => PieceColor::Black,
-                    _ => return Err("this game has no recorded side to analyse".into()),
-                };
-                let time_control =
-                    TimeControl::from_ms_pair(game.time_control.as_deref().unwrap_or_default());
-                (side, time_control)
+                let side = game
+                    .human_color
+                    .ok_or("this game has no recorded side to analyse")?;
+                (side, game.time_control)
             }
         };
 

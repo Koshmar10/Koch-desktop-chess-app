@@ -7,6 +7,8 @@ use koch_engine::{ChessPiece, PieceColor, PieceType, Square};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::app::rating::GameScore;
+
 // `GameResult` is `koch_engine`'s, not a separate app-layer enum — a PGN's
 // `[Result]` tag and trailing movetext token encode exactly these four
 // outcomes, so `koch_engine::pgn` and this IPC boundary share one type
@@ -56,15 +58,52 @@ pub struct TimeControl {
 }
 
 impl TimeControl {
-    /// Parses the `"<initial_ms>+<increment_ms>"` string `games.time_control`
-    /// stores. `None` for a missing or malformed value (e.g. an imported
-    /// game whose PGN carried no usable `[TimeControl]`).
+    /// The `"<initial_ms>+<increment_ms>"` string `games.time_control`
+    /// stores. The one place that format is written.
+    pub fn to_ms_pair(self) -> String {
+        format!("{}+{}", self.initial_ms, self.increment_ms)
+    }
+
+    /// Parses what [`TimeControl::to_ms_pair`] wrote. `None` for anything
+    /// that doesn't read as one.
     pub fn from_ms_pair(raw: &str) -> Option<TimeControl> {
         let (initial, increment) = raw.split_once('+')?;
         Some(TimeControl {
             initial_ms: initial.parse().ok()?,
             increment_ms: increment.parse().ok()?,
         })
+    }
+}
+
+/// Where a saved game came from. A closed set rather than a string, so the
+/// frontend's checks against it are checked by the compiler too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, rename_all = "lowercase")]
+pub enum GameSource {
+    /// Played inside Koch.
+    Koch,
+    /// Imported from a pasted PGN.
+    Pgn,
+}
+
+impl GameSource {
+    /// The stable string stored in `games.source` — written out rather
+    /// than derived from the variant name, so renaming a variant doesn't
+    /// orphan existing rows.
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            GameSource::Koch => "koch",
+            GameSource::Pgn => "pgn",
+        }
+    }
+
+    pub fn from_db_str(raw: &str) -> Option<GameSource> {
+        match raw {
+            "koch" => Some(GameSource::Koch),
+            "pgn" => Some(GameSource::Pgn),
+            _ => None,
+        }
     }
 }
 
@@ -121,6 +160,8 @@ pub struct GameStateView {
     /// any moves / once the game has gone off any known book line.
     pub opening_name: Option<String>,
     pub result: GameResult,
+    /// How `result` went for the human — `None` while the game is on.
+    pub human_score: Option<GameScore>,
     pub white_remaining_ms: u32,
     pub black_remaining_ms: u32,
     /// Milliseconds elapsed in the current side-to-move's turn, as of when
@@ -159,12 +200,17 @@ pub struct GameSummary {
     pub black_player: String,
     pub white_elo: u32,
     pub black_elo: u32,
-    pub result: String,
+    pub result: GameResult,
     pub opening_id: Option<u32>,
     pub opening_name: Option<String>,
-    pub time_control: Option<String>,
-    pub source: String,
-    pub human_color: Option<String>,
+    /// `None` for an import whose PGN carried no usable clock.
+    pub time_control: Option<TimeControl>,
+    pub source: GameSource,
+    /// `None` for an import nobody has picked a side for yet.
+    pub human_color: Option<PieceColor>,
+    /// How the game went for the human — `None` when there's no human side
+    /// to score it from.
+    pub human_score: Option<GameScore>,
     /// Whether this game has an aggregate `analysis` row — drives the
     /// analysed/not-analysed marker in the history card, nothing more. The
     /// actual analysis numbers are fetched separately when a game is opened.

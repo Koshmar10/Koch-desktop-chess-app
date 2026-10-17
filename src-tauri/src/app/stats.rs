@@ -1,8 +1,9 @@
+use koch_engine::{GameResult, PieceColor};
 use serde::Serialize;
 use ts_rs::TS;
 
 use crate::app::error::AppError;
-use crate::app::rating;
+use crate::app::rating::{self, GameScore};
 use crate::app::sessions::SessionDuration;
 use crate::db::{
     self,
@@ -41,17 +42,17 @@ pub struct RatingPoint {
     pub created_at: String,
 }
 
-/// True when `(result, human_color)` means the human won.
-fn human_won(result: &str, human_color: &str) -> bool {
-    matches!((result, human_color), ("1-0", "white") | ("0-1", "black"))
+/// True when the human, playing `human_color`, won.
+fn human_won(result: GameResult, human_color: PieceColor) -> bool {
+    GameScore::for_side(result, human_color) == Some(GameScore::Win)
 }
 
 /// Longest run of consecutive human wins in `results` (already in the
 /// order games were played).
-fn longest_win_streak(results: &[(String, String)]) -> u32 {
+fn longest_win_streak(results: &[(GameResult, PieceColor)]) -> u32 {
     let mut best = 0;
     let mut run = 0;
-    for (result, human_color) in results {
+    for &(result, human_color) in results {
         if human_won(result, human_color) {
             run += 1;
             best = best.max(run);
@@ -71,7 +72,10 @@ pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, App
 
     let results = GameService::new(&conn).human_game_results()?;
     let games_played = results.len() as u32;
-    let wins = results.iter().filter(|(r, c)| human_won(r, c)).count() as u32;
+    let wins = results
+        .iter()
+        .filter(|&&(result, color)| human_won(result, color))
+        .count() as u32;
     let win_rate = if games_played == 0 {
         0.0
     } else {
@@ -118,26 +122,25 @@ pub fn get_rating_history(db: tauri::State<'_, db::Db>) -> Result<Vec<RatingPoin
 mod tests {
     use super::*;
 
-    fn game(result: &str, human_color: &str) -> (String, String) {
-        (result.to_string(), human_color.to_string())
-    }
+    use koch_engine::GameResult::{BlackWin, Draw, WhiteWin};
+    use koch_engine::PieceColor::{Black, White};
 
     #[test]
     fn win_streak_counts_only_consecutive_human_wins() {
         let games = vec![
-            game("1-0", "white"),     // win
-            game("1-0", "white"),     // win
-            game("0-1", "white"),     // loss — resets
-            game("0-1", "black"),     // win
-            game("1/2-1/2", "black"), // draw — resets
-            game("0-1", "black"),     // win
+            (WhiteWin, White), // win
+            (WhiteWin, White), // win
+            (BlackWin, White), // loss — resets
+            (BlackWin, Black), // win
+            (Draw, Black),     // draw — resets
+            (BlackWin, Black), // win
         ];
         assert_eq!(longest_win_streak(&games), 2);
     }
 
     #[test]
     fn win_streak_is_zero_with_no_wins() {
-        assert_eq!(longest_win_streak(&[game("1/2-1/2", "white")]), 0);
+        assert_eq!(longest_win_streak(&[(Draw, White)]), 0);
         assert_eq!(longest_win_streak(&[]), 0);
     }
 }
