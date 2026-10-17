@@ -1,15 +1,16 @@
-import { flipCoords } from "../lib/orientation";
+import type { Square } from "../../../api/bindings/Square";
+import { toScreen } from "../lib/orientation";
+import type { Coordinate } from "./coordinate";
 
-export function getSquareCenter(
-  square: [number, number],
+/** The pixel centre of a board square, measured from the board's corner. */
+export const getSquareCenter = (
+  square: Square,
   isFlipped: boolean,
   squareSize: number,
-) {
-  const [row, col] = square;
-  const [yIndex, xIndex] = flipCoords(row, col, isFlipped);
-
+): Coordinate => {
+  const [row, col] = toScreen(square, isFlipped);
   return {
-    x: xIndex * squareSize + squareSize / 2,
-    y: yIndex * squareSize + squareSize / 2,
+    x: col * squareSize + squareSize / 2,
+    y: row * squareSize + squareSize / 2,
   };
-}
+};

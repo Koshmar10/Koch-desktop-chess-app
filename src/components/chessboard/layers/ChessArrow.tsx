@@ -1,8 +1,10 @@
+import type { Square } from "../../../api/bindings/Square";
 import { getSquareCenter } from "./squareCenter";
 
 interface ChessArrowProps {
-  from: [number, number]; // [row, col]
-  to: [number, number]; // [row, col]
+  // Board squares, not screen cells — flipping is applied here.
+  from: Square;
+  to: Square;
   color?: string;
   isGhost?: boolean;
   opacity?: number;

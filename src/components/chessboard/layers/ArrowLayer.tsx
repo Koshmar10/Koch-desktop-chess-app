@@ -1,37 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Square } from "../../../api/bindings/Square";
 import ChessArrow from "./ChessArrow";
+import { coordinateFromMouseEvent, squareAtPoint } from "./coordinate";
 import { useChessboardContext } from "../ChessboardContext";
-import { flipCoords } from "../lib/orientation";
+import { sameSquare } from "../lib/square";
+import { squareName } from "../lib/squareName";
 import type { ArrowData } from "../lib/types";
 
 const USER_ARROW_COLOR = "#ff9900";
 const RIGHT_MOUSE_BUTTON = 2;
 
 const ArrowLayer: React.FC = () => {
-  const { squareSize, boardSize, isFlipped } = useChessboardContext();
+  const { squareSize, isFlipped } = useChessboardContext();
   const svgRef = useRef<SVGSVGElement>(null);
   const [arrows, setArrows] = useState<ArrowData[]>([]);
-  const [startSquare, setStartSquare] = useState<[number, number] | null>(null);
+  const [startSquare, setStartSquare] = useState<Square | null>(null);
 
-  // Returns a board (rank/file) square — `ChessArrow` does its own
-  // domain -> screen conversion via `isFlipped`, so this undoes the pixel
-  // math's screen coordinates first.
-  const squareFromPoint = useCallback(
-    (clientX: number, clientY: number): [number, number] | null => {
+  // A board square, not a screen cell — `ChessArrow` applies the flip
+  // itself when it draws.
+  const squareUnderPointer = useCallback(
+    (e: MouseEvent): Square | null => {
       const bounds = svgRef.current?.getBoundingClientRect();
       if (!bounds) return null;
-      const screenCol = Math.floor((clientX - bounds.left) / squareSize);
-      const screenRow = Math.floor((clientY - bounds.top) / squareSize);
-      if (
-        screenRow < 0 ||
-        screenRow >= boardSize ||
-        screenCol < 0 ||
-        screenCol >= boardSize
-      )
-        return null;
-      return flipCoords(screenRow, screenCol, isFlipped);
+      return squareAtPoint(
+        coordinateFromMouseEvent(e),
+        bounds,
+        squareSize,
+        isFlipped,
+      );
     },
-    [boardSize, squareSize, isFlipped],
+    [squareSize, isFlipped],
   );
 
   // This layer has pointer-events: none (left-clicks must reach the pieces/squares
@@ -42,7 +40,7 @@ const ArrowLayer: React.FC = () => {
 
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button !== RIGHT_MOUSE_BUTTON) return;
-      setStartSquare(squareFromPoint(e.clientX, e.clientY));
+      setStartSquare(squareUnderPointer(e));
     };
 
     window.addEventListener("contextmenu", handleContextMenu);
@@ -51,7 +49,7 @@ const ArrowLayer: React.FC = () => {
       window.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [boardSize, squareSize, squareFromPoint]);
+  }, [squareUnderPointer]);
 
   useEffect(() => {
     if (!startSquare) return;
@@ -59,11 +57,8 @@ const ArrowLayer: React.FC = () => {
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button !== RIGHT_MOUSE_BUTTON) return;
 
-      const endSquare = squareFromPoint(e.clientX, e.clientY);
-      if (
-        endSquare &&
-        (endSquare[0] !== startSquare[0] || endSquare[1] !== startSquare[1])
-      ) {
+      const endSquare = squareUnderPointer(e);
+      if (endSquare && !sameSquare(endSquare, startSquare)) {
         setArrows((prev) => [
           ...prev,
           {
@@ -81,7 +76,7 @@ const ArrowLayer: React.FC = () => {
 
     window.addEventListener("mouseup", handleMouseUp);
     return () => window.removeEventListener("mouseup", handleMouseUp);
-  }, [startSquare, boardSize, squareSize, squareFromPoint]);
+  }, [startSquare, squareUnderPointer]);
 
   return (
     <svg
@@ -90,7 +85,7 @@ const ArrowLayer: React.FC = () => {
     >
       {arrows.map((arrow, index) => (
         <ChessArrow
-          key={`${arrow.from[0]}-${arrow.from[1]}-${arrow.to[0]}-${arrow.to[1]}-${index}`}
+          key={`${squareName(arrow.from)}-${squareName(arrow.to)}-${index}`}
           from={arrow.from}
           to={arrow.to}
           color={arrow.color}

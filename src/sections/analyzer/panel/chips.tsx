@@ -4,8 +4,9 @@ import { PieceAvatar } from "../../../components/chessboard/PieceAvatar";
 import {
   DARK_SQUARE_COLOR,
   LIGHT_SQUARE_COLOR,
-  isDarkSquare,
 } from "../../../components/chessboard/lib/constants";
+import { pieceById } from "../../../components/chessboard/lib/pieces";
+import { isDarkSquare } from "../../../components/chessboard/lib/square";
 import { squareName } from "../../../components/chessboard/lib/squareName";
 import type { PlacedPiece } from "../../../components/chessboard/lib/types";
 import { pieceLabel } from "./pieceLabel";
@@ -55,7 +56,7 @@ export const TileChip = ({
         style={{
           width: PIECE_CHIP_SIZE_PX,
           height: PIECE_CHIP_SIZE_PX,
-          backgroundColor: isDarkSquare(square.rank, square.file)
+          backgroundColor: isDarkSquare(square)
             ? DARK_SQUARE_COLOR
             : LIGHT_SQUARE_COLOR,
         }}
@@ -91,7 +92,7 @@ export const PieceChip = ({
   pieces: PlacedPiece[];
   showSquare?: boolean;
 }) => {
-  const piece = pieces.find((p) => p.id === id);
+  const piece = pieceById(pieces, id);
   if (!piece) return null;
 
   return (

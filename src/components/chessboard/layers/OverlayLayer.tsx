@@ -1,5 +1,6 @@
+import type { Square } from "../../../api/bindings/Square";
 import { useChessboardContext } from "../ChessboardContext";
-import { flipCoords } from "../lib/orientation";
+import { toScreen } from "../lib/orientation";
 import type { OverlayMask } from "../lib/types";
 import { OVERLAY_ARROWS_Z_INDEX } from "../lib/zIndex";
 import ChessArrow from "./ChessArrow";
@@ -36,9 +37,9 @@ const OverlayLayer = ({ masks }: OverlayLayerProps) => {
     arrows.map((arrow, index) => ({ key: `${id}-${index}`, arrow })),
   );
 
-  // Board (rank/file) square to its on-screen box.
-  const boxOf = (rank: number, file: number) => {
-    const [row, col] = flipCoords(rank, file, isFlipped);
+  // Board square to its on-screen box.
+  const boxOf = (square: Square) => {
+    const [row, col] = toScreen(square, isFlipped);
     return {
       left: col * squareSize,
       top: row * squareSize,
@@ -58,7 +59,7 @@ const OverlayLayer = ({ masks }: OverlayLayerProps) => {
               key={`${id}-${square.rank}-${square.file}`}
               className="absolute transition-colors duration-150"
               style={{
-                ...boxOf(square.rank, square.file),
+                ...boxOf(square),
                 backgroundColor: color,
               }}
             />

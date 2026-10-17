@@ -5,13 +5,13 @@ const SQUARE_SIZE = 72;
 
 describe("getSquareCenter", () => {
   it("centers on the square using unflipped board coordinates", () => {
-    const center = getSquareCenter([0, 0], false, SQUARE_SIZE);
+    const center = getSquareCenter({ rank: 0, file: 0 }, false, SQUARE_SIZE);
 
     expect(center).toEqual({ x: SQUARE_SIZE / 2, y: SQUARE_SIZE / 2 });
   });
 
   it("mirrors both axes when the board is flipped", () => {
-    const center = getSquareCenter([0, 0], true, SQUARE_SIZE);
+    const center = getSquareCenter({ rank: 0, file: 0 }, true, SQUARE_SIZE);
 
     expect(center).toEqual({
       x: 7 * SQUARE_SIZE + SQUARE_SIZE / 2,
@@ -19,8 +19,9 @@ describe("getSquareCenter", () => {
     });
   });
 
-  it("scales with square size", () => {
-    const center = getSquareCenter([2, 3], false, SQUARE_SIZE);
+  // Rank is the row and file the column — swapping them is the easy slip.
+  it("puts the file on x and the rank on y", () => {
+    const center = getSquareCenter({ rank: 2, file: 3 }, false, SQUARE_SIZE);
 
     expect(center).toEqual({
       x: 3 * SQUARE_SIZE + SQUARE_SIZE / 2,

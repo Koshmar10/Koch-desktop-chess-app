@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { squareName } from "../squareName";
+import { fileLetter, rankNumber, squareName } from "../squareName";
+
+describe("fileLetter and rankNumber", () => {
+  it("count the rank from White's side, the way a player does", () => {
+    expect(rankNumber({ rank: 7, file: 0 })).toBe(1);
+    expect(rankNumber({ rank: 0, file: 0 })).toBe(8);
+  });
+
+  it("letter the files from the a-file", () => {
+    expect(fileLetter({ rank: 0, file: 0 })).toBe("a");
+    expect(fileLetter({ rank: 0, file: 7 })).toBe("h");
+  });
+});
 
 describe("squareName", () => {
   // The inversion is the whole point of the function: rank 0 is the eighth

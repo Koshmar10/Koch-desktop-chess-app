@@ -1,22 +1,32 @@
+import type { Square } from "../../../api/bindings/Square";
 import { BOARD_SIZE } from "./constants";
 
-// Flips a [row, col] pair across both axes when `isFlipped`. Used at every
-// boundary between the board's absolute (rank/file) coordinates and
-// screen/grid coordinates — this transform is its own inverse (flipping
-// twice is the identity), so the same function converts both directions:
-// domain -> screen for rendering, screen -> domain for click/drag hit-testing.
-export const flipCoords = (
-  row: number,
-  col: number,
-  isFlipped: boolean,
-): [number, number] =>
-  isFlipped ? [BOARD_SIZE - 1 - row, BOARD_SIZE - 1 - col] : [row, col];
+/**
+ * A cell of the on-screen grid: row 0 is the top row as drawn, col 0 the
+ * left column. Distinct from a `Square`, which is where something is on
+ * the board itself — the two only line up while the board isn't flipped.
+ * Kept as its own type so the compiler, not the reader, catches a board
+ * square passed where a screen cell was meant.
+ */
+export type ScreenCell = [row: number, col: number];
 
-// Value equality for the [row, col]/[rank, file] tuples this whole board
-// subsystem uses (ChessboardContext's `selectedSquare`, PieceLayer's
-// `dragFrom`, etc.) — replaces the scattered `a?.[0] === b[0] && a?.[1] ===
-// b[1]` checks with one named comparison, either side can be null.
-export const squaresEqual = (
-  a: [number, number] | null,
-  b: [number, number] | null,
-): boolean => a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
+const mirror = (index: number): number => BOARD_SIZE - 1 - index;
+
+// Flipping mirrors both axes. That's its own inverse, so `toScreen` and
+// `fromScreen` are the same arithmetic — they differ only in which type
+// goes in and which comes out.
+
+/** Where a board square is drawn: for rendering. */
+export const toScreen = (
+  { rank, file }: Square,
+  isFlipped: boolean,
+): ScreenCell => (isFlipped ? [mirror(rank), mirror(file)] : [rank, file]);
+
+/** Which board square is drawn at a screen cell: for hit-testing. */
+export const fromScreen = (
+  [row, col]: ScreenCell,
+  isFlipped: boolean,
+): Square =>
+  isFlipped
+    ? { rank: mirror(row), file: mirror(col) }
+    : { rank: row, file: col };

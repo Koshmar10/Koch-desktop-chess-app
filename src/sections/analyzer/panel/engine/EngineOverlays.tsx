@@ -1,5 +1,5 @@
 import { Flame, Lightbulb, MoveRight, type LucideIcon } from "lucide-react";
-import type { Square } from "../../../../api/bindings/Square";
+import { pieceAt } from "../../../../components/chessboard/lib/pieces";
 import type { PlacedPiece } from "../../../../components/chessboard/lib/types";
 import { parseUciMove } from "../../../../components/chessboard/lib/uci";
 import { maskIdFor } from "../../overlays/masks";
@@ -32,11 +32,7 @@ const MoveRow = ({
   maskLabel,
 }: MoveRowProps) => {
   const squares = move ? parseUciMove(move) : null;
-  const pieceAt = (square: Square) =>
-    pieces.find(
-      (p) => p.square.rank === square.rank && p.square.file === square.file,
-    );
-  const mover = squares ? pieceAt(squares.from) : undefined;
+  const mover = squares ? pieceAt(pieces, squares.from) : undefined;
 
   return (
     <PlainRow maskId={maskId} maskLabel={maskLabel} captioned>
@@ -47,7 +43,7 @@ const MoveRow = ({
           <MoveRight size={18} className="shrink-0 text-foreground/25" />
           {/* The bare square for a quiet move, or the piece about to be
               taken on it for a capture. */}
-          <TileChip square={squares.to} piece={pieceAt(squares.to)} />
+          <TileChip square={squares.to} piece={pieceAt(pieces, squares.to)} />
         </>
       ) : (
         // Switching it on still works with nothing to show: the arrow

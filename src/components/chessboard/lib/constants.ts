@@ -11,8 +11,3 @@ export const BOARD_PIXEL_SIZE = SQUARE_SIZE * BOARD_SIZE;
 // square really is, rather than a generic grey that could be either.
 export const LIGHT_SQUARE_COLOR = "#f0d9b5";
 export const DARK_SQUARE_COLOR = "#a37a58";
-
-// Parity is the same in board and screen coordinates — flipping maps
-// (r, f) to (7−r, 7−f), which changes the sum by an even number.
-export const isDarkSquare = (rank: number, file: number): boolean =>
-  (rank + file) % 2 === 1;
