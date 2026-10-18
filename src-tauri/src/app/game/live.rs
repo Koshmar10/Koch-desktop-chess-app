@@ -11,9 +11,11 @@ use koch_uci::{Engine, UciError};
 use crate::app::app_state::AppState;
 use crate::app::error::AppError;
 use crate::app::rating::GameScore;
+use crate::app::ENGINE_PATH;
 use crate::db;
 
-use super::view::{GameResult, GameStateView, LastMove, PieceView, PlayerInfo, TimeControl};
+use super::replay::pieces_of;
+use super::view::{GameResult, GameStateView, LastMove, PlayerInfo, TimeControl};
 
 pub struct Game {
     pub engine: Engine,
@@ -51,7 +53,6 @@ pub struct Game {
 
 impl Game {
     pub async fn new(
-        engine_path: &str,
         white_player: PlayerInfo,
         black_player: PlayerInfo,
         human_color: PieceColor,
@@ -63,7 +64,7 @@ impl Game {
             PieceColor::Black => white_player.elo,
         };
 
-        let mut engine = Engine::spawn(engine_path).await?;
+        let mut engine = Engine::spawn(ENGINE_PATH).await?;
         engine.set_option("UCI_LimitStrength", Some("true")).await?;
         engine
             .set_option("UCI_Elo", Some(&engine_elo.to_string()))
@@ -71,15 +72,11 @@ impl Game {
         engine.new_game().await?;
         engine.set_position_startpos(&[]).await?;
 
-        let mut board = Board::default();
-        // `Board::from(&FenString)` (which `default()` delegates to) starts
-        // `legal_moves` as an empty map — nothing is clickable until this
-        // runs at least once.
-        board.refresh_legal_moves();
-
         Ok(Game {
             engine,
-            board,
+            // Comes with its legal moves worked out, so the first move is
+            // clickable straight away.
+            board: Board::default(),
             move_list: Vec::new(),
             move_times_ms: Vec::new(),
             white_player,
@@ -98,32 +95,20 @@ impl Game {
     /// no DB access — since `opening` is already resolved and kept
     /// up to date on `Game` itself by `apply_move`.
     pub fn state_view(&self) -> GameStateView {
-        let pieces = self
-            .board
-            .squares
-            .iter()
-            .flatten()
-            .flatten()
-            .map(PieceView::from)
-            .collect();
-
-        let legal_moves = legal_moves_view(&self.board);
-
         let move_history = self.move_list.iter().map(|m| m.san.clone()).collect();
 
-        let last_move = self.move_list.last().and_then(|mv| {
-            self.board.decode_uci_move(&mv.uci).map(|mv| LastMove {
-                from: mv.from,
-                to: mv.to,
-            })
-        });
+        let last_move = self
+            .move_list
+            .last()
+            .and_then(|mv| self.board.decode_uci_move(&mv.uci))
+            .map(LastMove::from);
 
         let opening_name = self.opening.as_ref().map(|o| o.opening_name.clone());
 
         GameStateView {
             turn: self.board.turn,
-            pieces,
-            legal_moves,
+            pieces: pieces_of(&self.board),
+            legal_moves: legal_moves_view(&self.board),
             move_history,
             last_move,
             opening_name,

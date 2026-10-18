@@ -8,7 +8,6 @@ use crate::app::analysis::MoveQualityEntry;
 use crate::app::game::{Game, GameResult, GameSource, TimeControl};
 use crate::db::columns::{color_from_db, color_to_db, parse_text};
 use crate::db::schemas::game::{Game as GameRow, GameMoveRow};
-use crate::db::schemas::imported_game::ImportedGame;
 
 /// The bits of a `games` row that don't come from the game itself. A
 /// live koch game fills these with `SaveMeta::koch()`; an import supplies
@@ -300,21 +299,6 @@ impl<'a> GameService<'a> {
             .optional()
     }
 
-    /// A single game by id, but only if it came from outside koch — typed
-    /// as an [`ImportedGame`] (optional clock, optional human side). `None`
-    /// for a koch-played game or an unknown id.
-    pub fn find_imported_game(&self, game_id: u32) -> rusqlite::Result<Option<ImportedGame>> {
-        self.conn
-            .query_row(
-                "SELECT game_id, white_player, black_player, result, opening_id,
-                        time_control, source, human_color, partial_import
-                 FROM games WHERE game_id = ?1 AND source <> ?2",
-                params![game_id, GameSource::Koch.as_db_str()],
-                |row| ImportedGame::try_from(row),
-            )
-            .optional()
-    }
-
     /// Every ply of a saved game, in order — for replaying it through the
     /// analyzer.
     pub fn game_moves(&self, game_id: u32) -> rusqlite::Result<Vec<GameMoveRow>> {
@@ -414,14 +398,13 @@ mod tests {
             increment_ms: 0,
         };
 
-        let mut game =
-            match Game::new("stockfish", white, black, PieceColor::White, time_control).await {
-                Ok(game) => game,
-                Err(err) => {
-                    eprintln!("skipping: no `stockfish` on PATH ({err})");
-                    return None;
-                }
-            };
+        let mut game = match Game::new(white, black, PieceColor::White, time_control).await {
+            Ok(game) => game,
+            Err(err) => {
+                eprintln!("skipping: no `stockfish` on PATH ({err})");
+                return None;
+            }
+        };
 
         game.move_list = vec![sample_move("e4", "e2e4"), sample_move("e5", "e7e5")];
         game.move_times_ms = vec![1000, 1200];
@@ -770,48 +753,6 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
             .unwrap();
         assert_eq!(games, 0, "the game row should roll back with its moves");
-    }
-
-    #[test]
-    fn find_imported_game_types_the_optional_fields_and_skips_koch_games() {
-        use koch_engine::PieceColor;
-
-        let conn = test_conn();
-        let service = GameService::new(&conn);
-
-        let parsed = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 *").unwrap();
-        let import_id = service
-            .save_pgn(
-                &parsed.game,
-                None,
-                Some(TimeControl {
-                    initial_ms: 300_000,
-                    increment_ms: 2_000,
-                }),
-                &[],
-                &SaveMeta {
-                    source: GameSource::Pgn,
-                    ..SaveMeta::koch()
-                },
-            )
-            .unwrap()
-            .unwrap();
-        service
-            .set_human_color(import_id, PieceColor::Black)
-            .unwrap();
-
-        let imported = service.find_imported_game(import_id).unwrap().unwrap();
-        assert_eq!(imported.source, GameSource::Pgn);
-        assert_eq!(imported.human_color, Some(PieceColor::Black));
-        let tc = imported.time_control.unwrap();
-        assert_eq!((tc.initial_ms, tc.increment_ms), (300_000, 2_000));
-
-        // A koch-played game is not an "imported" game.
-        let koch_id = seed_game_with_children(&conn, "koch-hash");
-        assert!(service
-            .find_imported_game(koch_id as u32)
-            .unwrap()
-            .is_none());
     }
 
     #[test]

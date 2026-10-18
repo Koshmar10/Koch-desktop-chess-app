@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use koch_engine::{ChessPiece, PieceColor, PieceType, Square};
+use koch_engine::{ChessPiece, PieceColor, PieceMove, PieceType, Square};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -137,6 +137,15 @@ impl From<&ChessPiece> for PieceView {
 pub struct LastMove {
     pub from: Square,
     pub to: Square,
+}
+
+impl From<PieceMove> for LastMove {
+    fn from(mv: PieceMove) -> Self {
+        LastMove {
+            from: mv.from,
+            to: mv.to,
+        }
+    }
 }
 
 /// Board snapshot the frontend renders from. Shared between `start_game`

@@ -1,5 +1,5 @@
 use crate::castling::{is_castle_move, CastlingRights};
-use crate::fen::{FenString, DEFAULT_FEN};
+use crate::fen::FenString;
 use crate::move_gen::MoveError;
 use crate::piece::{ChessPiece, PieceColor, PieceType};
 use crate::square::Square;
@@ -29,8 +29,7 @@ pub struct Board {
 
 impl Default for Board {
     fn default() -> Self {
-        let fen = FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is a valid FEN string");
-        let mut board = Board::from(&fen);
+        let mut board = Board::from(&FenString::default());
         board.refresh_legal_moves();
         board
     }

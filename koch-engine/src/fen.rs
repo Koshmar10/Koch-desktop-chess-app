@@ -39,6 +39,14 @@ impl FenString {
     }
 }
 
+/// The standard starting position. Built without validating: `DEFAULT_FEN`
+/// is a known-good constant, and a test holds it to that.
+impl Default for FenString {
+    fn default() -> Self {
+        FenString(DEFAULT_FEN.to_string())
+    }
+}
+
 impl TryFrom<&str> for FenString {
     type Error = FenError;
 
@@ -310,6 +318,14 @@ impl std::fmt::Display for Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_default_fen_string_is_a_valid_start_position() {
+        assert_eq!(
+            FenString::default(),
+            FenString::try_from(DEFAULT_FEN).unwrap()
+        );
+    }
 
     #[test]
     fn default_fen_round_trips() {
