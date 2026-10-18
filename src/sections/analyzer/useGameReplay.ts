@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  loadGameReplay,
-  onLiveEngineSnapshot,
-  refreshLiveEngineSession,
-} from "../../api/analyzer";
+import { loadGameReplay, refreshLiveEngineSession } from "../../api/analyzer";
 import type { EngineSnapshot } from "../../api/bindings/EngineSnapshot";
 import type { GameReplay } from "../../api/bindings/GameReplay";
+import { useAppEvent } from "../../app/useAppEvent";
 
 interface Loaded {
   // Which game this result belongs to. Kept with the result rather than
@@ -23,17 +20,7 @@ interface Loaded {
  */
 export const useLiveEngine = (): EngineSnapshot | null => {
   const [liveSnapshot, setLiveSnapshot] = useState<EngineSnapshot | null>(null);
-
-  // Subscribed once, on mount. Without the `[]` it re-subscribed after every
-  // render — and every snapshot is a render — dropping whatever arrived
-  // while the old listener was gone and the new one not yet attached.
-  useEffect(() => {
-    const unlisten = onLiveEngineSnapshot(setLiveSnapshot);
-    return () => {
-      unlisten.then((stop) => stop());
-    };
-  }, []);
-
+  useAppEvent("pvline", setLiveSnapshot);
   return liveSnapshot;
 };
 

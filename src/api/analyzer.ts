@@ -1,6 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { EngineSnapshot } from "./bindings/EngineSnapshot";
 import type { GameReplay } from "./bindings/GameReplay";
 import type { LiveEngineSettings } from "./bindings/LiveEngineSettings";
 import type { PieceType } from "./bindings/PieceType";
@@ -86,8 +84,3 @@ export const getLiveEngineSettings = (): Promise<LiveEngineSettings> =>
 export const applyLiveEngineSettings = (
   settings: LiveEngineSettings,
 ): Promise<void> => invoke("apply_live_engine_settings", { settings });
-
-export const onLiveEngineSnapshot = (
-  handler: (snapshot: EngineSnapshot) => void,
-): Promise<UnlistenFn> =>
-  listen<EngineSnapshot>("pvline", (event) => handler(event.payload));

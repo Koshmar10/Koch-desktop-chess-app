@@ -2,6 +2,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::app::error::AppError;
+use crate::app::events;
 use crate::db::{
     self,
     services::{analysis::AnalysisService, game::GameService},
@@ -41,7 +42,7 @@ pub async fn worker(app: AppHandle, mut rx: UnboundedReceiver<AnalysisJob>) {
         match analyse_and_save(&job, &app).await {
             Ok(analysis) => {
                 emit_status(&app, game_id, AnalysisStage::Done);
-                if let Err(err) = app.emit("game-analysis-complete", analysis) {
+                if let Err(err) = app.emit(events::GAME_ANALYSIS_COMPLETE, analysis) {
                     eprintln!("failed to emit game-analysis-complete: {err}");
                 }
             }

@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { AppContext, type Theme } from "./AppContext";
+import { useAppEvent } from "./useAppEvent";
 import type { AnalysisStage } from "../api/bindings/AnalysisStage";
-import type { AnalysisStatus } from "../api/bindings/AnalysisStatus";
 
 const THEME_STORAGE_KEY = "koch-theme";
 
@@ -37,17 +36,9 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // One subscription for the whole app; cards read from `analysisStages` by
   // game_id, so their indicator doesn't reset every time the card unmounts.
-  useEffect(() => {
-    const unlisten = listen<AnalysisStatus>("analysis-status", (event) => {
-      setAnalysisStages((prev) => ({
-        ...prev,
-        [event.payload.game_id]: event.payload.stage,
-      }));
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  useAppEvent("analysis-status", ({ game_id, stage }) =>
+    setAnalysisStages((prev) => ({ ...prev, [game_id]: stage })),
+  );
 
   const toggleTheme = () =>
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));

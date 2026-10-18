@@ -1,5 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useState, type ReactNode } from "react";
 import {
   startGame as apiStartGame,
   endGame as apiEndGame,
@@ -7,10 +6,10 @@ import {
 } from "../../api/game";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
-import type { GameStateView } from "../../api/bindings/GameStateView";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
+import { useAppEvent } from "../../app/useAppEvent";
 import {
   GameContext,
   MODE_TIME_CONTROL,
@@ -46,37 +45,20 @@ export function GameProvider({ children }: GameProviderProps) {
   // itself, whenever a game finishes (checkmate/stalemate via make_move,
   // or resignation/timeout via end_game) — not something either of those
   // commands returns directly.
-  useEffect(() => {
-    const unlisten = listen<GameAnalysis>("game-analysis-complete", (event) => {
-      setAnalysis(event.payload);
-      setAnalysisProgress(null);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  useAppEvent("game-analysis-complete", (finished) => {
+    setAnalysis(finished);
+    setAnalysisProgress(null);
+  });
 
-  useEffect(() => {
-    const unlisten = listen<number>("update-analysis-progress", (event) => {
-      setAnalysisProgress(event.payload);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  useAppEvent("update-analysis-progress", setAnalysisProgress);
 
   // The backend pushes this once the engine's own reply has finished
   // thinking — `make_move` returns right after the human's move, it
   // doesn't wait on this.
-  useEffect(() => {
-    const unlisten = listen<GameStateView>("engine-move-complete", (event) => {
-      setGame((prev) => (prev ? { ...prev, state: event.payload } : prev));
-      setGameReceivedAt(Date.now());
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  useAppEvent("engine-move-complete", (state) => {
+    setGame((prev) => (prev ? { ...prev, state } : prev));
+    setGameReceivedAt(Date.now());
+  });
 
   const cycleColorPreference = () => {
     setColorPreference((prev) => nextColorPreference(prev));

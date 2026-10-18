@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
 use super::snapshot::{EngineSnapshot, PvLine};
+use crate::app::events;
 
 /// The live engine's Stockfish options. Kept in memory for as long as the
 /// app runs and never saved — deliberately separate from the saved
@@ -135,7 +136,7 @@ pub async fn spawn_live_engine_session(
                             snapshot.depth = info.depth;
                             snapshot.pv_lines.push(pv_line);
                             if snapshot.is_complete() {
-                                let _ = app.emit("pvline", &snapshot);
+                                let _ = app.emit(events::LIVE_ENGINE_SNAPSHOT, &snapshot);
                                 snapshot.clear();
                             }
                         }
