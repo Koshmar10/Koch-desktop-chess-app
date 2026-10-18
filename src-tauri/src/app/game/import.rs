@@ -82,8 +82,16 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         partial_import: parse.truncated.is_some(),
     };
 
-    let game_id =
-        GameService::new(&conn).save_pgn(&parse.game, opening_id, time_control, &move_times, &meta);
+    // `None` only for a game already in the library. A failed insert used to
+    // come back as `None` too, and the popup told the user it was a
+    // duplicate; now it's an error they actually see.
+    let game_id = GameService::new(&conn).save_pgn(
+        &parse.game,
+        opening_id,
+        time_control,
+        &move_times,
+        &meta,
+    )?;
 
     Ok(ImportPgnResult {
         game_id,

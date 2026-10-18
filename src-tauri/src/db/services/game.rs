@@ -59,7 +59,7 @@ struct GameRowValues {
 }
 
 pub struct GameService<'a> {
-    pub conn: &'a Connection,
+    conn: &'a Connection,
 }
 
 impl<'a> GameService<'a> {
@@ -67,34 +67,38 @@ impl<'a> GameService<'a> {
         Self { conn }
     }
 
-    /// Saves a game and its moves together — `save_game` then
-    /// `save_moves` on the same `game_id`. `Option`, matching both of
-    /// those, rather than introducing `Result` for just this one method:
-    /// None means the same "didn't happen" outcomes `save_game` already
-    /// has (unfinished, already saved, or the insert failed), not
-    /// necessarily an error worth surfacing differently.
-    pub fn save(&self, game: &Game, meta: &SaveMeta) -> Option<u32> {
-        let game_id = self.save_game(game, meta)?;
-        self.save_moves(game_id, game);
-        Some(game_id)
-    }
-
-    /// Saves a finished game. `&Game`, not owned — callers still need it
-    /// afterward (`spawn_analysis`, `engine.quit()`). `&self`, not owned
-    /// either — the intended use is `save_game` then `save_moves` on the
-    /// same service instance for the same game. Returns the new
-    /// `games.game_id`, or None if the game hasn't ended yet, the exact
-    /// same game was already saved (`game_hash` dedup over the move
-    /// sequence), or the insert otherwise failed.
-    pub fn save_game(&self, game: &Game, meta: &SaveMeta) -> Option<u32> {
+    /// Saves a finished game and its moves, in one transaction: a failure
+    /// part way leaves nothing behind, rather than a game missing some of
+    /// its moves. `&Game`, not owned — callers still need it afterwards.
+    ///
+    /// `Ok(None)` when there's nothing new to save: the game hasn't ended,
+    /// or this exact game is already in the library (`game_hash` dedup over
+    /// the move sequence). Anything that goes wrong is an `Err`, never
+    /// another `None` — the two used to be indistinguishable.
+    pub fn save(&self, game: &Game, meta: &SaveMeta) -> rusqlite::Result<Option<u32>> {
         if game.result == GameResult::Unfinished {
-            return None;
+            return Ok(None);
         }
 
+        let tx = self.conn.unchecked_transaction()?;
+        let Some(game_id) = self.insert_game_row(Self::row_for(game, meta))? else {
+            return Ok(None);
+        };
+        let moves = game
+            .move_list
+            .iter()
+            .map(|m| (m.san.as_str(), m.uci.as_str()));
+        self.insert_moves(game_id, moves, &game.move_times_ms)?;
+        tx.commit()?;
+        Ok(Some(game_id))
+    }
+
+    /// The `games` row for a live koch game.
+    fn row_for(game: &Game, meta: &SaveMeta) -> GameRowValues {
         let game_hash = hash_uci_line(game.move_list.iter().map(|m| m.uci.as_str()));
         let opening_id = game.opening.as_ref().map(|o| o.opening_id);
 
-        self.insert_game_row(GameRowValues {
+        GameRowValues {
             game_hash,
             date_played: meta.date_played.clone(),
             white_player: game.white_player.name.clone(),
@@ -110,16 +114,18 @@ impl<'a> GameService<'a> {
             source: meta.source.as_db_str().to_string(),
             human_color: Some(color_to_db(game.human_color).to_string()),
             partial_import: meta.partial_import,
-        })
+        }
     }
 
     /// Persists an imported PGN game: the `games` row from the parsed tags
-    /// and `meta`, then one `game_moves` row per replayed ply.
-    /// `time_control` is `None` if the PGN had no usable clock (the caller
-    /// converts the PGN's seconds). `move_times_ms` is aligned to
-    /// `game.moves`; anything missing is stored as 0. `human_color` stays
-    /// NULL — an import only gains a side when the user picks one to
-    /// analyse (see [`GameService::set_human_color`]).
+    /// and `meta`, then one `game_moves` row per replayed ply — in one
+    /// transaction, like [`GameService::save`], and with the same
+    /// `Ok(None)` for a game already in the library. `time_control` is
+    /// `None` if the PGN had no usable clock (the caller converts the PGN's
+    /// seconds). `move_times_ms` is aligned to `game.moves`; anything
+    /// missing is stored as 0. `human_color` stays NULL — an import only
+    /// gains a side when the user picks one to analyse (see
+    /// [`GameService::set_human_color`]).
     pub fn save_pgn(
         &self,
         game: &PgnGame,
@@ -127,11 +133,12 @@ impl<'a> GameService<'a> {
         time_control: Option<TimeControl>,
         move_times_ms: &[u32],
         meta: &SaveMeta,
-    ) -> Option<u32> {
+    ) -> rusqlite::Result<Option<u32>> {
         let game_hash = hash_uci_line(game.moves.iter().map(|m| m.uci.as_str()));
         let unknown = || "?".to_string();
 
-        let game_id = self.insert_game_row(GameRowValues {
+        let tx = self.conn.unchecked_transaction()?;
+        let Some(game_id) = self.insert_game_row(GameRowValues {
             game_hash,
             date_played: meta.date_played.clone(),
             white_player: game.tags.white.clone().unwrap_or_else(unknown),
@@ -145,14 +152,14 @@ impl<'a> GameService<'a> {
             source: meta.source.as_db_str().to_string(),
             human_color: None,
             partial_import: meta.partial_import,
-        })?;
-
-        for (idx, mv) in game.moves.iter().enumerate() {
-            let time_ms = move_times_ms.get(idx).copied().unwrap_or(0);
-            self.insert_move(game_id, (idx + 1) as u32, &mv.san, &mv.uci, time_ms);
-        }
-
-        Some(game_id)
+        })?
+        else {
+            return Ok(None);
+        };
+        let moves = game.moves.iter().map(|m| (m.san.as_str(), m.uci.as_str()));
+        self.insert_moves(game_id, moves, move_times_ms)?;
+        tx.commit()?;
+        Ok(Some(game_id))
     }
 
     /// Records which side the user played — set when they pick one to
@@ -165,11 +172,11 @@ impl<'a> GameService<'a> {
         Ok(())
     }
 
-    fn insert_game_row(&self, values: GameRowValues) -> Option<u32> {
-        let rows_affected = self
-            .conn
-            .execute(
-                "INSERT INTO games (
+    /// `Ok(None)` when the `ON CONFLICT` hit: this exact game is already
+    /// saved.
+    fn insert_game_row(&self, values: GameRowValues) -> rusqlite::Result<Option<u32>> {
+        let rows_affected = self.conn.execute(
+            "INSERT INTO games (
                     game_hash, date_played, white_player, black_player,
                     white_elo, black_elo, result, opening_id, time_control,
                     pgn_data, source, human_color, partial_import
@@ -178,79 +185,78 @@ impl<'a> GameService<'a> {
                     ?10, ?11, ?12, ?13
                 )
                 ON CONFLICT (game_hash) DO NOTHING",
-                params![
-                    values.game_hash,
-                    values.date_played,
-                    values.white_player,
-                    values.black_player,
-                    values.white_elo,
-                    values.black_elo,
-                    values.result,
-                    values.opening_id,
-                    values.time_control,
-                    values.pgn_data,
-                    values.source,
-                    values.human_color,
-                    values.partial_import,
-                ],
-            )
-            .ok()?;
+            params![
+                values.game_hash,
+                values.date_played,
+                values.white_player,
+                values.black_player,
+                values.white_elo,
+                values.black_elo,
+                values.result,
+                values.opening_id,
+                values.time_control,
+                values.pgn_data,
+                values.source,
+                values.human_color,
+                values.partial_import,
+            ],
+        )?;
 
         if rows_affected == 0 {
-            // Conflict — this exact game was already saved.
-            return None;
+            return Ok(None);
         }
-
-        Some(self.conn.last_insert_rowid() as u32)
+        Ok(Some(self.conn.last_insert_rowid() as u32))
     }
 
-    /// Saves every ply as its own `game_moves` row — `san`/`uci`/`time_ms`
+    /// One `game_moves` row per ply, numbered from 1 — `san`/`uci`/`time_ms`
     /// only, since that's all that's known at save time. `eval_cp`,
     /// `quality`, and `centipawn_loss` are all analysis-derived and stay
-    /// NULL until whatever runs analysis later `UPDATE`s these same rows
-    /// by `(game_id, ply_number)`, not inserts new ones.
-    pub fn save_moves(&self, game_id: u32, game: &Game) {
-        for (idx, mv) in game.move_list.iter().enumerate() {
-            let time_ms = game.move_times_ms.get(idx).copied().unwrap_or(0);
-            self.insert_move(game_id, (idx + 1) as u32, &mv.san, &mv.uci, time_ms);
+    /// NULL until analysis later `UPDATE`s these same rows by
+    /// `(game_id, ply_number)`. `times_ms` lines up with the moves; a move
+    /// past its end is stored with 0.
+    ///
+    /// The one insert loop for both a live game's moves and an import's.
+    fn insert_moves<'m>(
+        &self,
+        game_id: u32,
+        moves: impl Iterator<Item = (&'m str, &'m str)>,
+        times_ms: &[u32],
+    ) -> rusqlite::Result<()> {
+        for (idx, (san, uci)) in moves.enumerate() {
+            let time_ms = times_ms.get(idx).copied().unwrap_or(0);
+            self.conn.execute(
+                "INSERT INTO game_moves (game_id, ply_number, san, uci, time_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![game_id, (idx + 1) as u32, san, uci, time_ms],
+            )?;
         }
+        Ok(())
     }
 
-    fn insert_move(&self, game_id: u32, ply_number: u32, san: &str, uci: &str, time_ms: u32) {
-        if let Err(err) = self.conn.execute(
-            "INSERT INTO game_moves (game_id, ply_number, san, uci, time_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![game_id, ply_number, san, uci, time_ms],
-        ) {
-            eprintln!("failed to save move {ply_number} for game {game_id}: {err}");
-        }
-    }
-
-    /// Fills in the analysis-derived columns on rows `save_moves` already
-    /// created — `UPDATE`s, never `INSERT`s. `eval_cp` comes from
-    /// `centipawn_history` for every ply (index 0 is the start position,
-    /// which has no `game_moves` row of its own, so it's skipped);
-    /// `quality`/`centipawn_loss` come from `move_qualities`, which grades
-    /// every move — both sides — so a fresh analysis fills them on every
-    /// row.
+    /// Fills in the analysis-derived columns on rows `save` already created
+    /// — `UPDATE`s, never `INSERT`s, all in one transaction so a game is
+    /// never left half graded. `eval_cp` comes from `centipawn_history` for
+    /// every ply (index 0 is the start position, which has no `game_moves`
+    /// row of its own, so it's skipped); `quality`/`centipawn_loss` come
+    /// from `move_qualities`, which grades every move — both sides — so a
+    /// fresh analysis fills them on every row.
     pub fn save_move_analysis(
         &self,
         game_id: u32,
         move_qualities: &[MoveQualityEntry],
         centipawn_history: &[i32],
-    ) {
+    ) -> rusqlite::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+
         for (idx, &eval_cp) in centipawn_history.iter().enumerate().skip(1) {
-            let ply_number = idx as u32;
-            if let Err(err) = self.conn.execute(
+            self.conn.execute(
                 "UPDATE game_moves SET eval_cp = ?1 WHERE game_id = ?2 AND ply_number = ?3",
-                params![eval_cp, game_id, ply_number],
-            ) {
-                eprintln!("failed to save eval for game {game_id} move {ply_number}: {err}");
-            }
+                params![eval_cp, game_id, idx as u32],
+            )?;
         }
 
         for entry in move_qualities {
-            if let Err(err) = self.conn.execute(
+            self.conn.execute(
                 "UPDATE game_moves SET quality = ?1, centipawn_loss = ?2
                  WHERE game_id = ?3 AND ply_number = ?4",
                 params![
@@ -259,13 +265,10 @@ impl<'a> GameService<'a> {
                     game_id,
                     entry.ply_number
                 ],
-            ) {
-                eprintln!(
-                    "failed to save quality for game {game_id} move {}: {err}",
-                    entry.ply_number
-                );
-            }
+            )?;
         }
+
+        tx.commit()
     }
 
     /// Every saved game, most recent first — the backing query for a game
@@ -440,7 +443,8 @@ mod tests {
 
             let game_id = GameService::new(&conn)
                 .save(&game, &SaveMeta::koch())
-                .expect("save should succeed");
+                .unwrap()
+                .expect("a new game should be saved");
 
             let (white_player, result): (String, String) = conn
                 .query_row(
@@ -466,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn save_game_is_a_no_op_for_an_unfinished_game() {
+    fn save_is_a_no_op_for_an_unfinished_game() {
         tauri::async_runtime::block_on(async {
             let Some(mut game) = finished_game().await else {
                 return;
@@ -475,7 +479,9 @@ mod tests {
             let conn = test_conn();
 
             assert_eq!(
-                GameService::new(&conn).save_game(&game, &SaveMeta::koch()),
+                GameService::new(&conn)
+                    .save(&game, &SaveMeta::koch())
+                    .unwrap(),
                 None
             );
 
@@ -484,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn save_game_dedups_the_same_move_sequence() {
+    fn save_dedups_the_same_move_sequence() {
         tauri::async_runtime::block_on(async {
             let Some(game) = finished_game().await else {
                 return;
@@ -492,9 +498,9 @@ mod tests {
             let conn = test_conn();
             let service = GameService::new(&conn);
 
-            assert!(service.save_game(&game, &SaveMeta::koch()).is_some());
+            assert!(service.save(&game, &SaveMeta::koch()).unwrap().is_some());
             assert_eq!(
-                service.save_game(&game, &SaveMeta::koch()),
+                service.save(&game, &SaveMeta::koch()).unwrap(),
                 None,
                 "the same move sequence should hit the game_hash conflict"
             );
@@ -511,7 +517,7 @@ mod tests {
             };
             let conn = test_conn();
             let service = GameService::new(&conn);
-            let game_id = service.save(&game, &SaveMeta::koch()).unwrap();
+            let game_id = service.save(&game, &SaveMeta::koch()).unwrap().unwrap();
 
             let move_qualities = vec![MoveQualityEntry {
                 ply_number: 1,
@@ -520,10 +526,12 @@ mod tests {
                 centipawn_loss: 12,
             }];
             // Index 0 is the start position (no game_moves row); ply 1 and
-            // ply 2 are what `save_moves` already created rows for.
+            // ply 2 are what `save` already created rows for.
             let centipawn_history = vec![0, 20, -10];
 
-            service.save_move_analysis(game_id, &move_qualities, &centipawn_history);
+            service
+                .save_move_analysis(game_id, &move_qualities, &centipawn_history)
+                .unwrap();
 
             let move_count: u32 = conn
                 .query_row(
@@ -571,6 +579,7 @@ mod tests {
             let conn = test_conn();
             let game_id = GameService::new(&conn)
                 .save(&game, &SaveMeta::koch())
+                .unwrap()
                 .unwrap();
 
             let games = GameService::new(&conn).get_games().unwrap();
@@ -689,6 +698,7 @@ mod tests {
                 &[10, 20, 30, 40],
                 &meta,
             )
+            .unwrap()
             .unwrap();
 
         let row = GameService::new(&conn).find_game(game_id).unwrap().unwrap();
@@ -720,10 +730,12 @@ mod tests {
         let full = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 *").unwrap();
         assert!(service
             .save_pgn(&full.game, None, None, &[], &SaveMeta::koch())
+            .unwrap()
             .is_some());
         // The same move sequence again is a no-op.
         assert!(service
             .save_pgn(&full.game, None, None, &[], &SaveMeta::koch())
+            .unwrap()
             .is_none());
 
         let broken = koch_engine::PgnGame::parse("1. d4 d5 2. Qxd5 *").unwrap();
@@ -734,8 +746,30 @@ mod tests {
         };
         let game_id = service
             .save_pgn(&broken.game, None, None, &[], &meta)
+            .unwrap()
             .unwrap();
         assert!(service.find_game(game_id).unwrap().unwrap().partial_import);
+    }
+
+    #[test]
+    fn a_failed_move_insert_leaves_no_game_behind() {
+        let conn = test_conn();
+        // Make every `game_moves` insert fail, after the `games` row is in.
+        conn.execute_batch(
+            "CREATE TRIGGER fail_moves BEFORE INSERT ON game_moves
+             BEGIN SELECT RAISE(ABORT, 'no moves today'); END;",
+        )
+        .unwrap();
+        let parsed = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 *").unwrap();
+
+        let saved =
+            GameService::new(&conn).save_pgn(&parsed.game, None, None, &[], &SaveMeta::koch());
+
+        assert!(saved.is_err());
+        let games: i64 = conn
+            .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(games, 0, "the game row should roll back with its moves");
     }
 
     #[test]
@@ -760,6 +794,7 @@ mod tests {
                     ..SaveMeta::koch()
                 },
             )
+            .unwrap()
             .unwrap();
         service
             .set_human_color(import_id, PieceColor::Black)
@@ -786,6 +821,7 @@ mod tests {
         let parsed = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 *").unwrap();
         let game_id = service
             .save_pgn(&parsed.game, None, None, &[], &SaveMeta::koch())
+            .unwrap()
             .unwrap();
 
         service.set_human_color(game_id, PieceColor::Black).unwrap();
@@ -823,6 +859,7 @@ mod tests {
         let parsed = koch_engine::PgnGame::parse("1. e4 e5 2. Nf3 1-0").unwrap();
         let game_id = service
             .save_pgn(&parsed.game, None, None, &[], &SaveMeta::koch())
+            .unwrap()
             .unwrap();
         service.set_human_color(game_id, PieceColor::Black).unwrap();
 
