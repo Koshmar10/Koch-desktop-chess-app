@@ -1,3 +1,6 @@
+import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
+import type { MoveQuality } from "../../api/bindings/MoveQuality";
+
 // What the Analyzer screen renders. The engine's output types are generated
 // by ts-rs from the live engine's Rust structs (KOCH-10) and re-exported
 // here, so they can't drift from what the backend actually sends.
@@ -9,6 +12,50 @@
 export type { EvalScore } from "../../api/bindings/EvalScore";
 export type { PvLine } from "../../api/bindings/PvLine";
 export type { EngineSnapshot } from "../../api/bindings/EngineSnapshot";
+
+/**
+ * Which screen the analyzer is: a saved game, or the sandbox. It's the
+ * route, not stored state (see `AnalyzerProvider`).
+ */
+export type AnalyzerMode = "game" | "sandbox";
+
+/**
+ * Ordered widest scope first: the game as a whole, then the position in
+ * front of you, then what the engine makes of it.
+ *
+ * Engine and Position are also split by *what changes them* — Engine
+ * repaints several times a second while a search runs, Position only when
+ * the viewed ply changes. Interleaving those in one scroll means half the
+ * panel is always flickering under the half you're reading.
+ */
+export type PanelTab = "game" | "position" | "engine";
+
+/**
+ * One point on the eval timeline: a move with both a stored eval and a
+ * grade. `index` is the move's ply — the number `goToPly` takes — and
+ * `score` is White-relative centipawns.
+ */
+export interface TimelineMove {
+  index: number;
+  score: number;
+  quality: MoveQuality;
+}
+
+// The toolbar's mode-specific buttons. A null handler means the action has
+// nothing to act on right now, and its button shows disabled.
+export interface GameActions {
+  analysisStage: AnalysisStage | undefined;
+  // Null for an import that's never been analysed: it has no side to grade
+  // yet, and History is where that gets picked.
+  onReanalyze: (() => void) | null;
+  onTryInSandbox: (() => void) | null;
+  onNextMistake: (() => void) | null;
+}
+
+export interface SandboxActions {
+  onReset: () => void;
+  onUndo: (() => void) | null;
+}
 
 /**
  * One value rather than the old `engineRunning` + `engineLoading` pair,

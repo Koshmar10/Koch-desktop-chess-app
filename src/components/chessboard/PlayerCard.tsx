@@ -1,5 +1,5 @@
 import { Clock, Loader2 } from "lucide-react";
-import { PieceAvatar } from "./PieceAvatar";
+import PieceAvatar from "./PieceAvatar";
 import { PIECE_IMAGES } from "./lib/pieceImages";
 import type { PieceColor, PieceKind } from "./lib/types";
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
@@ -37,8 +37,8 @@ const CAPTURED_PIECE_FILTER: Record<PieceColor, string> = {
   black: "drop-shadow(0 0 1px white)",
 };
 
-const CAPTURED_PIECE_SIZE = 28 * 0.9;
-const CAPTURED_PIECE_OVERLAP = -12;
+const CAPTURED_PIECE_SIZE_PX = 28 * 0.9;
+const CAPTURED_PIECE_OVERLAP_PX = -12;
 const CAPTURED_PIECE_BASE_Z_INDEX = 10;
 
 interface PlayerAvatarProps {
@@ -96,9 +96,9 @@ const TakenPieces = ({ piecesTaken, materialDiff }: TakenPiecesProps) => {
             alt=""
             style={{
               zIndex: CAPTURED_PIECE_BASE_Z_INDEX + idx,
-              width: CAPTURED_PIECE_SIZE,
-              height: CAPTURED_PIECE_SIZE,
-              marginLeft: idx === 0 ? 0 : CAPTURED_PIECE_OVERLAP,
+              width: CAPTURED_PIECE_SIZE_PX,
+              height: CAPTURED_PIECE_SIZE_PX,
+              marginLeft: idx === 0 ? 0 : CAPTURED_PIECE_OVERLAP_PX,
               filter: CAPTURED_PIECE_FILTER[pieceColor],
             }}
             draggable={false}
@@ -113,7 +113,7 @@ const TakenPieces = ({ piecesTaken, materialDiff }: TakenPiecesProps) => {
   );
 };
 
-export const PlayerCard = ({
+const PlayerCard = ({
   display,
   playerInfo,
   color,
@@ -155,3 +155,5 @@ export const PlayerCard = ({
     </div>
   );
 };
+
+export default PlayerCard;

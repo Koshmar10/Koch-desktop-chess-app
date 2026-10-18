@@ -1,17 +1,18 @@
 import type { LucideIcon } from "lucide-react";
-import { Tooltip } from "./Tooltip";
+import Tooltip from "./Tooltip";
 
 // One size for every icon button in the app, so a toolbar, the play
 // controls and the history bar read as the same kind of control.
-const ICON_SIZE = 18;
+const ICON_SIZE_PX = 18;
 
-const buttonCls =
+const BUTTON_CLASS =
   "relative text-foreground/90 transition-all duration-150 ease-out p-2 rounded-md border-[1px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 
 // A toggle that's currently on keeps its filled look instead of only
 // showing it on hover, so the state is readable without pointing at it.
-const activeCls = "border-primary bg-primary/60 disabled:hover:bg-primary/60";
-const inactiveCls =
+const ACTIVE_CLASS =
+  "border-primary bg-primary/60 disabled:hover:bg-primary/60";
+const INACTIVE_CLASS =
   "border-primary/20 bg-card hover:bg-primary/50 disabled:hover:bg-card";
 
 interface TooltipButtonProps {
@@ -31,7 +32,7 @@ interface TooltipButtonProps {
   active?: boolean;
 }
 
-export const TooltipButton = ({
+const TooltipButton = ({
   icon: Icon,
   iconClassName,
   tooltip,
@@ -43,12 +44,14 @@ export const TooltipButton = ({
     <Tooltip label={tooltip} color="primary">
       <button
         type="button"
-        className={`${buttonCls} ${active ? activeCls : inactiveCls}`}
+        className={`${BUTTON_CLASS} ${active ? ACTIVE_CLASS : INACTIVE_CLASS}`}
         onClick={onClick}
         disabled={disabled}
       >
-        <Icon size={ICON_SIZE} className={iconClassName} />
+        <Icon size={ICON_SIZE_PX} className={iconClassName} />
       </button>
     </Tooltip>
   );
 };
+
+export default TooltipButton;

@@ -7,7 +7,7 @@ import {
   Swords,
   type LucideIcon,
 } from "lucide-react";
-import { TooltipButton } from "../../components/TooltipButton";
+import TooltipButton from "../../components/TooltipButton";
 import Dropdown from "../../components/Dropdown";
 import {
   GAME_MODES,
@@ -22,7 +22,7 @@ import {
 } from "./GameContext";
 
 // For the mode menu's rows. The buttons size their own icons.
-const MENU_ICON_SIZE = 24;
+const MENU_ICON_SIZE_PX = 24;
 
 // One icon (a circle split into a filled half + an outline half), rotated
 // per state instead of swapping to a different icon each time — 180° flips
@@ -87,7 +87,7 @@ const ModeDropdownMenu = ({
           }}
         >
           <div className="flex items-center gap-3">
-            <Icon size={MENU_ICON_SIZE} className="text-primary" />
+            <Icon size={MENU_ICON_SIZE_PX} className="text-primary" />
             <span>{mode}</span>
           </div>
           <span>{modeMinutesLabel(mode)}</span>

@@ -37,7 +37,7 @@ interface GameCardProps {
   onDelete?: (game: GameSummary) => void;
 }
 
-const MODE_ICON_SIZE = 18;
+const MODE_ICON_SIZE_PX = 18;
 
 // The card's own touch: each mode's icon in its own colour, so a page of
 // cards sorts itself by speed at a glance. The icons are shared.
@@ -50,7 +50,7 @@ const MODE_COLOR_CLASS: Record<GameMode, string> = {
 
 const ModeIcon = ({ mode }: { mode: GameMode }) => {
   const Icon = MODE_ICON[mode];
-  return <Icon size={MODE_ICON_SIZE} className={MODE_COLOR_CLASS[mode]} />;
+  return <Icon size={MODE_ICON_SIZE_PX} className={MODE_COLOR_CLASS[mode]} />;
 };
 
 const PLAYER_DOT_CLASS: Record<PieceColor, string> = {
@@ -59,7 +59,7 @@ const PLAYER_DOT_CLASS: Record<PieceColor, string> = {
 };
 const CardSeparator = () => <hr className="border-border my-[1px]" />;
 
-const ANALYSIS_ICON_SIZE = 18;
+const ANALYSIS_ICON_SIZE_PX = 18;
 
 const AnalysisRing = ({ percent }: { percent: number }) => {
   const radius = 8;
@@ -68,24 +68,24 @@ const AnalysisRing = ({ percent }: { percent: number }) => {
     <span
       title={`Analysing… ${percent}%`}
       className="relative inline-flex animate-pulse items-center justify-center"
-      style={{ width: ANALYSIS_ICON_SIZE, height: ANALYSIS_ICON_SIZE }}
+      style={{ width: ANALYSIS_ICON_SIZE_PX, height: ANALYSIS_ICON_SIZE_PX }}
     >
       <svg
-        width={ANALYSIS_ICON_SIZE}
-        height={ANALYSIS_ICON_SIZE}
+        width={ANALYSIS_ICON_SIZE_PX}
+        height={ANALYSIS_ICON_SIZE_PX}
         className="-rotate-90"
       >
         <circle
-          cx={ANALYSIS_ICON_SIZE / 2}
-          cy={ANALYSIS_ICON_SIZE / 2}
+          cx={ANALYSIS_ICON_SIZE_PX / 2}
+          cy={ANALYSIS_ICON_SIZE_PX / 2}
           r={radius}
           fill="none"
           strokeWidth={2}
           className="stroke-border"
         />
         <circle
-          cx={ANALYSIS_ICON_SIZE / 2}
-          cy={ANALYSIS_ICON_SIZE / 2}
+          cx={ANALYSIS_ICON_SIZE_PX / 2}
+          cy={ANALYSIS_ICON_SIZE_PX / 2}
           r={radius}
           fill="none"
           strokeWidth={2}
@@ -115,7 +115,10 @@ const AnalysisIndicator = ({
   if (stage?.kind === "Queued") {
     return (
       <span title="Analysis queued">
-        <Hourglass size={ANALYSIS_ICON_SIZE} className="text-foreground/50" />
+        <Hourglass
+          size={ANALYSIS_ICON_SIZE_PX}
+          className="text-foreground/50"
+        />
       </span>
     );
   }
@@ -123,7 +126,7 @@ const AnalysisIndicator = ({
   return (
     <span title={analysed ? "Analysed" : "Not analysed"}>
       <ChartSpline
-        size={ANALYSIS_ICON_SIZE}
+        size={ANALYSIS_ICON_SIZE_PX}
         className={analysed ? "text-primary" : "text-foreground/25"}
       />
     </span>
@@ -140,7 +143,7 @@ interface GameActionsMenuProps {
 
 const MENU_ITEM_CLASS =
   "flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-white/10 cursor-pointer";
-const MENU_ICONS_SIZE = 14;
+const MENU_ICON_SIZE_PX = 14;
 
 // Delete is two-step: the row swaps to a confirm/cancel pair before it runs.
 const GameActionsMenu = ({
@@ -165,7 +168,7 @@ const GameActionsMenu = ({
         disabled={!onAnalyze}
         onClick={run(onAnalyze)}
       >
-        <RotateCcw size={MENU_ICONS_SIZE} /> Analyze
+        <RotateCcw size={MENU_ICON_SIZE_PX} /> Analyze
       </button>
       <button
         type="button"
@@ -173,7 +176,7 @@ const GameActionsMenu = ({
         disabled={!onOpen}
         onClick={run(onOpen)}
       >
-        <Eye size={MENU_ICONS_SIZE} /> Open
+        <Eye size={MENU_ICON_SIZE_PX} /> Open
       </button>
       <button
         type="button"
@@ -181,7 +184,7 @@ const GameActionsMenu = ({
         disabled={!onExportPgn}
         onClick={run(onExportPgn)}
       >
-        <Download size={MENU_ICONS_SIZE} /> Export PGN
+        <Download size={MENU_ICON_SIZE_PX} /> Export PGN
       </button>
 
       {confirmingDelete ? (
@@ -194,7 +197,7 @@ const GameActionsMenu = ({
               className="rounded p-0.5 hover:bg-white/10"
               onClick={run(onDelete)}
             >
-              <Check size={MENU_ICONS_SIZE} />
+              <Check size={MENU_ICON_SIZE_PX} />
             </button>
             <button
               type="button"
@@ -202,7 +205,7 @@ const GameActionsMenu = ({
               className="rounded p-0.5 text-foreground/60 hover:bg-white/10"
               onClick={() => setConfirmingDelete(false)}
             >
-              <X size={MENU_ICONS_SIZE} />
+              <X size={MENU_ICON_SIZE_PX} />
             </button>
           </div>
         </div>
@@ -213,7 +216,7 @@ const GameActionsMenu = ({
           disabled={!onDelete}
           onClick={() => setConfirmingDelete(true)}
         >
-          <Trash2 size={MENU_ICONS_SIZE} /> Delete
+          <Trash2 size={MENU_ICON_SIZE_PX} /> Delete
         </button>
       )}
     </div>
@@ -262,13 +265,13 @@ const GameCard = ({
           />
           {gameSummary.source !== "koch" && (
             <span title={`Imported from ${gameSummary.source}`}>
-              <Import size={ANALYSIS_ICON_SIZE} />
+              <Import size={ANALYSIS_ICON_SIZE_PX} />
             </span>
           )}
           {gameSummary.partial_import && (
             <span title="Imported partially — some moves couldn't be read">
               <TriangleAlert
-                size={ANALYSIS_ICON_SIZE}
+                size={ANALYSIS_ICON_SIZE_PX}
                 className="text-amber-500"
               />
             </span>
@@ -283,7 +286,7 @@ const GameCard = ({
               onClick={toggle}
               className="p-1 rounded-md text-foreground/50 bg-accent/20 hover:text-foreground hover:bg-accent/50"
             >
-              <MoreVertical size={MODE_ICON_SIZE} />
+              <MoreVertical size={MODE_ICON_SIZE_PX} />
             </button>
           )}
         >

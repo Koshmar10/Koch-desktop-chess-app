@@ -70,10 +70,10 @@ export interface GameContextValue {
 
 export const GameContext = createContext<GameContextValue | null>(null);
 
-export function useGameContext(): GameContextValue {
+export const useGameContext = (): GameContextValue => {
   const ctx = useContext(GameContext);
   if (!ctx) {
     throw new Error("useGameContext must be used inside <GameProvider>");
   }
   return ctx;
-}
+};

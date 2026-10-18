@@ -4,7 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { TooltipButton } from "../../../components/TooltipButton";
+import TooltipButton from "../../../components/TooltipButton";
 import { START_POSITION_PLY } from "../types";
 
 interface MoveNavigationProps {

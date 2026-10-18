@@ -51,7 +51,7 @@ interface PieceAvatarProps {
   title?: string;
 }
 
-export const PieceAvatar = ({
+const PieceAvatar = ({
   color,
   kind = "king",
   size,
@@ -76,3 +76,5 @@ export const PieceAvatar = ({
     </div>
   );
 };
+
+export default PieceAvatar;

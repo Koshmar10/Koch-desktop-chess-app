@@ -1,6 +1,6 @@
 import { useState } from "react";
 import GameCardsSection from "./GameCardsSection";
-import ActivityChart from "./GamePlaytimeCalendar";
+import GamePlaytimeCalendar from "./GamePlaytimeCalendar";
 import HistoryToolbar from "./HistoryToolbar";
 
 const History = () => {
@@ -8,7 +8,7 @@ const History = () => {
 
   return (
     <div className="w-full h-full flex flex-col">
-      <ActivityChart />
+      <GamePlaytimeCalendar />
       <HistoryToolbar onImported={() => setReloadKey((key) => key + 1)} />
       <GameCardsSection reloadKey={reloadKey} />
     </div>

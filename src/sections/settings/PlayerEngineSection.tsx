@@ -4,7 +4,7 @@ import { NumberSetting, ToggleSetting } from "../../components/controls";
 import { ENGINE_LIMITS, MAX_THREADS } from "../../lib/settings";
 import { isDirty, useDraft, type SectionState } from "./draft";
 
-export const PlayerEngineSection = ({
+const PlayerEngineSection = ({
   saved,
   onSaved,
 }: SectionState<PlayerEngineSettings>) => {
@@ -63,3 +63,5 @@ export const PlayerEngineSection = ({
     </Section>
   );
 };
+
+export default PlayerEngineSection;

@@ -6,7 +6,7 @@ import {
   getScoreCardStyle,
   resultToken,
 } from "../../../lib/gameSummary";
-import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
+import { BOARD_SIZE_PX } from "../../../components/chessboard/lib/constants";
 import DialogCard, { WIDE_DIALOG_PX } from "../../../components/DialogCard";
 import EmptyNote from "../../../components/EmptyNote";
 
@@ -15,7 +15,7 @@ const UNKNOWN = "—";
 
 // Most of the board's height: a fixed height is what lets the list scroll
 // inside the card, and leaving a margin keeps the board visible around it.
-const PICKER_HEIGHT_PX = BOARD_PIXEL_SIZE * 0.8;
+const PICKER_HEIGHT_PX = BOARD_SIZE_PX * 0.8;
 
 interface GameListCardProps {
   game: GameSummary;

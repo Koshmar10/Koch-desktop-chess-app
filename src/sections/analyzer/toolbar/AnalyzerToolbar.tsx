@@ -16,14 +16,18 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import type { AnalysisStage } from "../../../api/bindings/AnalysisStage";
 import Dropdown from "../../../components/Dropdown";
-import { TooltipButton } from "../../../components/TooltipButton";
-import { START_POSITION_PLY } from "../types";
+import TooltipButton from "../../../components/TooltipButton";
+import {
+  START_POSITION_PLY,
+  type AnalyzerMode,
+  type GameActions,
+  type SandboxActions,
+} from "../types";
 import MoveNavigation from "./MoveNavigation";
 import { useAnalyzerContext } from "../AnalyzerContext";
-import type { AnalyzerMode } from "../AnalyzerProvider";
 
 // For the mode menu's rows. The buttons size their own icons.
-const MENU_ICON_SIZE = 18;
+const MENU_ICON_SIZE_PX = 18;
 
 // Game shares the side panel's Game-tab icon, so the two read as one idea.
 const MODES: AnalyzerMode[] = ["game", "sandbox"];
@@ -40,22 +44,6 @@ const Group = ({ children }: { children: React.ReactNode }) => (
     {children}
   </div>
 );
-
-// A null handler means the action has nothing to act on right now, and its
-// button shows disabled.
-export interface GameActions {
-  analysisStage: AnalysisStage | undefined;
-  // Null for an import that's never been analysed: it has no side to grade
-  // yet, and History is where that gets picked.
-  onReanalyze: (() => void) | null;
-  onTryInSandbox: (() => void) | null;
-  onNextMistake: (() => void) | null;
-}
-
-export interface SandboxActions {
-  onReset: () => void;
-  onUndo: (() => void) | null;
-}
 
 const reanalyzeTooltip = (
   stage: AnalysisStage | undefined,
@@ -214,7 +202,7 @@ const AnalyzerToolbar = ({
                         close();
                       }}
                     >
-                      <Icon size={MENU_ICON_SIZE} />
+                      <Icon size={MENU_ICON_SIZE_PX} />
                       {mode}
                     </button>
                   );

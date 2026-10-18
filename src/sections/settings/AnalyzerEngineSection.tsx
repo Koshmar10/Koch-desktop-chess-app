@@ -22,7 +22,7 @@ const LIMIT_HINT: Record<SearchLimitMode, string> = {
     "Search-tree positions visited per move. Machine-independent, so a run costs the same effort on any computer — but the wall-clock time still grows with the count.",
 };
 
-export const AnalyzerEngineSection = ({
+const AnalyzerEngineSection = ({
   saved,
   onSaved,
 }: SectionState<AnalyzerEngineSettings>) => {
@@ -99,3 +99,5 @@ export const AnalyzerEngineSection = ({
     </Section>
   );
 };
+
+export default AnalyzerEngineSection;

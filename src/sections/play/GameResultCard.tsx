@@ -6,7 +6,7 @@ import PostGameStats from "./PostGameStats";
 import { useGameContext } from "./GameContext";
 import type { GameScore } from "../../api/bindings/GameScore";
 
-const ICON_SIZE = 16;
+const ICON_SIZE_PX = 16;
 const MOCK_ELO_DELTA = 18;
 const ELO_COUNT_UP_MS = 1000;
 const MESSAGE_CYCLE_MS = 2200;
@@ -113,11 +113,11 @@ interface ResultActionsProps {
 const ResultActions = ({ onNewGame }: ResultActionsProps) => (
   <div className="flex items-center gap-3">
     <OutlineButton onClick={onNewGame}>
-      <PlayIcon size={ICON_SIZE} />
+      <PlayIcon size={ICON_SIZE_PX} />
       New Game
     </OutlineButton>
     <OutlineButton>
-      <Microscope size={ICON_SIZE} />
+      <Microscope size={ICON_SIZE_PX} />
       Analyze
     </OutlineButton>
   </div>

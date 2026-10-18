@@ -14,7 +14,7 @@ interface RankProps {
   labelColor: string;
 }
 
-const Rank: React.FC<RankProps> = ({ rankLabel, labelColor }: RankProps) => {
+const Rank = ({ rankLabel, labelColor }: RankProps) => {
   if (!rankLabel) {
     return;
   }
@@ -32,7 +32,7 @@ interface FileProps {
   labelColor: string;
 }
 
-const File: React.FC<FileProps> = ({ fileLabel, labelColor }: FileProps) => {
+const File = ({ fileLabel, labelColor }: FileProps) => {
   if (!fileLabel) {
     return;
   }
@@ -45,15 +45,15 @@ const File: React.FC<FileProps> = ({ fileLabel, labelColor }: FileProps) => {
   );
 };
 
-const LegalMoveDot: React.FC = () => (
+const LegalMoveDot = () => (
   <div className="size-[50%] rounded-full bg-gray-600/70" />
 );
 
-const LegalMoveRing: React.FC = () => (
+const LegalMoveRing = () => (
   <div className="size-[50%] rounded-full border-6 border-gray-600/70 box-border" />
 );
 
-const Squares: React.FC = () => {
+const Squares = () => {
   const {
     boardSize,
     squareSize,

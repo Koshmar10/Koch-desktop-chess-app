@@ -17,13 +17,10 @@ import type {
   SandboxAnalyzerContextValue,
 } from "./AnalyzerContext";
 import { AnalyzerContext } from "./AnalyzerContext";
-import type { PanelTab } from "./panel/SidePanel";
-import { START_POSITION_PLY } from "./types";
+import { START_POSITION_PLY, type PanelTab } from "./types";
 import { useGameReplay } from "./useGameReplay";
 
-export type AnalyzerMode = "game" | "sandbox";
-
-export interface AnalyzerProviderProps {
+interface AnalyzerProviderProps {
   children: ReactNode;
 }
 
@@ -33,7 +30,7 @@ export interface AnalyzerProviderProps {
  * stored — it's the route (`/analysis` is the sandbox, `/analysis/:gameId`
  * a game), so it can never disagree with what's on screen.
  */
-export function AnalyzerProvider({ children }: AnalyzerProviderProps) {
+const AnalyzerProvider = ({ children }: AnalyzerProviderProps) => {
   const [loadedGameId, setLoadedGameId] = useState<number | null>(null);
   const [isCopyOverlayOpen, setIsCopyOverlayOpen] = useState<boolean>(false);
   const [isGameSelectOverlayOpen, setIsGameSelectOverlayOpen] =
@@ -185,4 +182,6 @@ export function AnalyzerProvider({ children }: AnalyzerProviderProps) {
       {children}
     </AnalyzerContext.Provider>
   );
-}
+};
+
+export default AnalyzerProvider;

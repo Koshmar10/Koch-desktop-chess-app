@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
-import { LoadingSpinner } from "../../components/LoadingSpinner";
+import LoadingSpinner from "../../components/LoadingSpinner";
 import Chessboard from "../../components/chessboard/Chessboard";
 import Squares from "../../components/chessboard/layers/Squares";
 import PieceLayer from "../../components/chessboard/layers/PieceLayer";
@@ -15,17 +15,14 @@ import ArrowLayer from "../../components/chessboard/layers/ArrowLayer";
 import OverlayLayer from "../../components/chessboard/layers/OverlayLayer";
 import BoardOverlay from "../../components/chessboard/layers/BoardOverlay";
 import { STARTING_POSITION } from "../../components/chessboard/lib/startingPosition";
-import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
+import { BOARD_SIZE_PX } from "../../components/chessboard/lib/constants";
 import { stopLiveEngine, updateLiveEnginePosition } from "../../api/analyzer";
 import SidePanel from "./panel/SidePanel";
 import { MaskSelectionContext } from "./panel/maskSelection";
-import AnalyzerToolbar, {
-  type GameActions,
-  type SandboxActions,
-} from "./toolbar/AnalyzerToolbar";
+import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
 import { nextMistakePly } from "./toolbar/nextMistake";
 import PanelPlaceholder from "./PanelPlaceholder";
-import TimelinePlaceholder from "./board/TimelinePlaceholder";
+import EvalTimeline from "./board/EvalTimeline";
 import EvalBar from "./board/EvalBar";
 import { cpScore, topLineMove, topLineScore } from "./board/evalBar";
 import { clamp } from "../../lib/math";
@@ -35,13 +32,15 @@ import {
   positionMasks,
   threatMask,
 } from "./overlays/masks";
-import { useLiveEngine } from "./useGameReplay";
+import { useLiveEngine } from "./useLiveEngine";
 import {
   START_POSITION_PLY,
   type EngineStatus,
+  type GameActions,
   type MaskSelection,
+  type SandboxActions,
+  type TimelineMove,
 } from "./types";
-import type { MoveQuality } from "../../api/bindings/MoveQuality";
 import type { Square } from "../../api/bindings/Square";
 import { useAnalyzerContext } from "./AnalyzerContext";
 import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
@@ -50,13 +49,7 @@ import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
 import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 
 const CHAT_PANEL_WIDTH_PX = 320;
-const PLACEHOLDER_ICON_SIZE = 28;
-
-export type TimelineMove = {
-  index: number;
-  score: number;
-  quality: MoveQuality;
-};
+const PLACEHOLDER_ICON_SIZE_PX = 28;
 
 const GameLoadError = ({ message }: { message: string }) => (
   <div className="max-w-sm rounded-lg border-[1px] border-destructive/50 bg-card p-4 text-sm text-foreground/80">
@@ -69,13 +62,14 @@ const GameLoadError = ({ message }: { message: string }) => (
  *
  * With a `gameId` it shows a saved game: every position, its findings and
  * its stored analysis come from one backend replay (`load_game_replay`).
- * Without one it's the sandbox: the starting position with no game behind
- * it, until sandbox play (KOCH-12) lets you move pieces. Either way the
- * live engine (KOCH-10) searches the position on screen.
+ * Without one it's the sandbox, where you play moves from any position you
+ * start or load. Either way the live engine searches the position on
+ * screen.
  *
- * The local state below is deliberately the *whole* set, and it stays small
- * enough to read in one go. KOCH-11 replaces it with a reducer/context; the
- * thing being avoided is the old Analyzer.tsx, which grew to 27 independent
+ * What outlives the screen — the loaded game, each mode's place and
+ * overlays — lives in `AnalyzerProvider`; the local state below is only
+ * what belongs to this visit, small enough to read in one go. The thing
+ * being avoided is the old Analyzer.tsx, which grew to 27 independent
  * `useState` calls in one component (KOCH-HANDOFF.md §8).
  */
 const Analyzer = ({ gameId }: { gameId: number | null }) => {
@@ -140,9 +134,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     [positions],
   );
   // One point per move that has both a stored eval and a grade, so an
-  // unanalysed game — and the sandbox — has none. `index` is the move's
-  // ply — the number `goToPly` takes — and `score` is White-relative
-  // centipawns.
+  // unanalysed game — and the sandbox — has none.
   const timelineMoves: TimelineMove[] = useMemo(
     () =>
       positions
@@ -385,7 +377,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
           <div
             className="grid items-start gap-x-6 gap-y-3"
             style={{
-              gridTemplateColumns: `auto ${BOARD_PIXEL_SIZE}px auto`,
+              gridTemplateColumns: `auto ${BOARD_SIZE_PX}px auto`,
             }}
           >
             <AnalyzerToolbar
@@ -489,7 +481,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
             </div>
 
             <div className="col-start-2 row-start-3">
-              <TimelinePlaceholder
+              <EvalTimeline
                 moves={timelineMoves}
                 viewedPly={viewedPly}
                 onSelectPly={goToPly}
@@ -502,7 +494,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
       {isChatOpen && (
         <PanelPlaceholder
           title="Assistant"
-          icon={<MessageSquareText size={PLACEHOLDER_ICON_SIZE} />}
+          icon={<MessageSquareText size={PLACEHOLDER_ICON_SIZE_PX} />}
           blockedOn="KOCH-16 — blocked on the AI layer (KOCH-19)"
           widthPx={CHAT_PANEL_WIDTH_PX}
           borderSide="left"

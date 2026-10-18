@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadGameReplay, refreshLiveEngineSession } from "../../api/analyzer";
-import type { EngineSnapshot } from "../../api/bindings/EngineSnapshot";
 import type { GameReplay } from "../../api/bindings/GameReplay";
-import { useAppEvent } from "../../app/useAppEvent";
 
 interface Loaded {
   // Which game this result belongs to. Kept with the result rather than
@@ -13,16 +11,6 @@ interface Loaded {
   replay: GameReplay | null;
   error: string | null;
 }
-
-/**
- * The live engine's latest full set of lines, for whichever position it was
- * last searching — the caller checks its `position_key`.
- */
-export const useLiveEngine = (): EngineSnapshot | null => {
-  const [liveSnapshot, setLiveSnapshot] = useState<EngineSnapshot | null>(null);
-  useAppEvent("pvline", setLiveSnapshot);
-  return liveSnapshot;
-};
 
 /**
  * Loads a saved game for the analyzer, and keeps the live engine session

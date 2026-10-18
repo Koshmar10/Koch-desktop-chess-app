@@ -4,10 +4,10 @@ import Squares from "../../components/chessboard/layers/Squares";
 import PieceLayer from "../../components/chessboard/layers/PieceLayer";
 import ArrowLayer from "../../components/chessboard/layers/ArrowLayer";
 import BoardOverlay from "../../components/chessboard/layers/BoardOverlay";
-import { PlayerCard } from "../../components/chessboard/PlayerCard";
-import { LoadingSpinner } from "../../components/LoadingSpinner";
+import PlayerCard from "../../components/chessboard/PlayerCard";
+import LoadingSpinner from "../../components/LoadingSpinner";
 import { STARTING_POSITION } from "../../components/chessboard/lib/startingPosition";
-import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
+import { BOARD_SIZE_PX } from "../../components/chessboard/lib/constants";
 import { getTakenPieces } from "../../components/chessboard/lib/takenPieces";
 import PlayControls from "./PlayControls";
 import GameSidePanel from "./GameSidePanel";
@@ -137,7 +137,7 @@ const Play = () => {
       <div className="flex flex-row gap-4">
         <div
           className="flex flex-col justify-center gap-2 w-full"
-          style={{ maxWidth: BOARD_PIXEL_SIZE }}
+          style={{ maxWidth: BOARD_SIZE_PX }}
         >
           <PlayerCard display={true} {...topCard} />
           <Chessboard

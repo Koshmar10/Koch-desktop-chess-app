@@ -6,7 +6,7 @@ import DialogCard, { WIDE_DIALOG_PX } from "../../components/DialogCard";
 import { useGameContext } from "./GameContext";
 import { buildLiveGamePgn } from "./buildPgn";
 
-const ICON_SIZE = 16;
+const ICON_SIZE_PX = 16;
 const PGN_ROWS = 14;
 
 const SharePgnCard = () => {
@@ -57,7 +57,11 @@ const SharePgnCard = () => {
 
       <div className="flex justify-end">
         <PrimaryButton onClick={copy}>
-          {copied ? <Check size={ICON_SIZE} /> : <Copy size={ICON_SIZE} />}
+          {copied ? (
+            <Check size={ICON_SIZE_PX} />
+          ) : (
+            <Copy size={ICON_SIZE_PX} />
+          )}
           {copied ? "Copied" : "Copy"}
         </PrimaryButton>
       </div>

@@ -7,10 +7,7 @@ import { SecretInput } from "../../components/controls";
 import { TEXT_INPUT_CLASS } from "../../components/controlStyles";
 import { isDirty, useDraft, type SectionState } from "./draft";
 
-export const AppSettingsSection = ({
-  saved,
-  onSaved,
-}: SectionState<AppSettings>) => {
+const AppSettingsSection = ({ saved, onSaved }: SectionState<AppSettings>) => {
   const { theme, toggleTheme } = useAppContext();
   const [draft, setDraft] = useDraft(saved);
 
@@ -79,3 +76,5 @@ export const AppSettingsSection = ({
     </Section>
   );
 };
+
+export default AppSettingsSection;
