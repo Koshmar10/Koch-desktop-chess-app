@@ -1,4 +1,4 @@
-use koch_engine::{fen::DEFAULT_FEN, FenString};
+use koch_engine::FenString;
 use tauri::AppHandle;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -19,7 +19,7 @@ pub fn update_live_engine_position(
     // Validated before taking the lock: no reason to hold it while parsing.
     let fen = match starting_position {
         Some(fen) => FenString::try_from(fen)?,
-        None => FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is valid"),
+        None => FenString::default(),
     };
 
     let mut slot = state.live_engine_handle.lock()?;
@@ -28,12 +28,10 @@ pub fn update_live_engine_position(
         return Ok(());
     };
 
-    // Stop whatever is searching now; the session can't read the new `Go`
-    // until that search ends, and an infinite one never ends on its own.
+    // The new search can't start until the current one stops.
+    handle.cancel_search();
     let cancel = CancellationToken::new();
-    if let Some(previous) = handle.cancel.replace(cancel.clone()) {
-        previous.cancel();
-    }
+    handle.cancel = Some(cancel.clone());
     handle.engine_tx.send(EngineCommand::Go {
         fen,
         moves,
@@ -56,9 +54,7 @@ pub fn apply_live_engine_settings(
         return Ok(());
     };
 
-    if let Some(cancel) = &handle.cancel {
-        cancel.cancel();
-    }
+    handle.cancel_search();
     handle.settings = settings;
     handle.engine_tx.send(EngineCommand::SetOptions(settings))?;
     Ok(())
@@ -77,8 +73,8 @@ pub fn get_live_engine_settings(
 #[tauri::command]
 pub fn stop_live_engine(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
     let slot = state.live_engine_handle.lock()?;
-    if let Some(cancel) = slot.as_ref().and_then(|handle| handle.cancel.as_ref()) {
-        cancel.cancel();
+    if let Some(handle) = slot.as_ref() {
+        handle.cancel_search();
     }
     Ok(())
 }
@@ -99,8 +95,8 @@ pub fn refresh_live_engine_session(
     }
     // The old session is stuck inside its search until that's cancelled —
     // only then does it see its sender dropped below and quit.
-    if let Some(cancel) = slot.as_ref().and_then(|handle| handle.cancel.as_ref()) {
-        cancel.cancel();
+    if let Some(handle) = slot.as_ref() {
+        handle.cancel_search();
     }
     // The options carry over: they belong to the app run, not to a game.
     let settings = slot

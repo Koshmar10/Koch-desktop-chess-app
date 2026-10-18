@@ -13,7 +13,7 @@ use crate::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new())
+        .manage(AppState::default())
         .setup(|app| {
             let db = db::init(app.handle())?;
             let log_id = {

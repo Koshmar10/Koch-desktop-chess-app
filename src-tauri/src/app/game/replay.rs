@@ -15,7 +15,7 @@
 //! and a copy that could fall out of step with the analyzer.
 
 use koch_engine::analyzer::PositionFindings;
-use koch_engine::{Board, FenString};
+use koch_engine::{Board, FenString, MoveStruct};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -83,32 +83,35 @@ pub(crate) fn fen_of(board: &Board) -> String {
     FenString::from(board).as_str().to_string()
 }
 
-pub(crate) fn start_position(board: &Board) -> ReplayPosition {
-    ReplayPosition {
-        pieces: pieces_of(board),
-        fen: fen_of(board),
-        findings: PositionFindings::from(board),
-        last_move: None,
-        san: None,
-        uci: None,
-        time_ms: None,
-        eval_cp: None,
-        quality: None,
+impl ReplayPosition {
+    /// `board`'s position with nothing yet said about the move that led to
+    /// it — a start position as it is, or the base a move's fields are
+    /// filled in over.
+    pub(crate) fn of(board: &Board) -> Self {
+        ReplayPosition {
+            pieces: pieces_of(board),
+            fen: fen_of(board),
+            findings: PositionFindings::from(board),
+            last_move: None,
+            san: None,
+            uci: None,
+            time_ms: None,
+            eval_cp: None,
+            quality: None,
+        }
     }
 }
 
-fn position_after(board: &Board, played: &GameMoveRow, last_move: LastMove) -> ReplayPosition {
-    ReplayPosition {
-        pieces: pieces_of(board),
-        fen: fen_of(board),
-        findings: PositionFindings::from(board),
-        last_move: Some(last_move),
-        san: Some(played.san.clone()),
-        uci: Some(played.uci.clone()),
-        time_ms: Some(played.time_ms),
-        eval_cp: played.eval_cp,
-        quality: played.quality.as_deref().and_then(MoveQuality::parse),
-    }
+/// Plays a move given in UCI — the one way a stored or pasted move list is
+/// replayed onto a board. Errors name the move, so a bad one says which.
+pub(crate) fn play_uci(board: &mut Board, uci: &str) -> Result<(LastMove, MoveStruct), String> {
+    let mv = board
+        .decode_uci_move(uci)
+        .ok_or_else(|| format!("move {uci} doesn't fit the position"))?;
+    let played = board
+        .move_piece(mv.from, mv.to, mv.promotion)
+        .map_err(|err| format!("move {uci} is illegal: {err:?}"))?;
+    Ok((LastMove::from(mv), played))
 }
 
 /// Every position `moves` pass through, start position first.
@@ -119,31 +122,24 @@ fn position_after(board: &Board, played: &GameMoveRow, last_move: LastMove) -> R
 /// back as an error naming the move rather than as a wrong board.
 pub(crate) fn replay_positions(moves: &[GameMoveRow]) -> Result<Vec<ReplayPosition>, String> {
     let mut board = Board::default();
-    board.refresh_legal_moves();
 
     let mut positions = Vec::with_capacity(moves.len() + 1);
-    positions.push(start_position(&board));
+    positions.push(ReplayPosition::of(&board));
 
     for played in moves {
-        let mv = board.decode_uci_move(&played.uci).ok_or_else(|| {
-            format!(
-                "move {} ({}) doesn't fit the position it was stored after",
-                played.ply_number, played.uci
-            )
-        })?;
-        board
-            .move_piece(mv.from, mv.to, mv.promotion)
-            .map_err(|err| {
-                format!(
-                    "move {} ({}) is illegal in the position it was stored after: {err:?}",
-                    played.ply_number, played.uci
-                )
-            })?;
-        let last_move = LastMove {
-            from: mv.from,
-            to: mv.to,
-        };
-        positions.push(position_after(&board, played, last_move));
+        let (last_move, _) = play_uci(&mut board, &played.uci)
+            .map_err(|err| format!("{err} (ply {} of the saved game)", played.ply_number))?;
+        // The stored SAN, not the one just worked out: it's what the game
+        // was saved with, and what the move list shows everywhere else.
+        positions.push(ReplayPosition {
+            last_move: Some(last_move),
+            san: Some(played.san.clone()),
+            uci: Some(played.uci.clone()),
+            time_ms: Some(played.time_ms),
+            eval_cp: played.eval_cp,
+            quality: played.quality.as_deref().and_then(MoveQuality::parse),
+            ..ReplayPosition::of(&board)
+        });
     }
 
     Ok(positions)
@@ -294,7 +290,7 @@ mod tests {
 
         let err = replay_positions(&moves).err().unwrap();
 
-        assert!(err.contains("move 1"));
-        assert!(err.contains("e7e5"));
+        assert!(err.contains("ply 1"), "{err}");
+        assert!(err.contains("e7e5"), "{err}");
     }
 }

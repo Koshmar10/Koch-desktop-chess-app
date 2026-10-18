@@ -8,11 +8,13 @@ use ts_rs::TS;
 use super::job::AnalysisJob;
 use super::metrics::{expected_win_percent, move_accuracy_percent, to_centipawns, TimeStats};
 use super::status::{emit_status, AnalysisStage};
+use crate::app::error::AppError;
 use crate::app::events;
+use crate::app::game::replay::play_uci;
 use crate::app::settings::{AnalyzerEngineSettings, SearchLimit, SearchLimitMode};
+use crate::app::ENGINE_PATH;
 use crate::db::{self, services::settings::SettingsService};
 
-const ENGINE_PATH: &str = "stockfish";
 /// The search depth when no analyzer settings have been saved.
 const ANALYSIS_DEPTH: u32 = 20;
 
@@ -232,16 +234,15 @@ pub struct GameAnalysis {
     pub position_findings: Vec<PositionFindings>,
 }
 
-/// The saved analyzer settings, or `None` when nothing has been saved or
-/// the row can't be read — the pass then runs at its built-in defaults
-/// rather than failing.
-fn saved_settings(app: &AppHandle) -> Option<AnalyzerEngineSettings> {
+/// The saved analyzer settings, or `None` when nothing has been saved yet —
+/// the pass then runs at its built-in defaults. A saved row that can't be
+/// read fails the pass, as it fails the settings screen that loads it,
+/// rather than quietly analysing at settings nobody chose.
+fn saved_settings(app: &AppHandle) -> Result<Option<AnalyzerEngineSettings>, AppError> {
     let db = app.state::<db::Db>();
-    let conn = db.lock().ok()?;
-    let row = SettingsService::new(&conn)
-        .get_latest_analyzer_engine_settings()
-        .ok()??;
-    AnalyzerEngineSettings::try_from(row).ok()
+    let conn = db.lock()?;
+    let row = SettingsService::new(&conn).get_latest_analyzer_engine_settings()?;
+    Ok(row.map(AnalyzerEngineSettings::try_from).transpose()?)
 }
 
 /// One position's search, bounded by the saved limit.
@@ -289,8 +290,8 @@ async fn search_eval(engine: &mut Engine, limits: &GoLimits) -> Result<Score, Uc
 pub async fn run_analysis(
     analysis_job: &AnalysisJob,
     app: &AppHandle,
-) -> Result<GameAnalysis, UciError> {
-    let settings = saved_settings(app);
+) -> Result<GameAnalysis, AppError> {
+    let settings = saved_settings(app)?;
     let limits = settings.as_ref().map_or(
         GoLimits {
             depth: Some(ANALYSIS_DEPTH),
@@ -321,13 +322,10 @@ pub async fn run_analysis(
 
     // Mirrors the engine's position exactly, one uci move behind: applied
     // *before* scoring index i, so it holds the same position the engine
-    // was just asked to evaluate. The engine tracks position via UCI
-    // strings alone and never needed a local `Board` before this - stored
-    // move history is already known-legal (see `analyze_game`'s comment),
-    // so a replay failure here means corrupted history, not a real
-    // possibility to design around.
+    // was just asked to evaluate. A move that won't replay means corrupted
+    // history; it fails this job rather than panicking, which would take
+    // the whole analysis worker down with it.
     let mut board = Board::default();
-    board.refresh_legal_moves();
 
     // evals[i] = score after i plies, from the perspective of whoever is to
     // move next (UCI convention) — evals[0] is the start position, White to
@@ -336,13 +334,7 @@ pub async fn run_analysis(
     let mut position_findings = Vec::with_capacity(total_positions);
     for i in 0..=uci_moves.len() {
         if i > 0 {
-            let uci_move = &uci_moves[i - 1];
-            let mv = board
-                .decode_uci_move(uci_move)
-                .expect("stored move history is already known-legal");
-            board
-                .move_piece(mv.from, mv.to, mv.promotion)
-                .expect("stored move history is already known-legal");
+            play_uci(&mut board, &uci_moves[i - 1])?;
         }
 
         engine.set_position_startpos(&uci_moves[..i]).await?;

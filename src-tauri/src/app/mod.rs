@@ -1,3 +1,8 @@
+/// The Stockfish binary every engine process is started from — the game's
+/// opponent, the post-game analysis and the live engine alike. Looked up on
+/// `PATH`, so it isn't tied to one machine's install location.
+pub const ENGINE_PATH: &str = "stockfish";
+
 pub mod analysis;
 pub mod app_state;
 pub mod error;

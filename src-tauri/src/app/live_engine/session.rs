@@ -8,6 +8,7 @@ use ts_rs::TS;
 
 use super::snapshot::{EngineSnapshot, PvLine};
 use crate::app::events;
+use crate::app::ENGINE_PATH;
 
 /// The live engine's Stockfish options. Kept in memory for as long as the
 /// app runs and never saved — deliberately separate from the saved
@@ -67,6 +68,15 @@ impl LiveEngineHandle {
             settings,
         }
     }
+
+    /// Stops the search in flight, if there is one. The session can't read
+    /// its next command until that search ends, and an infinite one never
+    /// ends on its own.
+    pub fn cancel_search(&self) {
+        if let Some(cancel) = &self.cancel {
+            cancel.cancel();
+        }
+    }
 }
 
 /// Sends the live engine's options to Stockfish. No search limit: the live
@@ -94,7 +104,7 @@ pub async fn spawn_live_engine_session(
     app: AppHandle,
     settings: LiveEngineSettings,
 ) -> Result<(), UciError> {
-    let mut engine = Engine::spawn("stockfish").await?;
+    let mut engine = Engine::spawn(ENGINE_PATH).await?;
     let mut snapshot = EngineSnapshot::default();
     apply_settings(&mut engine, &settings).await?;
     snapshot.multi_pv = Some(settings.multi_pv);

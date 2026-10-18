@@ -11,16 +11,20 @@ use crate::db::{
     self,
     services::{
         analysis::AnalysisService, game::GameService, opening::OpeningService,
-        player_rating::PlayerRatingService,
+        player_rating::PlayerRatingService, settings::SettingsService,
     },
 };
 
 use super::live::{restore_active_game, take_active_game, Game};
 use super::play::{apply_move, finish_game, prepare_next_move, spawn_engine_reply, update_opening};
 use super::view::{
-    GameCreateResponse, GameResult, GameStateView, GameSummary, PlayerInfo, TerminationReason,
-    TimeControl,
+    GameCreateResponse, GameResult, GameSource, GameStateView, GameSummary, PlayerInfo,
+    TerminationReason, TimeControl,
 };
+
+/// The human's name on a new game when no Koch username is set — the same
+/// stand-in the home screen greets them with.
+const DEFAULT_PLAYER_NAME: &str = "Player";
 
 pub(super) fn game_summary_from(
     game: &db::schemas::game::Game,
@@ -61,18 +65,19 @@ pub async fn start_game(
     human_color: PieceColor,
     time_control: TimeControl,
 ) -> Result<GameCreateResponse, AppError> {
-    let human_elo = {
+    let human = {
         let conn = db.lock()?;
-        PlayerRatingService::new(&conn).current_rating(i64::from(rating::DEFAULT_RATING))? as u32
-    };
-
-    let human = PlayerInfo {
-        name: String::from("Koshmar"),
-        elo: human_elo,
+        let name = SettingsService::new(&conn)
+            .get_latest_app_settings()?
+            .and_then(|settings| settings.koch_username)
+            .unwrap_or_else(|| DEFAULT_PLAYER_NAME.to_string());
+        let elo = PlayerRatingService::new(&conn)
+            .current_rating(i64::from(rating::DEFAULT_RATING))? as u32;
+        PlayerInfo { name, elo }
     };
     let engine_player = PlayerInfo {
         name: String::from("Stockfish"),
-        elo: stockfish_elo_for(human_elo),
+        elo: stockfish_elo_for(human.elo),
     };
 
     let (white_player, black_player) = match human_color {
@@ -80,14 +85,7 @@ pub async fn start_game(
         PieceColor::Black => (engine_player, human),
     };
 
-    let game = Game::new(
-        "stockfish",
-        white_player,
-        black_player,
-        human_color,
-        time_control,
-    )
-    .await?;
+    let game = Game::new(white_player, black_player, human_color, time_control).await?;
 
     let response = GameCreateResponse {
         state: game.state_view(),
@@ -227,29 +225,22 @@ pub fn analyze_game(
         let conn = db.lock()?;
         let service = GameService::new(&conn);
 
-        let (human_color, time_control) = match service.find_imported_game(game_id)? {
-            // Imports: the side comes from the popup (or a previous pick),
-            // and the clock may just not be there.
-            Some(imported) => {
-                let side = human_color
-                    .or(imported.human_color)
-                    .ok_or("pick which side you played to analyse this game")?;
-                if imported.human_color != Some(side) {
-                    service.set_human_color(game_id, side)?;
-                }
-                (side, imported.time_control)
-            }
-            // Koch-played games always carry both.
-            None => {
-                let game = service
-                    .find_game(game_id)?
-                    .ok_or_else(|| format!("no game with id {game_id}"))?;
-                let side = game
-                    .human_color
-                    .ok_or("this game has no recorded side to analyse")?;
-                (side, game.time_control)
-            }
+        let game = service
+            .find_game(game_id)?
+            .ok_or_else(|| format!("no game with id {game_id}"))?;
+        let side = match game.source {
+            // An import's side comes from the popup, or a previous pick.
+            GameSource::Pgn => human_color
+                .or(game.human_color)
+                .ok_or("pick which side you played to analyse this game")?,
+            // A koch-played game always has the side it was played from.
+            GameSource::Koch => game
+                .human_color
+                .ok_or("this game has no recorded side to analyse")?,
         };
+        if game.human_color != Some(side) {
+            service.set_human_color(game_id, side)?;
+        }
 
         let moves = service.game_moves(game_id)?;
         if moves.is_empty() {
@@ -270,8 +261,9 @@ pub fn analyze_game(
 
         AnalysisJob {
             game_id,
-            human_color,
-            time_control,
+            human_color: side,
+            // An import's PGN may have carried no clock.
+            time_control: game.time_control,
             move_times_ms,
             move_list,
         }

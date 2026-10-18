@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use koch_engine::{
-    analyzer::PositionFindings, fen::DEFAULT_FEN, Board, FenString, MoveStruct, PgnError, PgnGame,
-    PieceColor, PieceType, Square,
-};
+use koch_engine::{Board, FenString, MoveStruct, PgnError, PgnGame, PieceColor, PieceType, Square};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -12,7 +9,7 @@ use crate::app::{
     error::AppError,
     game::{
         live::legal_moves_view,
-        replay::{fen_of, pieces_of, start_position, ReplayPosition},
+        replay::{play_uci, ReplayPosition},
         view::LastMove,
     },
 };
@@ -45,39 +42,15 @@ pub struct SandboxMoved {
     pub legal_moves: HashMap<u32, Vec<Square>>,
 }
 
-fn default_fen() -> FenString {
-    FenString::try_from(DEFAULT_FEN).expect("DEFAULT_FEN is valid")
-}
-
-/// The position a move just played leads to, as the frontend lists it.
+/// The position a move just played leads to, as the frontend lists it. No
+/// clock in the sandbox, and no analysis to grade it, so those stay `None`.
 fn position_after(board: &Board, last_move: LastMove, played: MoveStruct) -> ReplayPosition {
     ReplayPosition {
-        pieces: pieces_of(board),
-        fen: fen_of(board),
-        findings: PositionFindings::from(board),
         last_move: Some(last_move),
         san: Some(played.san),
         uci: Some(played.uci),
-        time_ms: None, // no clock in the sandbox, and no analysis to grade it
-        eval_cp: None,
-        quality: None,
+        ..ReplayPosition::of(board)
     }
-}
-
-/// Plays a move given in UCI. Errors name the move, so a bad import says
-/// which one it couldn't play.
-fn play_uci(board: &mut Board, uci: &str) -> Result<(LastMove, MoveStruct), String> {
-    let mv = board
-        .decode_uci_move(uci)
-        .ok_or_else(|| format!("move {uci} doesn't fit the position"))?;
-    let played = board
-        .move_piece(mv.from, mv.to, mv.promotion)
-        .map_err(|err| format!("move {uci} is illegal: {err:?}"))?;
-    let last_move = LastMove {
-        from: mv.from,
-        to: mv.to,
-    };
-    Ok((last_move, played))
 }
 
 /// A sandbox started on `start_fen` with `moves` (UCI) already played, and
@@ -85,15 +58,15 @@ fn play_uci(board: &mut Board, uci: &str) -> Result<(LastMove, MoveStruct), Stri
 /// both come down to.
 fn sandbox_from(start_fen: FenString, moves: &[String]) -> Result<Sandbox, String> {
     let mut board = Board::from(&start_fen);
-    board.refresh_legal_moves();
-    let mut positions = vec![start_position(&board)];
+    let mut positions = vec![ReplayPosition::of(&board)];
 
     for uci in moves {
         let (last_move, played) = play_uci(&mut board, uci)?;
-        // So each position's findings, and the frontend, see what can move.
-        board.refresh_legal_moves();
         positions.push(position_after(&board, last_move, played));
     }
+    // So the frontend sees what can move from where the sandbox now stands.
+    // (`move_piece` works out its own legal moves before each move.)
+    board.refresh_legal_moves();
 
     Ok(Sandbox {
         start_fen,
@@ -142,7 +115,7 @@ fn sandbox_from_notation(notation: &str) -> Result<Sandbox, String> {
         .fen
         .as_deref()
         .and_then(|fen| FenString::try_from(fen).ok())
-        .unwrap_or_else(default_fen);
+        .unwrap_or_default();
     let moves: Vec<String> = parse.game.moves.into_iter().map(|mv| mv.uci).collect();
     sandbox_from(start_fen, &moves)
 }
@@ -188,7 +161,7 @@ pub fn sandbox_new(
 ) -> Result<SandboxStarted, AppError> {
     let start_fen = match fen {
         Some(fen) => FenString::try_from(fen)?,
-        None => default_fen(),
+        None => FenString::default(),
     };
     let sandbox = sandbox_from(start_fen, &[])?;
     let started = started(&sandbox);
@@ -251,6 +224,7 @@ pub fn sandbox_undo(state: tauri::State<'_, AppState>) -> Result<SandboxStarted,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::game::replay::fen_of;
 
     const AFTER_E4_E5: &str = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2";
 
@@ -310,7 +284,7 @@ mod tests {
 
     #[test]
     fn undo_with_no_moves_is_an_error() {
-        let mut sandbox = sandbox_from(default_fen(), &[]).unwrap();
+        let mut sandbox = sandbox_from(FenString::default(), &[]).unwrap();
 
         assert!(undo_last_move(&mut sandbox).is_err());
         assert_eq!(sandbox.positions.len(), 1);
