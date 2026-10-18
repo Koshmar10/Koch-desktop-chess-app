@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
-const CLOSE_ICON_SIZE = 18;
+const CLOSE_ICON_SIZE_PX = 18;
 
 // The two widths a dialog comes in, so cards opened side by side in the
 // app line up instead of each picking its own number.
@@ -47,7 +47,7 @@ const DialogCard = ({
         onClick={onClose}
         className="absolute top-3 right-3 cursor-pointer rounded-md p-1 text-foreground/40 transition-colors hover:bg-primary/10 hover:text-foreground/80"
       >
-        <X size={CLOSE_ICON_SIZE} />
+        <X size={CLOSE_ICON_SIZE_PX} />
       </button>
     )}
     {title && (

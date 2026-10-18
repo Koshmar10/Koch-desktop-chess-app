@@ -12,7 +12,7 @@ interface ChessArrowProps {
   squareSize: number;
 }
 
-const ChessArrow: React.FC<ChessArrowProps> = ({
+const ChessArrow = ({
   from,
   to,
   color = "#ff9900",
@@ -20,7 +20,7 @@ const ChessArrow: React.FC<ChessArrowProps> = ({
   isFlipped = false,
   isGhost = false,
   squareSize,
-}) => {
+}: ChessArrowProps) => {
   const start = getSquareCenter(from, isFlipped, squareSize);
   const end = getSquareCenter(to, isFlipped, squareSize);
 

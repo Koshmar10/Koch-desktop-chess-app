@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import HomeCard from "./HomeCard";
-import { STAT_CARDS } from "./mock";
+import { STAT_CARDS } from "./statCards";
 import { randomChessQuote } from "./quotes";
 import { getPlayerStats } from "../../api/stats";
 import { getAppSettings } from "../../api/settings";

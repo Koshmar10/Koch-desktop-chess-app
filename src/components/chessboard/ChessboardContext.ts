@@ -35,7 +35,7 @@ export const ChessboardContext = createContext<ChessboardContextValue | null>(
   null,
 );
 
-export function useChessboardContext(): ChessboardContextValue {
+export const useChessboardContext = (): ChessboardContextValue => {
   const ctx = useContext(ChessboardContext);
   if (!ctx) {
     throw new Error(
@@ -43,4 +43,4 @@ export function useChessboardContext(): ChessboardContextValue {
     );
   }
   return ctx;
-}
+};

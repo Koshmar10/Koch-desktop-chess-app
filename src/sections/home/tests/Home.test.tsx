@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import Home from "../Home";
-import { STAT_CARDS } from "../mock";
+import { STAT_CARDS } from "../statCards";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "@testing-library/jest-dom/vitest";

@@ -10,7 +10,7 @@ import type { ArrowData } from "../lib/types";
 const USER_ARROW_COLOR = "#ff9900";
 const RIGHT_MOUSE_BUTTON = 2;
 
-const ArrowLayer: React.FC = () => {
+const ArrowLayer = () => {
   const { squareSize, isFlipped } = useChessboardContext();
   const svgRef = useRef<SVGSVGElement>(null);
   const [arrows, setArrows] = useState<ArrowData[]>([]);

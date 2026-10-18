@@ -3,7 +3,9 @@ import MoveTimeline from "../../components/MoveTimeline";
 import PanelSection from "../../components/PanelSection";
 import { useGameContext } from "./GameContext";
 
-// Mock, deliberately — there's no player-stats backend at all yet.
+// Still mock. `get_player_stats` exists now, but its numbers are all-time,
+// and this panel is about the current session — wiring that up is its own
+// ticket, not part of a refactor.
 const MOCK_SESSION_STATS = {
   eloRampup: "+42",
   timePlayed: "4h 32m",

@@ -1,5 +1,5 @@
 import { Cpu, Search, Swords } from "lucide-react";
-import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
+import { BOARD_SIZE_PX } from "../../../components/chessboard/lib/constants";
 import type { PlacedPiece } from "../../../components/chessboard/lib/types";
 import type { GameSummary } from "../../../api/bindings/GameSummary";
 import type { MoveQuality } from "../../../api/bindings/MoveQuality";
@@ -8,30 +8,23 @@ import type { SideAccuracy } from "../../../api/bindings/SideAccuracy";
 import EngineTab from "./engine/EngineTab";
 import GamePanel from "./game/GamePanel";
 import PositionPanel from "./position/PositionPanel";
-import type { EngineSnapshot, EngineStatus } from "../types";
+import type { EngineSnapshot, EngineStatus, PanelTab } from "../types";
 import { useAnalyzerContext } from "../AnalyzerContext";
 
-const TAB_ICON_SIZE = 14;
+const TAB_ICON_SIZE_PX = 14;
 // Wider than the board's other neighbours because the Position tab holds
 // two colors' worth of king-safety breakdown; at the old 208px the penalty
 // labels wrapped every line.
 const PANEL_WIDTH_PX = 320;
 
-/**
- * Ordered widest scope first: the game as a whole, then the position in
- * front of you, then what the engine makes of it.
- *
- * Engine and Position are also split by *what changes them* — Engine
- * repaints several times a second while a search runs, Position only when
- * the viewed ply changes. Interleaving those in one scroll means half the
- * panel is always flickering under the half you're reading.
- */
-export type PanelTab = "game" | "position" | "engine";
-
 const TAB_OPTIONS: { tab: PanelTab; label: string; icon: React.ReactNode }[] = [
-  { tab: "game", label: "Game", icon: <Swords size={TAB_ICON_SIZE} /> },
-  { tab: "position", label: "Position", icon: <Search size={TAB_ICON_SIZE} /> },
-  { tab: "engine", label: "Engine", icon: <Cpu size={TAB_ICON_SIZE} /> },
+  { tab: "game", label: "Game", icon: <Swords size={TAB_ICON_SIZE_PX} /> },
+  {
+    tab: "position",
+    label: "Position",
+    icon: <Search size={TAB_ICON_SIZE_PX} />,
+  },
+  { tab: "engine", label: "Engine", icon: <Cpu size={TAB_ICON_SIZE_PX} /> },
 ];
 
 interface SidePanelProps {
@@ -86,7 +79,7 @@ const SidePanel = ({
   return (
     <div
       className="flex flex-col"
-      style={{ width: PANEL_WIDTH_PX, height: BOARD_PIXEL_SIZE }}
+      style={{ width: PANEL_WIDTH_PX, height: BOARD_SIZE_PX }}
     >
       {/* Folder tabs: the active tab has no bottom border and the body has
           no top border, so the two share one continuous outline and read

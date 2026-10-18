@@ -6,7 +6,7 @@ import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { ReplayPosition } from "../../api/bindings/ReplayPosition";
 import type { SandboxStarted } from "../../api/bindings/SandboxStarted";
 import type { Square } from "../../api/bindings/Square";
-import type { PanelTab } from "./panel/SidePanel";
+import type { PanelTab } from "./types";
 
 // Always present, with its setters, so a game can be loaded into it; what
 // starts empty is the replay — null until the first game is opened.
@@ -77,7 +77,7 @@ export interface AnalyzerContextValue {
 
 export const AnalyzerContext = createContext<AnalyzerContextValue | null>(null);
 
-export function useAnalyzerContext(): AnalyzerContextValue {
+export const useAnalyzerContext = (): AnalyzerContextValue => {
   const ctx = useContext(AnalyzerContext);
   if (!ctx) {
     throw new Error(
@@ -85,4 +85,4 @@ export function useAnalyzerContext(): AnalyzerContextValue {
     );
   }
   return ctx;
-}
+};

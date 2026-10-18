@@ -14,7 +14,12 @@ const MissingGames = () => (
   </div>
 );
 
-const GameCardsSection = ({ reloadKey }: { reloadKey?: number }) => {
+interface GameCardsSectionProps {
+  // Bumped by the toolbar after an import, so the list fetches again.
+  reloadKey?: number;
+}
+
+const GameCardsSection = ({ reloadKey }: GameCardsSectionProps) => {
   const [gameData, setGameData] = useState<GameSummary[] | null>(null);
   const [sideNeeded, setSideNeeded] = useState<GameSummary | null>(null);
   const { openGame } = useAnalyzerContext();

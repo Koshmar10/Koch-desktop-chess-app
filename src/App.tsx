@@ -3,14 +3,14 @@ import "./App.css";
 import Sidebar from "./sections/sidebar/Sidebar";
 import Home from "./sections/home/Home";
 import Play from "./sections/play/Play";
-import { GameProvider } from "./sections/play/GameProvider";
+import GameProvider from "./sections/play/GameProvider";
 import Analyzer from "./sections/analyzer/Analyzer";
 import History from "./sections/history/History";
 import Puzzle from "./sections/Puzzle";
 import Settings from "./sections/settings/Settings";
-import { AnalyzerProvider } from "./sections/analyzer/AnalyzerProvider";
+import AnalyzerProvider from "./sections/analyzer/AnalyzerProvider";
 
-function App() {
+const App = () => {
   return (
     // GameProvider lives here, not inside the /play route itself: it
     // listens for backend events (engine replies, analysis progress/
@@ -37,6 +37,6 @@ function App() {
       </GameProvider>
     </AnalyzerProvider>
   );
-}
+};
 
 export default App;

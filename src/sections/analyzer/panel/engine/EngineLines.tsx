@@ -22,7 +22,7 @@ const StatusPill = ({ status, onToggle }: StatusPillProps) => {
   }
 
   const isRunning = status === "running";
-  const pillCls = isRunning
+  const pillClass = isRunning
     ? "border-green-500/60 bg-green-700/30 text-green-500"
     : "border-destructive/60 bg-destructive/20 text-destructive";
 
@@ -31,7 +31,7 @@ const StatusPill = ({ status, onToggle }: StatusPillProps) => {
       type="button"
       onClick={onToggle}
       title={isRunning ? "Stop engine" : "Start engine"}
-      className={`inline-flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 ${pillCls}`}
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 ${pillClass}`}
     >
       <span className="relative flex h-2 w-2">
         {isRunning && (
@@ -50,7 +50,7 @@ const PvLineRow = ({ line }: { line: PvLine }) => {
   // `evalBarWhiteFraction`; reusing it here keeps the chip and the bar
   // from ever disagreeing about who a position favours.
   const favoursWhite = evalBarWhiteFraction(line.score) >= 0.5;
-  const chipCls = favoursWhite
+  const chipClass = favoursWhite
     ? "bg-neutral-100 text-neutral-900"
     : "bg-neutral-900 text-neutral-100";
   const moves = line.moves.join(" ");
@@ -58,7 +58,7 @@ const PvLineRow = ({ line }: { line: PvLine }) => {
   return (
     <div className="flex flex-row items-center gap-2">
       <span
-        className={`w-13 shrink-0 rounded px-1 text-right font-mono tabular-nums ${chipCls}`}
+        className={`w-13 shrink-0 rounded px-1 text-right font-mono tabular-nums ${chipClass}`}
       >
         {formatEvalScore(line.score)}
       </span>

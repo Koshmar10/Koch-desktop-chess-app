@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { Square } from "../../../api/bindings/Square";
-import { PieceAvatar } from "../../../components/chessboard/PieceAvatar";
+import PieceAvatar from "../../../components/chessboard/PieceAvatar";
 import {
   DARK_SQUARE_COLOR,
   LIGHT_SQUARE_COLOR,
@@ -17,7 +17,15 @@ import { pieceLabel } from "./pieceLabel";
 // the best move and the threat with them, and the two should look like
 // one language rather than two.
 
-export const PIECE_CHIP_SIZE_PX = 28;
+const PIECE_CHIP_SIZE_PX = 28;
+const ICON_LABEL_SIZE_PX = 14;
+
+interface TileChipProps {
+  square: Square;
+  piece?: PlacedPiece;
+  showSquare?: boolean;
+  title?: string;
+}
 
 /**
  * A square as a tile, with its name beneath — the piece standing on it
@@ -35,12 +43,7 @@ export const TileChip = ({
   piece,
   showSquare = true,
   title,
-}: {
-  square: Square;
-  piece?: PlacedPiece;
-  showSquare?: boolean;
-  title?: string;
-}) => (
+}: TileChipProps) => (
   <span className="relative flex shrink-0">
     {piece ? (
       <PieceAvatar
@@ -77,6 +80,12 @@ export const TileChip = ({
   </span>
 );
 
+interface PieceChipProps {
+  id: number;
+  pieces: PlacedPiece[];
+  showSquare?: boolean;
+}
+
 /**
  * A piece named by id, which is how every analyzer finding refers to
  * one. Renders nothing for an id the position doesn't hold — that means
@@ -87,11 +96,7 @@ export const PieceChip = ({
   id,
   pieces,
   showSquare = true,
-}: {
-  id: number;
-  pieces: PlacedPiece[];
-  showSquare?: boolean;
-}) => {
+}: PieceChipProps) => {
   const piece = pieceById(pieces, id);
   if (!piece) return null;
 
@@ -105,21 +110,24 @@ export const PieceChip = ({
   );
 };
 
-export const SquareChip = ({ label }: { label: string }) => (
+interface SquareChipProps {
+  label: string;
+}
+
+export const SquareChip = ({ label }: SquareChipProps) => (
   <span className="flex h-5 min-w-5 items-center justify-center rounded-sm border-[1px] border-border/60 bg-card/40 px-1 font-mono text-xs text-foreground/65">
     {label}
   </span>
 );
 
-/** An icon standing in for a label, with the word kept as its tooltip. */
-export const IconLabel = ({
-  icon: Icon,
-  title,
-}: {
+interface IconLabelProps {
   icon: LucideIcon;
   title: string;
-}) => (
+}
+
+/** An icon standing in for a label, with the word kept as its tooltip. */
+export const IconLabel = ({ icon: Icon, title }: IconLabelProps) => (
   <span title={title} className="flex shrink-0 text-foreground/40">
-    <Icon size={14} />
+    <Icon size={ICON_LABEL_SIZE_PX} />
   </span>
 );

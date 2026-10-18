@@ -7,6 +7,10 @@ const VISIBILITY_CLASS: Record<MaskVisibility, string> = {
   shown: "text-primary",
 };
 
+interface EyeIndicatorProps {
+  visibility: MaskVisibility;
+}
+
 /**
  * Where a row's finding stands on the board, at a glance: closed and dim
  * when it isn't drawn, open but dim while you're only hovering it, open
@@ -19,7 +23,7 @@ const VISIBILITY_CLASS: Record<MaskVisibility, string> = {
  *
  * Pushes itself to the far end of the row it sits in.
  */
-const EyeIndicator = ({ visibility }: { visibility: MaskVisibility }) => (
+const EyeIndicator = ({ visibility }: EyeIndicatorProps) => (
   <span
     aria-hidden
     className={`ml-auto flex shrink-0 p-1 transition-colors duration-150 ${VISIBILITY_CLASS[visibility]}`}

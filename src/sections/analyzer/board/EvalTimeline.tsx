@@ -8,33 +8,27 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
-import type { TimelineMove } from "../Analyzer";
+import { BOARD_SIZE_PX } from "../../../components/chessboard/lib/constants";
+import type { TimelineMove } from "../types";
 import { cpScore, evalBarWhiteFraction, formatEvalScore } from "./evalBar";
 
 const TIMELINE_HEIGHT_PX = 152;
 
-/**
- * Reserved space for the timeline strip — the eval curve from
- * `centipawn_history`, a move-quality dot per ply, and the move list, all
- * sharing one ply axis with the scrubber.
- *
- * Empty on purpose: it runs entirely on `GameAnalysis`, which already
- * exists, so it needs no engine session — but it does need a loaded game,
- * and there's no way to load one into this screen yet.
- */
-interface TimelinePlaceholderProps {
+interface EvalTimelineProps {
   moves: TimelineMove[];
   // The ply on the board, marked on the curve.
   viewedPly: number;
   // Clicking the chart jumps the board to the move under the cursor.
   onSelectPly: (ply: number) => void;
 }
-const TimelinePlaceholder = ({
-  moves,
-  viewedPly,
-  onSelectPly,
-}: TimelinePlaceholderProps) => {
+
+/**
+ * The game's eval curve under the board, one point per analysed move, with
+ * the viewed ply marked on it. It reads only what the analysis pass stored,
+ * so it needs no engine session — and an unanalysed game, or the sandbox,
+ * draws an empty chart.
+ */
+const EvalTimeline = ({ moves, viewedPly, onSelectPly }: EvalTimelineProps) => {
   // Rebuilt only when the moves change, not when just the ply marker moves —
   // Recharts re-lays-out the whole curve whenever `data` is a new array.
   const data = useMemo(
@@ -55,7 +49,7 @@ const TimelinePlaceholder = ({
       style={{ height: TIMELINE_HEIGHT_PX }}
     >
       <AreaChart
-        width={BOARD_PIXEL_SIZE * 0.95}
+        width={BOARD_SIZE_PX * 0.95}
         height={TIMELINE_HEIGHT_PX * 0.9}
         data={data}
         style={{ cursor: "pointer" }}
@@ -68,8 +62,8 @@ const TimelinePlaceholder = ({
         }}
       >
         <XAxis dataKey="index" />
-        <YAxis domain={[0, 1]} hide />{" "}
-        {/* fixed, so 0.5 is always the middle */}
+        {/* Fixed, so 0.5 is always the middle. */}
+        <YAxis domain={[0, 1]} hide />
         {/* Theme tokens from App.css, so the chart follows light and dark
             mode like everything else. */}
         <ReferenceLine
@@ -136,4 +130,4 @@ const TimelinePlaceholder = ({
 // Memoised: engine snapshots re-render the analyzer several times a second,
 // and with stable props (memoised moves, a `useCallback` `onSelectPly`) the
 // chart skips every render where only the engine lines changed.
-export default memo(TimelinePlaceholder);
+export default memo(EvalTimeline);

@@ -23,7 +23,7 @@ interface AppProviderProps {
 
 // State that outlives any one route or game — theme and per-game analysis
 // status. GameProvider nests inside this, not the other way round.
-export function AppProvider({ children }: AppProviderProps) {
+const AppProvider = ({ children }: AppProviderProps) => {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [analysisStages, setAnalysisStages] = useState<
     Record<number, AnalysisStage>
@@ -50,4 +50,6 @@ export function AppProvider({ children }: AppProviderProps) {
       {children}
     </AppContext.Provider>
   );
-}
+};
+
+export default AppProvider;

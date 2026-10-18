@@ -15,9 +15,9 @@ import {
   DEFAULT_ANALYZER_SETTINGS,
   DEFAULT_PLAYER_SETTINGS,
 } from "../../lib/settings";
-import { AppSettingsSection } from "./AppSettingsSection";
-import { AnalyzerEngineSection } from "./AnalyzerEngineSection";
-import { PlayerEngineSection } from "./PlayerEngineSection";
+import AppSettingsSection from "./AppSettingsSection";
+import AnalyzerEngineSection from "./AnalyzerEngineSection";
+import PlayerEngineSection from "./PlayerEngineSection";
 
 const Settings = () => {
   const [app, setApp] = useState<AppSettings | null>(null);

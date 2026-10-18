@@ -1,18 +1,16 @@
 import type { ReactNode } from "react";
 import { GhostButton, PrimaryButton } from "../../components/buttons";
 
-// Two columns: label + `* hint` stacked on the left, the control on a
-// fixed right rail so every control shares the same right edge and the
-// number fields line up with each other.
-export const SettingRow = ({
-  label,
-  hint,
-  children,
-}: {
+interface SettingRowProps {
   label: string;
   hint?: string;
   children: ReactNode;
-}) => (
+}
+
+// Two columns: label + `* hint` stacked on the left, the control on a
+// fixed right rail so every control shares the same right edge and the
+// number fields line up with each other.
+export const SettingRow = ({ label, hint, children }: SettingRowProps) => (
   <div className="flex items-center justify-between gap-6 py-3">
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="text-foreground/80">{label}</span>
@@ -24,6 +22,15 @@ export const SettingRow = ({
   </div>
 );
 
+interface SectionProps {
+  title: string;
+  subtitle: string;
+  dirty: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  children: ReactNode;
+}
+
 // A titled group of related settings — separated by heading and spacing
 // only, no card or fill. The subtitle carries the section's scope so
 // individual row hints can stay short.
@@ -34,14 +41,7 @@ export const Section = ({
   onSave,
   onCancel,
   children,
-}: {
-  title: string;
-  subtitle: string;
-  dirty: boolean;
-  onSave: () => void;
-  onCancel: () => void;
-  children: ReactNode;
-}) => (
+}: SectionProps) => (
   <section>
     <h2 className="text-xl text-foreground/90">{title}</h2>
     <p className="mt-0.5 text-sm text-foreground/50">{subtitle}</p>

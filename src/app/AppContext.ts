@@ -18,14 +18,13 @@ export interface AppContextValue {
 
 export const AppContext = createContext<AppContextValue | null>(null);
 
-export function useAppContext(): AppContextValue {
+export const useAppContext = (): AppContextValue => {
   const ctx = useContext(AppContext);
   if (!ctx) {
     throw new Error("useAppContext must be used inside <AppProvider>");
   }
   return ctx;
-}
+};
 
-export function useAnalysisStage(gameId: number): AnalysisStage | undefined {
-  return useAppContext().analysisStages[gameId];
-}
+export const useAnalysisStage = (gameId: number): AnalysisStage | undefined =>
+  useAppContext().analysisStages[gameId];

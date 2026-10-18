@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChessboardContext } from "./ChessboardContext";
 import { applyMove } from "./lib/applyMove";
-import { BOARD_PIXEL_SIZE, BOARD_SIZE, SQUARE_SIZE } from "./lib/constants";
+import { BOARD_SIZE, BOARD_SIZE_PX, SQUARE_SIZE_PX } from "./lib/constants";
 import { pieceAt } from "./lib/pieces";
 import { STARTING_POSITION } from "./lib/startingPosition";
 import type { PieceColor, PlacedPiece } from "./lib/types";
@@ -38,7 +38,7 @@ interface ChessboardProps {
   lastMove?: LastMove | null;
 }
 
-const Chessboard: React.FC<ChessboardProps> = ({
+const Chessboard = ({
   children,
   pieces: externalPieces,
   flipped = false,
@@ -47,7 +47,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   onMove,
   legalMoves,
   lastMove = null,
-}) => {
+}: ChessboardProps) => {
   const [pieces, setPieces] = useState<PlacedPiece[]>(
     externalPieces ?? STARTING_POSITION,
   );
@@ -88,7 +88,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
     <ChessboardContext.Provider
       value={{
         boardSize: BOARD_SIZE,
-        squareSize: SQUARE_SIZE,
+        squareSize: SQUARE_SIZE_PX,
         pieces,
         legalDestinations,
         isFlipped: flipped,
@@ -103,7 +103,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
     >
       <div
         className="relative"
-        style={{ width: BOARD_PIXEL_SIZE, height: BOARD_PIXEL_SIZE }}
+        style={{ width: BOARD_SIZE_PX, height: BOARD_SIZE_PX }}
       >
         {children}
       </div>

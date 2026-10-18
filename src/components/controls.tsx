@@ -4,6 +4,12 @@ import { clamp } from "../lib/math";
 import Dropdown from "./Dropdown";
 import { CONTROL_CLASS, TEXT_INPUT_CLASS } from "./controlStyles";
 
+interface SecretInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
 // Masked by default with a reveal toggle — used for the OpenAI key, which
 // is a secret. Note: nothing here persists it yet; per the repo's rules a
 // key must go to the OS keychain via a backend command, never localStorage
@@ -12,11 +18,7 @@ export const SecretInput = ({
   value,
   onChange,
   placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) => {
+}: SecretInputProps) => {
   const [revealed, setRevealed] = useState(false);
   return (
     <div className="flex w-full items-center gap-2">
@@ -41,19 +43,21 @@ export const SecretInput = ({
   );
 };
 
+interface NumberSettingProps {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
 export const NumberSetting = ({
   value,
   onChange,
   min,
   max,
   step = 1,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-}) => {
+}: NumberSettingProps) => {
   const clamped = (n: number) => clamp(n, min ?? -Infinity, max ?? Infinity);
   return (
     <div
@@ -94,13 +98,12 @@ export const NumberSetting = ({
   );
 };
 
-export const ToggleSetting = ({
-  checked,
-  onChange,
-}: {
+interface ToggleSettingProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
-}) => (
+}
+
+export const ToggleSetting = ({ checked, onChange }: ToggleSettingProps) => (
   <button
     type="button"
     role="switch"
@@ -118,15 +121,17 @@ export const ToggleSetting = ({
   </button>
 );
 
+interface SelectSettingProps {
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+}
+
 export const SelectSetting = ({
   value,
   options,
   onChange,
-}: {
-  value: string;
-  options: readonly string[];
-  onChange: (value: string) => void;
-}) => (
+}: SelectSettingProps) => (
   <Dropdown
     trigger={({ toggle }) => (
       <button

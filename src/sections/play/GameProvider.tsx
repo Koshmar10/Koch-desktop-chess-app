@@ -24,7 +24,7 @@ interface GameProviderProps {
   children: ReactNode;
 }
 
-export function GameProvider({ children }: GameProviderProps) {
+const GameProvider = ({ children }: GameProviderProps) => {
   const [game, setGame] = useState<GameCreateResponse | null>(null);
   const [gameReceivedAt, setGameReceivedAt] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
@@ -150,4 +150,6 @@ export function GameProvider({ children }: GameProviderProps) {
       {children}
     </GameContext.Provider>
   );
-}
+};
+
+export default GameProvider;

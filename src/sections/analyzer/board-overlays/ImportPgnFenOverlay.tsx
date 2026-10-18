@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardPaste } from "lucide-react";
 import DialogCard, { NARROW_DIALOG_PX } from "../../../components/DialogCard";
-import { TooltipButton } from "../../../components/TooltipButton";
+import TooltipButton from "../../../components/TooltipButton";
 import NotationField from "./NotationField";
 
 const NOTATION_ROWS = 14;

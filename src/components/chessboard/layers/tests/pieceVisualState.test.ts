@@ -7,7 +7,7 @@ import {
   OVERLAY_ARROWS_Z_INDEX,
 } from "../../lib/zIndex";
 
-const SQUARE_SIZE = 72;
+const SQUARE_SIZE_PX = 72;
 
 describe("getPieceVisualState", () => {
   it("translates a resting piece onto its square at the board's square size", () => {
@@ -16,19 +16,25 @@ describe("getPieceVisualState", () => {
       null,
       3,
       5,
-      SQUARE_SIZE,
+      SQUARE_SIZE_PX,
     );
 
     expect(className).toContain("cursor-grab");
     expect(style).toMatchObject({
-      transform: `translate(${5 * SQUARE_SIZE}px, ${3 * SQUARE_SIZE}px)`,
-      width: SQUARE_SIZE,
-      height: SQUARE_SIZE,
+      transform: `translate(${5 * SQUARE_SIZE_PX}px, ${3 * SQUARE_SIZE_PX}px)`,
+      width: SQUARE_SIZE_PX,
+      height: SQUARE_SIZE_PX,
     });
   });
 
   it("slides a resting piece between squares", () => {
-    const { className } = getPieceVisualState(false, null, 3, 5, SQUARE_SIZE);
+    const { className } = getPieceVisualState(
+      false,
+      null,
+      3,
+      5,
+      SQUARE_SIZE_PX,
+    );
 
     expect(className).toContain("transition-transform");
   });
@@ -40,7 +46,7 @@ describe("getPieceVisualState", () => {
       dragPosition,
       3,
       5,
-      SQUARE_SIZE,
+      SQUARE_SIZE_PX,
     );
 
     expect(className).toContain("pointer-events-none");
@@ -48,18 +54,18 @@ describe("getPieceVisualState", () => {
     expect(className).not.toContain("transition-transform");
     expect(style).toMatchObject({
       zIndex: DRAGGED_PIECE_Z_INDEX,
-      left: dragPosition.x - SQUARE_SIZE / 2,
-      top: dragPosition.y - SQUARE_SIZE / 2,
-      width: SQUARE_SIZE * 1.1,
-      height: SQUARE_SIZE * 1.1,
+      left: dragPosition.x - SQUARE_SIZE_PX / 2,
+      top: dragPosition.y - SQUARE_SIZE_PX / 2,
+      width: SQUARE_SIZE_PX * 1.1,
+      height: SQUARE_SIZE_PX * 1.1,
     });
   });
 
   it("falls back to the resting state if dragged with no known position", () => {
-    const { style } = getPieceVisualState(true, null, 3, 5, SQUARE_SIZE);
+    const { style } = getPieceVisualState(true, null, 3, 5, SQUARE_SIZE_PX);
 
     expect(style).toMatchObject({
-      transform: `translate(${5 * SQUARE_SIZE}px, ${3 * SQUARE_SIZE}px)`,
+      transform: `translate(${5 * SQUARE_SIZE_PX}px, ${3 * SQUARE_SIZE_PX}px)`,
     });
   });
 });

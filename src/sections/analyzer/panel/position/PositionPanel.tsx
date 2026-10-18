@@ -23,7 +23,7 @@ import type { PawnStructure } from "../../../../api/bindings/PawnStructure";
 import type { PieceColor } from "../../../../api/bindings/PieceColor";
 import type { Pin } from "../../../../api/bindings/Pin";
 import type { PositionFindings } from "../../../../api/bindings/PositionFindings";
-import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
+import PieceAvatar from "../../../../components/chessboard/PieceAvatar";
 import { pieceById } from "../../../../components/chessboard/lib/pieces";
 import {
   FILES,

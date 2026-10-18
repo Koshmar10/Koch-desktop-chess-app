@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
-const TITLE_ICON_SIZE = 16;
+const TITLE_ICON_SIZE_PX = 16;
 
 interface PanelSectionProps {
   title: string;
@@ -52,7 +52,7 @@ const PanelSection = ({
     <section className={`flex flex-col gap-2 ${sizing} ${rule}`}>
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-foreground/60 uppercase">
-          {Icon && <Icon size={TITLE_ICON_SIZE} className="text-primary" />}
+          {Icon && <Icon size={TITLE_ICON_SIZE_PX} className="text-primary" />}
           {title}
         </h3>
         {action}

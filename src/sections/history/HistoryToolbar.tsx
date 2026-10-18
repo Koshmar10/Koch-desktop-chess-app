@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { Check, ChevronDown, RefreshCcw, Search, Upload } from "lucide-react";
-import { TooltipButton } from "../../components/TooltipButton";
+import TooltipButton from "../../components/TooltipButton";
 import Dropdown from "../../components/Dropdown";
 import ImportPgnPopup from "./ImportPgnPopup";
 
@@ -72,7 +72,11 @@ const MonthSelect = () => {
   );
 };
 
-const HistoryToolbar = ({ onImported }: { onImported?: () => void }) => {
+interface HistoryToolbarProps {
+  onImported?: () => void;
+}
+
+const HistoryToolbar = ({ onImported }: HistoryToolbarProps) => {
   const [importOpen, setImportOpen] = useState(false);
 
   return (

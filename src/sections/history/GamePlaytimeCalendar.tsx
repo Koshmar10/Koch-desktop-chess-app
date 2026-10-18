@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSessions } from "../../api/sessions";
-import { Tooltip } from "../../components/Tooltip";
+import Tooltip from "../../components/Tooltip";
 import { formatDuration } from "../../lib/time";
 import {
   getDaysInCurrentYear,
