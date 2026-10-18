@@ -68,9 +68,8 @@ pub(super) fn apply_move(game: &mut Game, mover: PieceColor, mv: MoveStruct) -> 
 
 /// Applies the human's Elo change for a game that was just persisted for
 /// the first time (`GameService::save` returns `None` on a re-save, so
-/// this can't double-count). Best-effort: a rating write failing must not
-/// fail the move / end-game command, so errors are only logged.
-fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
+/// this can't double-count).
+fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) -> Result<(), AppError> {
     let (human_elo, opponent_elo) = match game.human_color {
         PieceColor::White => (game.white_player.elo, game.black_player.elo),
         PieceColor::Black => (game.black_player.elo, game.white_player.elo),
@@ -78,7 +77,7 @@ fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
 
     // `save` only persists finished games, so there's always a score here.
     let Some(score) = GameScore::for_side(game.result, game.human_color) else {
-        return;
+        return Ok(());
     };
     // `player_rating.reason`'s spelling of each outcome.
     let reason = match score {
@@ -89,30 +88,17 @@ fn record_rating_for_finished_game(db: &db::Db, game: &Game, game_id: u32) {
 
     let delta = rating::elo_delta(human_elo, opponent_elo, score);
 
-    let conn = match db.lock() {
-        Ok(conn) => conn,
-        Err(e) => {
-            eprintln!("rating: db lock poisoned, skipping update: {e}");
-            return;
-        }
-    };
+    let conn = db.lock()?;
     let service = PlayerRatingService::new(&conn);
-    let current = match service.current_rating(i64::from(rating::DEFAULT_RATING)) {
-        Ok(current) => current,
-        Err(e) => {
-            eprintln!("rating: could not read current rating: {e}");
-            return;
-        }
-    };
+    let current = service.current_rating(i64::from(rating::DEFAULT_RATING))?;
     let new_rating = (current + i64::from(delta)).max(0);
-    if let Err(e) = service.record(
+    service.record(
         new_rating,
         i64::from(delta),
         reason,
         Some(i64::from(game_id)),
-    ) {
-        eprintln!("rating: could not record change for game {game_id}: {e}");
-    }
+    )?;
+    Ok(())
 }
 
 /// Re-resolves `game.opening` against the moves played so far. Separate
@@ -130,8 +116,13 @@ pub(super) fn update_opening(game: &mut Game, db: &db::Db) -> Result<(), AppErro
         .collect::<Vec<_>>()
         .join(" ");
     let conn = db.lock()?;
-    if let Ok(Some(opening)) = OpeningService::new(&conn).find_by_uci_prefix(&played_uci) {
-        game.opening = Some(opening);
+    match OpeningService::new(&conn).find_by_uci_prefix(&played_uci) {
+        Ok(Some(opening)) => game.opening = Some(opening),
+        Ok(None) => {}
+        // The opening is only a label, so a failed lookup is logged and the
+        // move goes on. Failing here would also lose the game: it's checked
+        // out of `AppState` while it moves.
+        Err(err) => eprintln!("could not look up the opening: {err}"),
     }
     Ok(())
 }
@@ -186,7 +177,11 @@ pub(super) async fn finish_game(app: &AppHandle, game: Game) -> Result<(), AppEr
     // `Ok(None)` when this game was already in the library — its rating and
     // analysis were done the first time.
     if let Ok(Some(game_id)) = saved {
-        record_rating_for_finished_game(&db, &game, game_id);
+        // The game is saved either way, so a rating that didn't update is
+        // logged rather than failing the move or end-game command.
+        if let Err(err) = record_rating_for_finished_game(&db, &game, game_id) {
+            eprintln!("could not record the rating change for game {game_id}: {err}");
+        }
         if ANALYSIS_ENABLED {
             analysis::enqueue_analysis(app, analysis_job_for(game_id, &game));
         }

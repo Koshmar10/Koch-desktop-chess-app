@@ -87,12 +87,14 @@ pub fn get_player_stats(db: tauri::State<'_, db::Db>) -> Result<PlayerStats, App
         .average_human_accuracy()?
         .unwrap_or(0.0) as f32;
 
+    // Same rule as `get_sessions`: the session running now has no end yet
+    // and is left out, but one that can't be read is an error, not a zero.
     let total_seconds: i64 = SessionService::new(&conn)
         .get_sessions()?
         .iter()
-        .filter_map(|s| SessionDuration::try_from(s).ok())
-        .map(|d| d.duration)
-        .sum();
+        .filter(|s| s.disconnect_at.is_some())
+        .map(|s| SessionDuration::try_from(s).map(|d| d.duration))
+        .sum::<Result<_, String>>()?;
 
     Ok(PlayerStats {
         current_rating: current_rating as i32,

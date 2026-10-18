@@ -234,16 +234,15 @@ pub struct GameAnalysis {
     pub position_findings: Vec<PositionFindings>,
 }
 
-/// The saved analyzer settings, or `None` when nothing has been saved or
-/// the row can't be read — the pass then runs at its built-in defaults
-/// rather than failing.
-fn saved_settings(app: &AppHandle) -> Option<AnalyzerEngineSettings> {
+/// The saved analyzer settings, or `None` when nothing has been saved yet —
+/// the pass then runs at its built-in defaults. A saved row that can't be
+/// read fails the pass, as it fails the settings screen that loads it,
+/// rather than quietly analysing at settings nobody chose.
+fn saved_settings(app: &AppHandle) -> Result<Option<AnalyzerEngineSettings>, AppError> {
     let db = app.state::<db::Db>();
-    let conn = db.lock().ok()?;
-    let row = SettingsService::new(&conn)
-        .get_latest_analyzer_engine_settings()
-        .ok()??;
-    AnalyzerEngineSettings::try_from(row).ok()
+    let conn = db.lock()?;
+    let row = SettingsService::new(&conn).get_latest_analyzer_engine_settings()?;
+    Ok(row.map(AnalyzerEngineSettings::try_from).transpose()?)
 }
 
 /// One position's search, bounded by the saved limit.
@@ -292,7 +291,7 @@ pub async fn run_analysis(
     analysis_job: &AnalysisJob,
     app: &AppHandle,
 ) -> Result<GameAnalysis, AppError> {
-    let settings = saved_settings(app);
+    let settings = saved_settings(app)?;
     let limits = settings.as_ref().map_or(
         GoLimits {
             depth: Some(ANALYSIS_DEPTH),

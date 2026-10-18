@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::db::schemas::opening::Opening;
 
@@ -27,11 +27,7 @@ impl<'a> OpeningService<'a> {
                 params![played_uci],
                 |row| Opening::try_from(row),
             )
-            .map(Some)
-            .or_else(|err| match err {
-                rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                err => Err(err),
-            })
+            .optional()
     }
 
     /// Resolves an `opening_id` (as saved on a `games` row) back into its
@@ -44,11 +40,7 @@ impl<'a> OpeningService<'a> {
                 params![opening_id],
                 |row| Opening::try_from(row),
             )
-            .map(Some)
-            .or_else(|err| match err {
-                rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                err => Err(err),
-            })
+            .optional()
     }
 }
 
