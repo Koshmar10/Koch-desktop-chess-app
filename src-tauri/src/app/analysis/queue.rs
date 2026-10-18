@@ -54,7 +54,9 @@ pub async fn worker(app: AppHandle, mut rx: UnboundedReceiver<AnalysisJob>) {
     }
 }
 
-/// Runs one job and writes its results, per move and per game.
+/// Runs one job and writes its results, per move and per game. A write
+/// that fails fails the job, so the game is marked `Failed` rather than
+/// `Done` over grades that were never saved.
 async fn analyse_and_save(job: &AnalysisJob, app: &AppHandle) -> Result<GameAnalysis, AppError> {
     let analysis = run_analysis(job, app).await?;
 
@@ -64,7 +66,7 @@ async fn analyse_and_save(job: &AnalysisJob, app: &AppHandle) -> Result<GameAnal
         job.game_id,
         &analysis.move_qualities,
         &analysis.centipawn_history,
-    );
-    AnalysisService::new(&conn).save(job.game_id, &analysis);
+    )?;
+    AnalysisService::new(&conn).save(job.game_id, &analysis)?;
     Ok(analysis)
 }

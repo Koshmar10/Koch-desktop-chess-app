@@ -25,16 +25,13 @@ use super::view::{
 pub(super) fn game_summary_from(
     game: &db::schemas::game::Game,
     db_conn: &rusqlite::Connection,
-) -> GameSummary {
-    let opening_name = game.opening_id.and_then(|id| {
-        OpeningService::new(db_conn)
-            .find_by_id(id)
-            .ok()
-            .flatten()
-            .map(|opening| opening.opening_name)
-    });
+) -> rusqlite::Result<GameSummary> {
+    let opening = match game.opening_id {
+        Some(id) => OpeningService::new(db_conn).find_by_id(id)?,
+        None => None,
+    };
 
-    GameSummary {
+    Ok(GameSummary {
         game_id: game.game_id as u32,
         game_hash: game.game_hash.clone(),
         date_played: game.date_played.clone(),
@@ -44,16 +41,16 @@ pub(super) fn game_summary_from(
         black_elo: game.black_elo as u32,
         result: game.result,
         opening_id: game.opening_id.map(|id| id as u32),
-        opening_name,
+        opening_name: opening.map(|opening| opening.opening_name),
         time_control: game.time_control,
         source: game.source,
         human_color: game.human_color,
         human_score: game
             .human_color
             .and_then(|side| GameScore::for_side(game.result, side)),
-        has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32),
+        has_analysis: AnalysisService::new(db_conn).has_analysis(game.game_id as u32)?,
         partial_import: game.partial_import,
-    }
+    })
 }
 
 #[tauri::command]
@@ -199,10 +196,11 @@ pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, AppEr
 
     let games = GameService::new(&conn).get_games()?;
 
-    Ok(games
+    let summaries = games
         .iter()
         .map(|game| game_summary_from(game, &conn))
-        .collect())
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(summaries)
 }
 
 #[tauri::command]

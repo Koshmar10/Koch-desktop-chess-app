@@ -19,12 +19,10 @@ impl<'a> AnalysisService<'a> {
     /// A re-analysis replaces the previous row. This used to be `DO
     /// NOTHING` on conflict, which kept the first analysis's numbers
     /// forever: re-analysing an import from the other side updated every
-    /// move's grade but left the old side's accuracy standing. Returns
-    /// whether the row was written.
-    pub fn save(&self, game_id: u32, analysis: &GameAnalysis) -> bool {
-        self.conn
-            .execute(
-                "INSERT INTO analysis (
+    /// move's grade but left the old side's accuracy standing.
+    pub fn save(&self, game_id: u32, analysis: &GameAnalysis) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT INTO analysis (
                     game_id, accuracy_percent, average_centipawn_loss,
                     average_move_time_ms, longest_think_ms, longest_think_ply,
                     time_trouble_moves, total_duration_ms,
@@ -43,22 +41,22 @@ impl<'a> AnalysisService<'a> {
                     white_average_centipawn_loss = excluded.white_average_centipawn_loss,
                     black_accuracy_percent = excluded.black_accuracy_percent,
                     black_average_centipawn_loss = excluded.black_average_centipawn_loss",
-                params![
-                    game_id,
-                    analysis.accuracy_percent,
-                    analysis.average_centipawn_loss,
-                    analysis.average_move_time_ms,
-                    analysis.longest_think_ms,
-                    analysis.longest_think_ply,
-                    analysis.time_trouble_moves,
-                    analysis.total_duration_ms,
-                    analysis.white.accuracy_percent,
-                    analysis.white.average_centipawn_loss,
-                    analysis.black.accuracy_percent,
-                    analysis.black.average_centipawn_loss,
-                ],
-            )
-            .is_ok_and(|rows| rows > 0)
+            params![
+                game_id,
+                analysis.accuracy_percent,
+                analysis.average_centipawn_loss,
+                analysis.average_move_time_ms,
+                analysis.longest_think_ms,
+                analysis.longest_think_ply,
+                analysis.time_trouble_moves,
+                analysis.total_duration_ms,
+                analysis.white.accuracy_percent,
+                analysis.white.average_centipawn_loss,
+                analysis.black.accuracy_percent,
+                analysis.black.average_centipawn_loss,
+            ],
+        )?;
+        Ok(())
     }
 
     /// White's and Black's accuracy for an analysed game, or `None` when
@@ -103,18 +101,13 @@ impl<'a> AnalysisService<'a> {
 
     /// Whether `game_id` has an aggregate analysis row yet. Cheap existence
     /// check for history/library views that only need the yes/no, not the
-    /// numbers — `UNIQUE(game_id)` means there's at most one. A query error
-    /// is reported as "no analysis" rather than propagated: the caller
-    /// (`game_summary_from`) has nowhere useful to surface it and a missing
-    /// badge is the safe default.
-    pub fn has_analysis(&self, game_id: u32) -> bool {
-        self.conn
-            .query_row(
-                "SELECT EXISTS (SELECT 1 FROM analysis WHERE game_id = ?1)",
-                params![game_id],
-                |row| row.get::<_, bool>(0),
-            )
-            .unwrap_or(false)
+    /// numbers — `UNIQUE(game_id)` means there's at most one.
+    pub fn has_analysis(&self, game_id: u32) -> rusqlite::Result<bool> {
+        self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM analysis WHERE game_id = ?1)",
+            params![game_id],
+            |row| row.get::<_, bool>(0),
+        )
     }
 
     /// Mean `accuracy_percent` across analysed games the human played, or
@@ -190,8 +183,12 @@ mod tests {
         let game_id = insert_game(&conn);
         let service = AnalysisService::new(&conn);
 
-        assert!(service.save(game_id, &analysis(side(70.0, 40), side(60.0, 55))));
-        assert!(service.save(game_id, &analysis(side(90.0, 12), side(85.0, 20))));
+        service
+            .save(game_id, &analysis(side(70.0, 40), side(60.0, 55)))
+            .unwrap();
+        service
+            .save(game_id, &analysis(side(90.0, 12), side(85.0, 20)))
+            .unwrap();
 
         let (white, black) = service.side_accuracies(game_id).unwrap().unwrap();
         assert_eq!(white, side(90.0, 12));

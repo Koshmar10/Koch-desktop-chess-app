@@ -165,7 +165,7 @@ pub fn load_game_replay(
     let accuracies = AnalysisService::new(&conn).side_accuracies(game_id)?;
 
     Ok(GameReplay {
-        summary: game_summary_from(&game, &conn),
+        summary: game_summary_from(&game, &conn)?,
         positions: replay_positions(&moves)?,
         white_accuracy: accuracies.map(|(white, _)| white),
         black_accuracy: accuracies.map(|(_, black)| black),

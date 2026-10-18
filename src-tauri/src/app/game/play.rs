@@ -179,20 +179,21 @@ pub(super) async fn finish_game(app: &AppHandle, game: Game) -> Result<(), AppEr
     let db = app.state::<db::Db>();
     // Scoped so the guard is gone before the `.await` below — one held
     // across it would make this future non-`Send`.
-    let game_id = {
+    let saved = {
         let conn = db.lock()?;
         GameService::new(&conn).save(&game, &SaveMeta::koch())
     };
-    // `None` when nothing new was saved — the game was already in the
-    // library, or the insert failed — so there's no rating or analysis to
-    // add for it.
-    if let Some(game_id) = game_id {
+    // `Ok(None)` when this game was already in the library — its rating and
+    // analysis were done the first time.
+    if let Ok(Some(game_id)) = saved {
         record_rating_for_finished_game(&db, &game, game_id);
         if ANALYSIS_ENABLED {
             analysis::enqueue_analysis(app, analysis_job_for(game_id, &game));
         }
     }
+    // The engine is done whether or not the save worked.
     let _ = game.engine.quit().await;
+    saved?;
     Ok(())
 }
 
