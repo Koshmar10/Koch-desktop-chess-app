@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::app::analysis::{self, AnalysisJob};
 use crate::app::app_state::AppState;
 use crate::app::error::AppError;
+use crate::app::events;
 use crate::app::rating::{self, GameScore};
 use crate::db::{
     self,
@@ -253,13 +254,13 @@ async fn play_engine_reply(app: &AppHandle, mut game: Game) -> Result<(), AppErr
     if game_ended {
         let response = game.state_view();
         finish_game(app, game).await?;
-        let _ = app.emit("engine-move-complete", response);
+        let _ = app.emit(events::ENGINE_MOVE_COMPLETE, response);
         return Ok(());
     }
 
     prepare_next_move(&mut game).await;
     let response = game.state_view();
     restore_active_game(&state, game)?;
-    let _ = app.emit("engine-move-complete", response);
+    let _ = app.emit(events::ENGINE_MOVE_COMPLETE, response);
     Ok(())
 }

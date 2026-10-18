@@ -8,6 +8,7 @@ use ts_rs::TS;
 use super::job::AnalysisJob;
 use super::metrics::{expected_win_percent, move_accuracy_percent, to_centipawns, TimeStats};
 use super::status::{emit_status, AnalysisStage};
+use crate::app::events;
 use crate::app::settings::{AnalyzerEngineSettings, SearchLimit, SearchLimitMode};
 use crate::db::{self, services::settings::SettingsService};
 
@@ -351,7 +352,7 @@ pub async fn run_analysis(
         let percent = (((i + 1) * 100) / total_positions) as u8;
         // `update-analysis-progress` stays for the play view's progress bar;
         // `analysis-status` carries the `game_id` a history card filters on.
-        let _ = app.emit("update-analysis-progress", percent);
+        let _ = app.emit(events::ANALYSIS_PROGRESS, percent);
         emit_status(
             app,
             analysis_job.game_id,

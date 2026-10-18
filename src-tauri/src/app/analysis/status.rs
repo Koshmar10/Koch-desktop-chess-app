@@ -2,6 +2,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use ts_rs::TS;
 
+use crate::app::events;
+
 /// Where one game's analysis is in its lifecycle — pushed on the
 /// `analysis-status` event so a per-game view (a history card) can show
 /// queued / running / done for its own `game_id`. `Running` carries its
@@ -27,5 +29,5 @@ pub struct AnalysisStatus {
 /// Fire an `analysis-status` event. Best-effort — a listener that isn't
 /// there isn't worth surfacing.
 pub(super) fn emit_status(app: &AppHandle, game_id: u32, stage: AnalysisStage) {
-    let _ = app.emit("analysis-status", AnalysisStatus { game_id, stage });
+    let _ = app.emit(events::ANALYSIS_STATUS, AnalysisStatus { game_id, stage });
 }
