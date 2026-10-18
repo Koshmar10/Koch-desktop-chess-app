@@ -7,7 +7,7 @@ import {
   formatDatePlayed,
   formatTimeControl,
   resultToken,
-} from "../../../../api/gameSummary";
+} from "../../../../lib/gameSummary";
 import { PieceAvatar } from "../../../../components/chessboard/PieceAvatar";
 import MoveTimeline from "../../../../components/MoveTimeline";
 import PanelSection from "../../../../components/PanelSection";

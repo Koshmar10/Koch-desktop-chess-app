@@ -2,7 +2,8 @@ import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { ReplayPosition } from "../../api/bindings/ReplayPosition";
 import type { TimeControl } from "../../api/bindings/TimeControl";
-import { resultToken } from "../../api/gameSummary";
+import { resultToken } from "../../lib/gameSummary";
+import { MS_PER_SECOND, parseStoredDate } from "../../lib/time";
 
 // PGN's placeholders for a tag value that isn't known, and for a Round
 // when the game wasn't part of one.
@@ -13,8 +14,6 @@ const NO_ROUND = "-";
 const KOCH_SITE = "Koch";
 const CASUAL_GAME_EVENT = "Casual Game";
 const SANDBOX_EVENT = "Analysis";
-
-const MS_PER_SECOND = 1000;
 
 const STANDARD_START_FEN =
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -65,13 +64,11 @@ const pad = (n: number): string => n.toString().padStart(2, "0");
 const pgnDate = (date: Date): string =>
   `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`;
 
-// `date_played` is SQLite's UTC "YYYY-MM-DD HH:MM:SS" — read as UTC, the
-// way `formatDatePlayed` does, so the PGN has the same day the game tab
-// shows.
+// Read the same way `formatDatePlayed` reads it, so the PGN has the same
+// day the game tab shows.
 const pgnDateFromDatePlayed = (datePlayed: string | null): string => {
-  if (!datePlayed) return UNKNOWN_DATE;
-  const date = new Date(`${datePlayed.replace(" ", "T")}Z`);
-  return isNaN(date.getTime()) ? UNKNOWN_DATE : pgnDate(date);
+  const date = parseStoredDate(datePlayed);
+  return date ? pgnDate(date) : UNKNOWN_DATE;
 };
 
 // PGN's TimeControl is "<initial>+<increment>" in seconds.

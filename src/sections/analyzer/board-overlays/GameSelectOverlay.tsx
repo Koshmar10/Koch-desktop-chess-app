@@ -5,7 +5,7 @@ import {
   formatDatePlayed,
   getScoreCardStyle,
   resultToken,
-} from "../../../api/gameSummary";
+} from "../../../lib/gameSummary";
 import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
 import DialogCard, { WIDE_DIALOG_PX } from "../../../components/DialogCard";
 import EmptyNote from "../../../components/EmptyNote";

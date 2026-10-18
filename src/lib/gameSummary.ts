@@ -1,18 +1,14 @@
-import type { GameResult } from "./bindings/GameResult";
-import type { GameScore } from "./bindings/GameScore";
-import type { TimeControl } from "./bindings/TimeControl";
+import type { GameResult } from "../api/bindings/GameResult";
+import type { GameScore } from "../api/bindings/GameScore";
+import type { TimeControl } from "../api/bindings/TimeControl";
+import { MS_PER_MINUTE, MS_PER_SECOND, parseStoredDate } from "./time";
 
-const MS_PER_SECOND = 1000;
-const MS_PER_MINUTE = 60 * MS_PER_SECOND;
-
-// SQLite's `datetime('now')` is UTC "YYYY-MM-DD HH:MM:SS" with no zone
-// marker, so the Z has to be added or the browser reads it as local time
-// and the date can land a day out. Shared by the history cards and the
-// analyzer's game tab, which both print it.
+// The day a game was played, the way the history cards and the analyzer's
+// game tab both print it. A value that won't read as a date is shown as
+// it is rather than dropped.
 export const formatDatePlayed = (datePlayed: string | null): string => {
-  if (!datePlayed) return "";
-  const date = new Date(`${datePlayed.replace(" ", "T")}Z`);
-  if (isNaN(date.getTime())) return datePlayed;
+  const date = parseStoredDate(datePlayed);
+  if (!date) return datePlayed ?? "";
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",

@@ -1,3 +1,4 @@
+import { clamp } from "../../../lib/math";
 import type { EvalScore } from "../types";
 
 const CENTIPAWNS_PER_PAWN = 100;
@@ -12,8 +13,11 @@ const BAR_CLAMP_PAWNS = 5;
 /** Shown instead of a number before the engine has reported anything. */
 export const EVAL_UNKNOWN_LABEL = "—";
 
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
+/** A plain centipawn eval as an `EvalScore` — a stored eval, say. */
+export const cpScore = (centipawns: number): EvalScore => ({
+  kind: "cp",
+  centipawns,
+});
 
 const signPrefix = (value: number): string => {
   if (value > 0) return "+";

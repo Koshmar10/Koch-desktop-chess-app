@@ -2,7 +2,6 @@ import type { AnalyzerEngineSettings } from "../../api/bindings/AnalyzerEngineSe
 import type { SearchLimitMode } from "../../api/bindings/SearchLimitMode";
 import { Section, SettingRow } from "./Section";
 import { NumberSetting, SelectSetting } from "../../components/controls";
-import { MAX_THREADS } from "../../api/settings";
 import {
   LABEL_TO_LIMIT_MODE,
   LIMIT_BOUNDS,
@@ -10,7 +9,8 @@ import {
   LIMIT_MODE_LABEL,
   LIMIT_MODES,
   limitValueLabel,
-} from "../../api/searchLimit";
+} from "../../lib/searchLimit";
+import { ENGINE_LIMITS, MAX_THREADS } from "../../lib/settings";
 import { isDirty, useDraft, type SectionState } from "./draft";
 
 const LIMIT_HINT: Record<SearchLimitMode, string> = {
@@ -32,7 +32,6 @@ export const AnalyzerEngineSection = ({
     setDraft((current) => ({ ...current, ...next }));
 
   const mode = draft.search_limit.mode;
-  const bounds = LIMIT_BOUNDS[mode];
 
   return (
     <Section
@@ -64,9 +63,7 @@ export const AnalyzerEngineSection = ({
         <NumberSetting
           value={draft.search_limit.value}
           onChange={(v) => patch({ search_limit: { mode, value: v } })}
-          min={bounds.min}
-          max={bounds.max}
-          step={bounds.step}
+          {...LIMIT_BOUNDS[mode]}
         />
       </SettingRow>
       <SettingRow
@@ -76,8 +73,7 @@ export const AnalyzerEngineSection = ({
         <NumberSetting
           value={draft.multi_pv}
           onChange={(v) => patch({ multi_pv: v })}
-          min={1}
-          max={5}
+          {...ENGINE_LIMITS.lines}
         />
       </SettingRow>
       <SettingRow
@@ -87,8 +83,7 @@ export const AnalyzerEngineSection = ({
         <NumberSetting
           value={draft.threads}
           onChange={(v) => patch({ threads: v })}
-          min={1}
-          max={MAX_THREADS}
+          {...ENGINE_LIMITS.threads}
         />
       </SettingRow>
       <SettingRow
@@ -98,9 +93,7 @@ export const AnalyzerEngineSection = ({
         <NumberSetting
           value={draft.hash_mb}
           onChange={(v) => patch({ hash_mb: v })}
-          min={16}
-          max={4096}
-          step={16}
+          {...ENGINE_LIMITS.hashMb}
         />
       </SettingRow>
     </Section>

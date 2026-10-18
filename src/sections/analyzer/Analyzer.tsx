@@ -27,7 +27,8 @@ import { nextMistakePly } from "./toolbar/nextMistake";
 import PanelPlaceholder from "./PanelPlaceholder";
 import TimelinePlaceholder from "./board/TimelinePlaceholder";
 import EvalBar from "./board/EvalBar";
-import { topLineMove, topLineScore } from "./board/evalBar";
+import { cpScore, topLineMove, topLineScore } from "./board/evalBar";
+import { clamp } from "../../lib/math";
 import {
   bestMoveMask,
   ghosted,
@@ -38,7 +39,6 @@ import { useLiveEngine } from "./useGameReplay";
 import {
   START_POSITION_PLY,
   type EngineStatus,
-  type EvalScore,
   type MaskSelection,
 } from "./types";
 import type { MoveQuality } from "../../api/bindings/MoveQuality";
@@ -57,9 +57,6 @@ export type TimelineMove = {
   score: number;
   quality: MoveQuality;
 };
-
-const clampPly = (ply: number, totalPlies: number): number =>
-  Math.min(totalPlies - 1, Math.max(START_POSITION_PLY, ply));
 
 const GameLoadError = ({ message }: { message: string }) => (
   <div className="max-w-sm rounded-lg border-[1px] border-destructive/50 bg-card p-4 text-sm text-foreground/80">
@@ -224,8 +221,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   // stored — null for the start position and for a game that hasn't been
   // analysed.
   const storedEval = position?.eval_cp ?? null;
-  const storedScore: EvalScore | null =
-    storedEval === null ? null : { kind: "cp", centipawns: storedEval };
+  const storedScore = storedEval === null ? null : cpScore(storedEval);
   const evalScore = topLineScore(snapshot?.pv_lines) ?? storedScore;
 
   // ---- What's drawn: everything switched on, plus the preview ----
@@ -253,7 +249,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   // as `onSelectPly`, can skip them.
   const goToPly = useCallback(
     (ply: number) => {
-      const next = clampPly(ply, moves.length);
+      const next = clamp(ply, START_POSITION_PLY, moves.length - 1);
       if (next === viewedPly) return;
       if (engineStatus === "running") searchPosition(next);
       setViewedPly(next);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { clamp } from "../lib/math";
 import Dropdown from "./Dropdown";
 import { CONTROL_CLASS, TEXT_INPUT_CLASS } from "./controlStyles";
 
@@ -53,8 +54,7 @@ export const NumberSetting = ({
   max?: number;
   step?: number;
 }) => {
-  const clamped = (n: number) =>
-    Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
+  const clamped = (n: number) => clamp(n, min ?? -Infinity, max ?? Infinity);
   return (
     <div
       className={`${CONTROL_CLASS} flex w-28 items-stretch overflow-hidden p-0`}

@@ -1,13 +1,7 @@
 import type { LiveEngineSettings } from "../../../../api/bindings/LiveEngineSettings";
-import { MAX_THREADS } from "../../../../api/settings";
 import { NumberSetting } from "../../../../components/controls";
 import PanelSection from "../../../../components/PanelSection";
-
-const MIN_LINES = 1;
-const MAX_LINES = 5;
-const MIN_HASH_MB = 16;
-const MAX_HASH_MB = 4096;
-const HASH_STEP_MB = 16;
+import { ENGINE_LIMITS } from "../../../../lib/settings";
 
 // The Settings screen pairs each of these with a paragraph explaining the
 // trade-off; here they're bare. This panel is for adjusting a value you
@@ -46,8 +40,7 @@ const EngineSettings = ({ settings, onChange }: EngineSettingsProps) => {
         <NumberSetting
           value={settings.multi_pv}
           onChange={(multi_pv) => patch({ multi_pv })}
-          min={MIN_LINES}
-          max={MAX_LINES}
+          {...ENGINE_LIMITS.lines}
         />
       </Row>
 
@@ -55,8 +48,7 @@ const EngineSettings = ({ settings, onChange }: EngineSettingsProps) => {
         <NumberSetting
           value={settings.threads}
           onChange={(threads) => patch({ threads })}
-          min={1}
-          max={MAX_THREADS}
+          {...ENGINE_LIMITS.threads}
         />
       </Row>
 
@@ -64,9 +56,7 @@ const EngineSettings = ({ settings, onChange }: EngineSettingsProps) => {
         <NumberSetting
           value={settings.hash_mb}
           onChange={(hash_mb) => patch({ hash_mb })}
-          min={MIN_HASH_MB}
-          max={MAX_HASH_MB}
-          step={HASH_STEP_MB}
+          {...ENGINE_LIMITS.hashMb}
         />
       </Row>
     </PanelSection>

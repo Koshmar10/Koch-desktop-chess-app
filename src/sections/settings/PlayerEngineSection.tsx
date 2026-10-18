@@ -1,7 +1,7 @@
 import type { PlayerEngineSettings } from "../../api/bindings/PlayerEngineSettings";
 import { Section, SettingRow } from "./Section";
 import { NumberSetting, ToggleSetting } from "../../components/controls";
-import { MAX_THREADS } from "../../api/settings";
+import { ENGINE_LIMITS, MAX_THREADS } from "../../lib/settings";
 import { isDirty, useDraft, type SectionState } from "./draft";
 
 export const PlayerEngineSection = ({
@@ -28,8 +28,7 @@ export const PlayerEngineSection = ({
         <NumberSetting
           value={draft.threads}
           onChange={(v) => patch({ threads: v })}
-          min={1}
-          max={MAX_THREADS}
+          {...ENGINE_LIMITS.threads}
         />
       </SettingRow>
       <SettingRow
@@ -39,9 +38,7 @@ export const PlayerEngineSection = ({
         <NumberSetting
           value={draft.hash_mb}
           onChange={(v) => patch({ hash_mb: v })}
-          min={16}
-          max={1024}
-          step={16}
+          {...ENGINE_LIMITS.playerHashMb}
         />
       </SettingRow>
       <SettingRow
@@ -51,9 +48,7 @@ export const PlayerEngineSection = ({
         <NumberSetting
           value={draft.move_overhead_ms}
           onChange={(v) => patch({ move_overhead_ms: v })}
-          min={10}
-          max={1000}
-          step={10}
+          {...ENGINE_LIMITS.moveOverheadMs}
         />
       </SettingRow>
       <SettingRow

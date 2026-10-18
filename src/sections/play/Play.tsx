@@ -11,14 +11,9 @@ import { BOARD_PIXEL_SIZE } from "../../components/chessboard/lib/constants";
 import { getTakenPieces } from "../../components/chessboard/lib/takenPieces";
 import PlayControls from "./PlayControls";
 import GameSidePanel from "./GameSidePanel";
-import type { GameMode } from "./GameContext";
-import {
-  useGameContext,
-  MODE_TIME_CONTROL,
-  formatClock,
-  isGameOngoing,
-  isTurn,
-} from "./GameContext";
+import { MODE_TIME_CONTROL, type GameMode } from "../../lib/gameModes";
+import { formatClock } from "../../lib/time";
+import { useGameContext, isGameOngoing, isTurn } from "./GameContext";
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameResultCard from "./GameResultCard";

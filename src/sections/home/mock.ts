@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { TrendingUp, Trophy, Target, Medal, Zap, Clock } from "lucide-react";
 import type { PlayerStats } from "../../api/bindings/PlayerStats";
+import { formatDuration } from "../../lib/time";
 
 // Layout + presentation for each Home stat card. The value comes from live
 // `PlayerStats` via `format`; the icon / label / grid span are fixed here.
@@ -11,13 +12,6 @@ export interface StatCard {
   delta?: string;
   format: (stats: PlayerStats) => string | number;
 }
-
-const formatDuration = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  return `${minutes}m`;
-};
 
 export const STAT_CARDS: StatCard[] = [
   {

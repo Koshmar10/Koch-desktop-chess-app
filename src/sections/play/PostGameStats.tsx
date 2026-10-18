@@ -3,37 +3,19 @@ import type { ReactNode } from "react";
 import { Target, Clock3, ListChecks, type LucideIcon } from "lucide-react";
 import PanelSection from "../../components/PanelSection";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
-import type { MoveQuality } from "../../api/bindings/MoveQuality";
 import type { PieceColor } from "../../api/bindings/PieceColor";
+import {
+  MOVE_QUALITY_COUNT_LABEL,
+  MOVE_QUALITY_ORDER,
+  countByQuality,
+} from "../../lib/moveQuality";
+import { formatClock, formatSeconds } from "../../lib/time";
 import { CentipawnGraph, TimeGraph } from "./StatGraphs";
-import { formatClock } from "./GameContext";
 
 const SLIDE_DURATION_MS = 220;
 const SLIDE_DISTANCE_PX = 20;
 const AUTO_ADVANCE_MS = 4000;
 const SECTION_COUNT = 3;
-
-const MOVE_QUALITY_ORDER: MoveQuality[] = [
-  "Brilliant",
-  "Great",
-  "Excellent",
-  "Good",
-  "Inaccuracy",
-  "Mistake",
-  "Blunder",
-];
-
-const MOVE_QUALITY_LABEL: Record<MoveQuality, string> = {
-  Brilliant: "Brilliant",
-  Great: "Great",
-  Excellent: "Excellent",
-  Good: "Good",
-  Inaccuracy: "Inaccuracies",
-  Mistake: "Mistakes",
-  Blunder: "Blunders",
-};
-
-const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 interface StatEntry {
   label: string;
@@ -60,18 +42,9 @@ const buildAccuracySection = (
   analysis: GameAnalysis,
   humanColor: PieceColor | null,
 ): StatSection => {
-  const counts: Record<MoveQuality, number> = {
-    Brilliant: 0,
-    Great: 0,
-    Excellent: 0,
-    Good: 0,
-    Inaccuracy: 0,
-    Mistake: 0,
-    Blunder: 0,
-  };
-  for (const { quality } of yourMoveQualities(analysis, humanColor)) {
-    counts[quality] += 1;
-  }
+  const counts = countByQuality(
+    yourMoveQualities(analysis, humanColor).map((entry) => entry.quality),
+  );
 
   return {
     id: "accuracy",
@@ -84,7 +57,7 @@ const buildAccuracySection = (
         value: analysis.average_centipawn_loss,
       },
       ...MOVE_QUALITY_ORDER.map((quality) => ({
-        label: MOVE_QUALITY_LABEL[quality],
+        label: MOVE_QUALITY_COUNT_LABEL[quality],
         value: counts[quality],
       })),
     ],

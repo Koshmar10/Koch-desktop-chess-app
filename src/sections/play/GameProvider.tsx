@@ -10,12 +10,8 @@ import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
 import { useAppEvent } from "../../app/useAppEvent";
-import {
-  GameContext,
-  MODE_TIME_CONTROL,
-  type ColorPreference,
-  type GameMode,
-} from "./GameContext";
+import { MODE_TIME_CONTROL, type GameMode } from "../../lib/gameModes";
+import { GameContext, type ColorPreference } from "./GameContext";
 
 const randomColor = (): PieceColor => (Math.random() < 0.5 ? "white" : "black");
 

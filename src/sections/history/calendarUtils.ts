@@ -1,4 +1,7 @@
-export const MS_PER_DAY = 1000 * 60 * 60 * 24;
+import { clamp } from "../../lib/math";
+import { MS_PER_MINUTE } from "../../lib/time";
+
+export const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
 
 export function getDaysInCurrentYear(): number {
   const year = new Date().getFullYear();
@@ -25,19 +28,6 @@ export function formatDayLabel(dateStr: string): string {
   }).format(date);
 }
 
-export function formatDuration(seconds: number): string {
-  const totalMinutes = Math.round(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) {
-    return `${minutes}m`;
-  }
-  if (minutes === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${minutes}m`;
-}
-
 const MIN_DURATION_SECONDS = 2 * 60;
 const MAX_DURATION_SECONDS = 4 * 60 * 60;
 
@@ -46,10 +36,7 @@ export function scaleOpacity(
   minOpacity = 0.1,
   maxOpacity = 1,
 ): number {
-  const clamped = Math.min(
-    Math.max(duration, MIN_DURATION_SECONDS),
-    MAX_DURATION_SECONDS,
-  );
+  const clamped = clamp(duration, MIN_DURATION_SECONDS, MAX_DURATION_SECONDS);
   const ratio =
     (clamped - MIN_DURATION_SECONDS) /
     (MAX_DURATION_SECONDS - MIN_DURATION_SECONDS);

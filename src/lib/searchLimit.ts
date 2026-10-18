@@ -1,4 +1,4 @@
-import type { SearchLimitMode } from "./bindings/SearchLimitMode";
+import type { SearchLimitMode } from "../api/bindings/SearchLimitMode";
 
 // Shape and bounds for the analyzer's stop condition, shared by the two
 // screens that edit it — the Settings page and the Analyzer's engine tab.
