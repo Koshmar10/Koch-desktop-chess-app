@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { BOARD_PIXEL_SIZE } from "../../../components/chessboard/lib/constants";
 import type { TimelineMove } from "../Analyzer";
-import { evalBarWhiteFraction, formatEvalScore } from "./evalBar";
+import { cpScore, evalBarWhiteFraction, formatEvalScore } from "./evalBar";
 
 const TIMELINE_HEIGHT_PX = 152;
 
@@ -42,7 +42,7 @@ const TimelinePlaceholder = ({
       moves.map((move) => ({
         ...move,
         // 0 = Black winning, 0.5 = equal, 1 = White winning
-        white: evalBarWhiteFraction({ kind: "cp", centipawns: move.score }),
+        white: evalBarWhiteFraction(cpScore(move.score)),
       })),
     [moves],
   );
@@ -125,7 +125,7 @@ const TimelinePlaceholder = ({
           // The chart plots the 0–1 bar fraction; the tooltip shows the eval
           // it came from, formatted the way the eval bar shows it.
           formatter={(_value, _name, item) => [
-            formatEvalScore({ kind: "cp", centipawns: item.payload.score }),
+            formatEvalScore(cpScore(item.payload.score)),
             "Eval",
           ]}
         />

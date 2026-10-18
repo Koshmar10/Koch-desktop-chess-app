@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { getSessions } from "../../api/sessions";
 import { Tooltip } from "../../components/Tooltip";
+import { formatDuration } from "../../lib/time";
 import {
   getDaysInCurrentYear,
   dateToDayIndex,
   scaleOpacity,
   formatDayLabel,
-  formatDuration,
 } from "./calendarUtils";
 
 const WEEK_DAYS_ARRAY = ["Mon", "Wed", "Fri"];

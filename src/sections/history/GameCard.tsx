@@ -1,14 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   formatDatePlayed,
   getScoreCardStyle,
   resultToken,
-} from "../../api/gameSummary";
+} from "../../lib/gameSummary";
 import {
-  Flame,
-  Zap,
-  Clock,
-  ChessKnight,
+  MODE_ICON,
+  modeForTimeControl,
+  type GameMode,
+} from "../../lib/gameModes";
+import {
   ChessKing,
   ChartSpline,
   MoreVertical,
@@ -25,9 +26,7 @@ import {
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
-import type { TimeControl } from "../../api/bindings/TimeControl";
 import { useAnalysisStage } from "../../app/AppContext";
-import { MODE_TIME_CONTROL, type GameMode } from "../play/GameContext";
 import Dropdown from "../../components/Dropdown";
 
 interface GameCardProps {
@@ -40,24 +39,18 @@ interface GameCardProps {
 
 const MODE_ICON_SIZE = 18;
 
-const MODE_ICON: Record<GameMode, ReactNode> = {
-  Bullet: <Flame size={MODE_ICON_SIZE} className="text-red-500" />,
-  Blitz: <Zap size={MODE_ICON_SIZE} className="text-amber-500" />,
-  Rapid: <Clock size={MODE_ICON_SIZE} className="text-sky-600" />,
-  Classical: <ChessKnight size={MODE_ICON_SIZE} className="text-violet-400" />,
+// The card's own touch: each mode's icon in its own colour, so a page of
+// cards sorts itself by speed at a glance. The icons are shared.
+const MODE_COLOR_CLASS: Record<GameMode, string> = {
+  Bullet: "text-red-500",
+  Blitz: "text-amber-500",
+  Rapid: "text-sky-600",
+  Classical: "text-violet-400",
 };
 
-const MODE_ORDER: GameMode[] = ["Bullet", "Blitz", "Rapid", "Classical"];
-
-const modeForTimeControl = (
-  timeControl: TimeControl | null,
-): GameMode | null => {
-  if (!timeControl) return null;
-  return (
-    MODE_ORDER.find(
-      (mode) => timeControl.initial_ms <= MODE_TIME_CONTROL[mode].initial_ms,
-    ) ?? "Classical"
-  );
+const ModeIcon = ({ mode }: { mode: GameMode }) => {
+  const Icon = MODE_ICON[mode];
+  return <Icon size={MODE_ICON_SIZE} className={MODE_COLOR_CLASS[mode]} />;
 };
 
 const PLAYER_DOT_CLASS: Record<PieceColor, string> = {
@@ -251,14 +244,18 @@ const GameCard = ({
   onExportPgn,
   onDelete,
 }: GameCardProps) => {
-  const mode = modeForTimeControl(gameSummary.time_control);
+  // An import with no clock has no mode, and shows no icon for one.
+  const mode =
+    gameSummary.time_control && modeForTimeControl(gameSummary.time_control);
   const analysisStage = useAnalysisStage(gameSummary.game_id);
 
   return (
     <div className="flex flex-col justify-between gap-2 px-4 py-3 w-full h-62 rounded-lg bg-card border border-border">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground/50">
-          <span title={mode ?? undefined}>{mode && MODE_ICON[mode]}</span>
+          <span title={mode ?? undefined}>
+            {mode && <ModeIcon mode={mode} />}
+          </span>
           <AnalysisIndicator
             hasAnalysis={gameSummary.has_analysis}
             stage={analysisStage}

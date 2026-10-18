@@ -4,18 +4,11 @@ import {
   applyLiveEngineSettings,
   getLiveEngineSettings,
 } from "../../../../api/analyzer";
+import { DEFAULT_LIVE_ENGINE_SETTINGS } from "../../../../lib/settings";
 
 // Applying stops the search and restarts it, so wait for a pause instead
 // of restarting on every click of a spinner.
 const APPLY_DEBOUNCE_MS = 600;
-
-// Stockfish's own defaults — what a fresh session runs with — shown until
-// the session's real values load.
-const STOCKFISH_DEFAULTS: LiveEngineSettings = {
-  multi_pv: 1,
-  threads: 1,
-  hash_mb: 16,
-};
 
 /**
  * The live engine's options, read from the running session and applied to
@@ -26,8 +19,10 @@ const STOCKFISH_DEFAULTS: LiveEngineSettings = {
  * in, to pick it back up.
  */
 export const useLiveEngineSettings = (onApplied: () => void) => {
-  const [settings, setSettings] =
-    useState<LiveEngineSettings>(STOCKFISH_DEFAULTS);
+  // Stockfish's defaults until the session's real values load.
+  const [settings, setSettings] = useState<LiveEngineSettings>(
+    DEFAULT_LIVE_ENGINE_SETTINGS,
+  );
   // The exact object last known to match the engine. Compared by
   // reference, which is enough because every edit builds a new object — it
   // stops the freshly loaded values being applied straight back.

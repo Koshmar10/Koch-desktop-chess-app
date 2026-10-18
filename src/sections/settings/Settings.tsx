@@ -9,10 +9,12 @@ import {
   saveAppSettings,
   saveAnalyzerEngineSettings,
   savePlayerEngineSettings,
+} from "../../api/settings";
+import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_ANALYZER_SETTINGS,
   DEFAULT_PLAYER_SETTINGS,
-} from "../../api/settings";
+} from "../../lib/settings";
 import { AppSettingsSection } from "./AppSettingsSection";
 import { AnalyzerEngineSection } from "./AnalyzerEngineSection";
 import { PlayerEngineSection } from "./PlayerEngineSection";

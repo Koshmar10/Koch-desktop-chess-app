@@ -1,23 +1,24 @@
 import {
-  ChessKnight,
-  Clock,
   Contrast,
   Flag,
-  Flame,
   Loader2,
   Play,
   Share2,
   Swords,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { TooltipButton } from "../../components/TooltipButton";
 import Dropdown from "../../components/Dropdown";
 import {
+  GAME_MODES,
+  MODE_ICON,
+  modeMinutesLabel,
+  type GameMode,
+} from "../../lib/gameModes";
+import {
   useGameContext,
   isGameOngoing,
   type ColorPreference,
-  type GameMode,
 } from "./GameContext";
 
 // For the mode menu's rows. The buttons size their own icons.
@@ -36,47 +37,6 @@ const COLOR_PREFERENCE_TOOLTIP: Record<ColorPreference, string> = {
   random: "Random color",
   white: "Play as White",
   black: "Play as Black",
-};
-
-interface ModeOption {
-  mode: GameMode;
-  label: string;
-  time: string;
-  icon: React.ReactNode;
-}
-
-const MODE_OPTIONS: ModeOption[] = [
-  {
-    mode: "Bullet",
-    label: "bullet",
-    time: "1 min",
-    icon: <Flame size={MENU_ICON_SIZE} className="text-primary" />,
-  },
-  {
-    mode: "Blitz",
-    label: "blitz",
-    time: "3 min",
-    icon: <Zap size={MENU_ICON_SIZE} className="text-primary" />,
-  },
-  {
-    mode: "Rapid",
-    label: "rapid",
-    time: "10 min",
-    icon: <Clock size={MENU_ICON_SIZE} className="text-primary" />,
-  },
-  {
-    mode: "Classical",
-    label: "classical",
-    time: "30 min",
-    icon: <ChessKnight size={MENU_ICON_SIZE} className="text-primary" />,
-  },
-];
-
-const MODE_TRIGGER_ICON: Record<GameMode, LucideIcon> = {
-  Classical: ChessKnight,
-  Rapid: Clock,
-  Blitz: Zap,
-  Bullet: Flame,
 };
 
 // What the start button shows: swords while a game is on, a spinner while
@@ -102,9 +62,10 @@ const ModeDropdownMenu = ({
   setSelectedMode,
 }: ModeDropdownMenuProps) => (
   <div className="flex flex-col shadow-md rounded-md min-w-[240px] bg-background">
-    {MODE_OPTIONS.map(({ mode, label, time, icon }, idx) => {
+    {GAME_MODES.map((mode, idx) => {
+      const Icon = MODE_ICON[mode];
       const isFirst = idx === 0;
-      const isLast = idx === MODE_OPTIONS.length - 1;
+      const isLast = idx === GAME_MODES.length - 1;
       const isSelected = selectedMode === mode;
 
       const buttonClassName = [
@@ -126,10 +87,10 @@ const ModeDropdownMenu = ({
           }}
         >
           <div className="flex items-center gap-3">
-            {icon}
-            <span className="capitalize">{label}</span>
+            <Icon size={MENU_ICON_SIZE} className="text-primary" />
+            <span>{mode}</span>
           </div>
-          <span>{time}</span>
+          <span>{modeMinutesLabel(mode)}</span>
         </button>
       );
     })}
@@ -186,7 +147,7 @@ const PlayControls = () => {
         align="center"
         trigger={({ open, toggle }) => (
           <TooltipButton
-            icon={MODE_TRIGGER_ICON[selectedMode]}
+            icon={MODE_ICON[selectedMode]}
             tooltip={!open ? "Change game mode" : null}
             onClick={toggle}
             disabled={isGameOngoing(game)}

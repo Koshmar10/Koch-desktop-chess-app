@@ -21,3 +21,47 @@ export const MOVE_QUALITY_COLOR: Record<MoveQuality, string> = {
   Mistake: "#e2802b",
   Blunder: "#d1352f",
 };
+
+/** Best to worst — the order a breakdown lists them in. */
+export const MOVE_QUALITY_ORDER: readonly MoveQuality[] = [
+  "Brilliant",
+  "Great",
+  "Excellent",
+  "Good",
+  "Inaccuracy",
+  "Mistake",
+  "Blunder",
+];
+
+/** What a count of each is called in a breakdown — "3 Mistakes". */
+export const MOVE_QUALITY_COUNT_LABEL: Record<MoveQuality, string> = {
+  Brilliant: "Brilliant",
+  Great: "Great",
+  Excellent: "Excellent",
+  Good: "Good",
+  Inaccuracy: "Inaccuracies",
+  Mistake: "Mistakes",
+  Blunder: "Blunders",
+};
+
+/**
+ * How many of `qualities` got each grade — every grade present, at zero
+ * when nothing got it, so a breakdown always has the same rows.
+ */
+export const countByQuality = (
+  qualities: readonly MoveQuality[],
+): Record<MoveQuality, number> => {
+  // Spelled out rather than built from a list: as a `Record` over the
+  // binding's union, a grade added in the backend fails to compile here.
+  const counts: Record<MoveQuality, number> = {
+    Brilliant: 0,
+    Great: 0,
+    Excellent: 0,
+    Good: 0,
+    Inaccuracy: 0,
+    Mistake: 0,
+    Blunder: 0,
+  };
+  for (const quality of qualities) counts[quality] += 1;
+  return counts;
+};

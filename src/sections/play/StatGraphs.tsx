@@ -1,5 +1,6 @@
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import EmptyNote from "../../components/EmptyNote";
+import { clamp } from "../../lib/math";
 
 // The graph's vertical range is derived per-game from the actual eval
 // swing (see `displayRangeCp` below), bounded by these two — a floor so a
@@ -55,7 +56,7 @@ export const CentipawnGraph = ({
   const displayRangePawns = displayRangeCp / 100;
 
   const points = playerRelative.map((cp, idx) => {
-    const clamped = Math.max(-displayRangeCp, Math.min(displayRangeCp, cp));
+    const clamped = clamp(cp, -displayRangeCp, displayRangeCp);
     const x = (idx / lastPly) * GRAPH_VIEWBOX_WIDTH;
     const y =
       GRAPH_VIEWBOX_HEIGHT / 2 -

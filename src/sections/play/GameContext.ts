@@ -4,25 +4,9 @@ import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
-import type { TimeControl } from "../../api/bindings/TimeControl";
+import type { GameMode } from "../../lib/gameModes";
 
 export type ColorPreference = PieceColor | "random";
-
-export type GameMode = "Bullet" | "Blitz" | "Rapid" | "Classical";
-
-export const MODE_TIME_CONTROL: Record<GameMode, TimeControl> = {
-  Bullet: { initial_ms: 60_000, increment_ms: 0 },
-  Blitz: { initial_ms: 180_000, increment_ms: 0 },
-  Rapid: { initial_ms: 600_000, increment_ms: 0 },
-  Classical: { initial_ms: 1_800_000, increment_ms: 0 },
-};
-
-export const formatClock = (ms: number): string => {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-};
 
 // A game exists and hasn't reached a terminal result yet. `GameCreateResponse`
 // is plain ts-rs-generated data (no methods of its own), so this lives here
