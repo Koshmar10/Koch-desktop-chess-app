@@ -3,7 +3,12 @@ import type { PieceColor } from "./PieceColor";
 import type { ReplayPosition } from "./ReplayPosition";
 import type { Square } from "./Square";
 
-export type ChessPuzzle = { rating: number, themes: Array<string>, 
+export type ChessPuzzle = { 
+/**
+ * Lichess's id for the puzzle. The screen keys on it, so a new puzzle
+ * starts with nothing left over from the last one.
+ */
+id: string, rating: number, themes: Array<string>, 
 /**
  * The game up to the puzzle, then its solution played out.
  */

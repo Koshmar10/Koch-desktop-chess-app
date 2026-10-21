@@ -54,6 +54,9 @@ struct PuzzleData {
 #[derive(Serialize, TS)]
 #[ts(export)]
 pub struct ChessPuzzle {
+    /// Lichess's id for the puzzle. The screen keys on it, so a new puzzle
+    /// starts with nothing left over from the last one.
+    id: String,
     rating: u32,
     themes: Vec<String>,
     /// The game up to the puzzle, then its solution played out.
@@ -109,6 +112,7 @@ pub async fn get_puzzle() -> Result<ChessPuzzle, AppError> {
         };
 
         ChessPuzzle {
+            id: lichess_puzzle_response.puzzle.id,
             rating: lichess_puzzle_response.puzzle.rating,
             themes: lichess_puzzle_response.puzzle.themes,
             positions,
