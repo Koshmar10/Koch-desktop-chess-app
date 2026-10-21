@@ -59,7 +59,8 @@ pub fn run() {
             app::game::sandbox::sandbox_new,
             app::game::sandbox::sandbox_load,
             app::game::sandbox::sandbox_move,
-            app::game::sandbox::sandbox_undo
+            app::game::sandbox::sandbox_undo,
+            app::puzzle::commands::get_puzzle,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

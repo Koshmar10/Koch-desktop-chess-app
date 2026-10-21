@@ -11,7 +11,7 @@
 
 use std::sync::PoisonError;
 
-use koch_engine::FenError;
+use koch_engine::{FenError, MoveError, PgnError};
 use koch_uci::UciError;
 use serde::{Serialize, Serializer};
 use tokio::sync::mpsc::error::SendError;
@@ -30,6 +30,17 @@ pub enum AppError {
     #[error("invalid FEN: {0:?}")]
     InvalidFen(FenError),
 
+    /// A PGN with nothing in it, or no moves to replay. A move that doesn't
+    /// replay isn't one of these — `PgnGame::parse` reports that in
+    /// `truncated` and still succeeds.
+    #[error("invalid PGN: {0:?}")]
+    InvalidPgn(PgnError),
+
+    /// A move the board refused to play — not legal in the position, or
+    /// no moves left to make.
+    #[error("illegal move: {0:?}")]
+    IllegalMove(MoveError),
+
     /// A thread panicked while holding a lock, so what it guards may be
     /// half-updated. Reported rather than unwrapped, so one panic doesn't
     /// turn every later command into another.
@@ -40,6 +51,10 @@ pub enum AppError {
     /// listening for commands any more.
     #[error("the live engine session has stopped")]
     SessionClosed,
+
+    /// A request to an outside service, such as Lichess, failed.
+    #[error(transparent)]
+    Network(#[from] reqwest::Error),
 
     /// Anything else, already worded for whoever reads it — "no game with
     /// id 4", "Paste a FEN or a PGN to load."
@@ -59,6 +74,20 @@ impl Serialize for AppError {
 impl From<FenError> for AppError {
     fn from(err: FenError) -> Self {
         AppError::InvalidFen(err)
+    }
+}
+
+// Same reason as `FenError`: no `std::error::Error` impl to `#[from]`.
+impl From<PgnError> for AppError {
+    fn from(err: PgnError) -> Self {
+        AppError::InvalidPgn(err)
+    }
+}
+
+// Same reason again: `MoveError` has no `std::error::Error` impl either.
+impl From<MoveError> for AppError {
+    fn from(err: MoveError) -> Self {
+        AppError::IllegalMove(err)
     }
 }
 
@@ -120,6 +149,20 @@ mod tests {
         let err = AppError::from(FenError::InvalidSideToMove);
 
         assert_eq!(err.to_string(), "invalid FEN: InvalidSideToMove");
+    }
+
+    #[test]
+    fn words_an_invalid_pgn_like_an_invalid_fen() {
+        let err = AppError::from(PgnError::NoMoves);
+
+        assert_eq!(err.to_string(), "invalid PGN: NoMoves");
+    }
+
+    #[test]
+    fn words_an_illegal_move_the_way_the_sandbox_does() {
+        let err = AppError::from(MoveError::IllegalMove);
+
+        assert_eq!(err.to_string(), "illegal move: IllegalMove");
     }
 
     #[test]

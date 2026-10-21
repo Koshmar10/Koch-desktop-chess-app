@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use koch_engine::{Board, FenString, MoveStruct, PgnError, PgnGame, PieceColor, PieceType, Square};
+use koch_engine::{Board, FenString, PgnError, PgnGame, PieceColor, PieceType, Square};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -9,7 +9,7 @@ use crate::app::{
     error::AppError,
     game::{
         live::legal_moves_view,
-        replay::{play_uci, ReplayPosition},
+        replay::{play_uci, position_after, replay_uci, ReplayPosition},
         view::LastMove,
     },
 };
@@ -42,28 +42,12 @@ pub struct SandboxMoved {
     pub legal_moves: HashMap<u32, Vec<Square>>,
 }
 
-/// The position a move just played leads to, as the frontend lists it. No
-/// clock in the sandbox, and no analysis to grade it, so those stay `None`.
-fn position_after(board: &Board, last_move: LastMove, played: MoveStruct) -> ReplayPosition {
-    ReplayPosition {
-        last_move: Some(last_move),
-        san: Some(played.san),
-        uci: Some(played.uci),
-        ..ReplayPosition::of(board)
-    }
-}
-
 /// A sandbox started on `start_fen` with `moves` (UCI) already played, and
 /// every position on the way kept — what starting fresh and loading a PGN
 /// both come down to.
 fn sandbox_from(start_fen: FenString, moves: &[String]) -> Result<Sandbox, String> {
     let mut board = Board::from(&start_fen);
-    let mut positions = vec![ReplayPosition::of(&board)];
-
-    for uci in moves {
-        let (last_move, played) = play_uci(&mut board, uci)?;
-        positions.push(position_after(&board, last_move, played));
-    }
+    let positions = replay_uci(&mut board, moves)?;
     // So the frontend sees what can move from where the sandbox now stands.
     // (`move_piece` works out its own legal moves before each move.)
     board.refresh_legal_moves();
@@ -196,10 +180,7 @@ pub fn sandbox_move(
     let sandbox = slot.as_mut().ok_or("no sandbox open")?;
 
     // Checks legality itself, and hands back the move's SAN and UCI.
-    let played = sandbox
-        .board
-        .move_piece(from, to, promotion)
-        .map_err(|err| format!("illegal move: {err:?}"))?;
+    let played = sandbox.board.move_piece(from, to, promotion)?;
     // So the frontend can show where the next move may go.
     sandbox.board.refresh_legal_moves();
 

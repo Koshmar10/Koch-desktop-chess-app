@@ -9,6 +9,7 @@ pub mod error;
 pub mod events;
 pub mod game;
 pub mod live_engine;
+pub mod puzzle;
 pub mod rating;
 pub mod sessions;
 pub mod settings;

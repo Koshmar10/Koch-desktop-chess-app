@@ -64,9 +64,6 @@ export interface SandboxActions {
  */
 export type EngineStatus = "running" | "stopped" | "loading";
 
-/** Viewed-ply value for "before any move was played". */
-export const START_POSITION_PLY = -1;
-
 /**
  * Which overlay masks are on the board, by id, and the way to change
  * that — bundled so the panel's rows can read it as one value, from

@@ -1,3 +1,4 @@
+import { opponentOf } from "./pieces";
 import type { PieceColor, PieceKind, PlacedPiece } from "./types";
 
 const STARTING_COMPOSITION: Record<PieceKind, number> = {
@@ -8,9 +9,6 @@ const STARTING_COMPOSITION: Record<PieceKind, number> = {
   queen: 1,
   king: 1,
 };
-
-const opponentOf = (color: PieceColor): PieceColor =>
-  color === "white" ? "black" : "white";
 
 // Pieces `color` has captured, inferred from what's missing on the board
 // relative to a full starting set. There's no captured-pieces list from the

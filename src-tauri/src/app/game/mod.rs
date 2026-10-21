@@ -18,6 +18,7 @@ pub(crate) mod replay;
 pub mod sandbox;
 mod view;
 
+pub(crate) use live::legal_moves_view;
 pub use live::Game;
 pub use view::{
     GameCreateResponse, GameResult, GameSource, GameStateView, GameSummary, LastMove, PieceView,

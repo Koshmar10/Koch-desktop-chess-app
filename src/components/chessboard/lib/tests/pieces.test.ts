@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { pieceAt, pieceById } from "../pieces";
+import { opponentOf, pieceAt, pieceById } from "../pieces";
 import type { PlacedPiece } from "../types";
+
+describe("opponentOf", () => {
+  it("is the other side, both ways", () => {
+    expect(opponentOf("white")).toBe("black");
+    expect(opponentOf("black")).toBe("white");
+  });
+});
 
 const whiteKing: PlacedPiece = {
   id: 28,

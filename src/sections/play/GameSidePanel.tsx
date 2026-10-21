@@ -1,6 +1,7 @@
 import { Clock3, Gamepad2, TrendingUp } from "lucide-react";
 import MoveTimeline from "../../components/MoveTimeline";
 import PanelSection from "../../components/PanelSection";
+import StatRow from "../../components/StatRow";
 import { useGameContext } from "./GameContext";
 
 // Still mock. `get_player_stats` exists now, but its numbers are all-time,
@@ -11,20 +12,6 @@ const MOCK_SESSION_STATS = {
   timePlayed: "4h 32m",
   gamesPlayed: 27,
 };
-
-interface StatRowProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-}
-
-const StatRow = ({ icon, label, value }: StatRowProps) => (
-  <div className="flex items-center gap-2 text-md">
-    {icon}
-    <span className="text-foreground/50">{label}</span>
-    <span className="ml-auto font-semibold text-foreground/90">{value}</span>
-  </div>
-);
 
 const GameSidePanel = () => {
   const { game } = useGameContext();
