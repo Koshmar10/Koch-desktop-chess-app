@@ -34,6 +34,8 @@ export const getPieceVisualState = (
     // jump from one square to the next, while a transform can be
     // interpolated between them, so a move slides — and the browser animates
     // a transform on the GPU, without re-laying-out the board every frame.
+    // `will-change-transform` was tried against a WebKitGTK 2.54 / Wayland
+    // slide flicker; it isn't shown to help.
     className:
       "absolute top-0 left-0 p-2 box-border select-none cursor-grab transition-transform duration-200 ease-in-out will-change-transform motion-reduce:transition-none",
     style: {

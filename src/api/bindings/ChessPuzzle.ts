@@ -11,8 +11,8 @@ positions: Array<ReplayPosition>,
 /**
  * The first position the solver moves from.
  */
-start: number, 
+start_ply: number, 
 /**
- * Legal moves at `positions[start + i]`, keyed by piece id.
+ * Legal moves at `positions[start_ply + i]`, keyed by piece id.
  */
 legal_moves: Array<{ [key in number]?: Array<Square> }>, solver_color: PieceColor, };

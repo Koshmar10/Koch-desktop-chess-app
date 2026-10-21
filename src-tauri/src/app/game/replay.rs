@@ -171,6 +171,7 @@ pub(crate) fn replay_uci(
     }
     Ok(positions)
 }
+
 /// A saved game, every position of it, ready for the analyzer to scrub.
 #[tauri::command]
 pub fn load_game_replay(

@@ -30,10 +30,10 @@ const PuzzleProvider = ({ children }: PuzzleProviderProps) => {
   );
 
   const recordSolvedPuzzle = (rating: number, mistakes: number) => {
-    const earned = puzzlePoints(rating, mistakes, streak);
-    setPoints(points + earned);
+    const earnedPoints = puzzlePoints(rating, mistakes, streak);
+    setPoints(points + earnedPoints);
     setStreak(mistakes === 0 ? streak + 1 : 0);
-    return earned;
+    return earnedPoints;
   };
 
   return (
@@ -44,7 +44,7 @@ const PuzzleProvider = ({ children }: PuzzleProviderProps) => {
         error,
         isLoading,
         ensureLoaded,
-        newPuzzle: refresh,
+        requestNewPuzzle: refresh,
         updateProgress,
         points,
         streak,

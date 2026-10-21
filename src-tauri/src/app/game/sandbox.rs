@@ -9,7 +9,7 @@ use crate::app::{
     error::AppError,
     game::{
         live::legal_moves_view,
-        replay::{play_uci, position_after, ReplayPosition},
+        replay::{play_uci, position_after, replay_uci, ReplayPosition},
         view::LastMove,
     },
 };
@@ -47,12 +47,7 @@ pub struct SandboxMoved {
 /// both come down to.
 fn sandbox_from(start_fen: FenString, moves: &[String]) -> Result<Sandbox, String> {
     let mut board = Board::from(&start_fen);
-    let mut positions = vec![ReplayPosition::of(&board)];
-
-    for uci in moves {
-        let (last_move, played) = play_uci(&mut board, uci)?;
-        positions.push(position_after(&board, last_move, played));
-    }
+    let positions = replay_uci(&mut board, moves)?;
     // So the frontend sees what can move from where the sandbox now stands.
     // (`move_piece` works out its own legal moves before each move.)
     board.refresh_legal_moves();

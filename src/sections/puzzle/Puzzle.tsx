@@ -41,7 +41,7 @@ const Puzzle = () => {
     error,
     isLoading,
     ensureLoaded,
-    newPuzzle,
+    requestNewPuzzle,
     updateProgress,
     points,
     streak,
@@ -98,8 +98,8 @@ const Puzzle = () => {
     viewedPly === currentPly &&
     wrongMove === null;
   const legalMoves =
-    puzzle !== null && currentPly >= puzzle.start
-      ? puzzle.legal_moves[currentPly - puzzle.start]
+    puzzle !== null && currentPly >= puzzle.start_ply
+      ? puzzle.legal_moves[currentPly - puzzle.start_ply]
       : undefined;
   // Moves still to come are the solution, so only played ones are listed.
   const playedMoves = positions
@@ -109,28 +109,31 @@ const Puzzle = () => {
   const viewedMove = viewedPosition?.last_move ?? null;
   const isSolverMove =
     puzzle !== null &&
-    viewedPly > puzzle.start &&
-    (viewedPly - puzzle.start) % 2 === 1;
+    viewedPly > puzzle.start_ply &&
+    (viewedPly - puzzle.start_ply) % 2 === 1;
   const resultMasks = wrongMove
     ? [wrongMoveMask(wrongMove.move)]
     : isSolverMove && viewedMove
       ? [correctMoveMask(viewedMove)]
       : [];
 
-  const goToPly = (ply: number) =>
+  // Stepping away ends a wrong move's preview, so the board follows the view.
+  const goToPly = (ply: number) => {
+    setWrongMove(null);
     updateProgress((current) => ({ ...current, viewedPly: ply }));
+  };
 
   const handleMove = (from: Square, to: Square) => {
     if (puzzle === null) return;
     const pieces = positions[currentPly].pieces;
-    const expected = positions[currentPly + 1]?.last_move;
+    const expectedMove = positions[currentPly + 1]?.last_move;
     if (
-      expected &&
-      sameSquare(expected.from, from) &&
-      sameSquare(expected.to, to)
+      expectedMove &&
+      sameSquare(expectedMove.from, from) &&
+      sameSquare(expectedMove.to, to)
     ) {
       // Scored outside the updater: Strict Mode runs updaters twice.
-      const earned =
+      const earnedPoints =
         currentPly + 1 === lastPly
           ? recordSolvedPuzzle(puzzle.rating, mistakes.length)
           : null;
@@ -139,7 +142,7 @@ const Puzzle = () => {
         currentPly: current.currentPly + 1,
         viewedPly: current.currentPly + 1,
         turn: opponentOf(puzzle.solver_color),
-        earnedPoints: earned ?? current.earnedPoints,
+        earnedPoints: earnedPoints ?? current.earnedPoints,
       }));
       return;
     }
@@ -167,7 +170,7 @@ const Puzzle = () => {
   const handleNewPuzzle = () => {
     if (!isSolved) breakStreak();
     setWrongMove(null);
-    newPuzzle();
+    requestNewPuzzle();
   };
 
   const boardOverlay = isLoading ? (
@@ -243,7 +246,9 @@ const Puzzle = () => {
           <PanelCard fill>
             {puzzle === null ? (
               error !== null && (
-                <OutlineButton onClick={newPuzzle}>Try again</OutlineButton>
+                <OutlineButton onClick={requestNewPuzzle}>
+                  Try again
+                </OutlineButton>
               )
             ) : (
               <>

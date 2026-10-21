@@ -6,8 +6,8 @@ export const newProgress = (puzzle: ChessPuzzle): PuzzleProgress => ({
   puzzleId: puzzle.id,
   // One position early, so the opponent's setup move plays first, as on
   // Lichess.
-  currentPly: puzzle.start - 1,
-  viewedPly: puzzle.start - 1,
+  currentPly: puzzle.start_ply - 1,
+  viewedPly: puzzle.start_ply - 1,
   turn: opponentOf(puzzle.solver_color),
   mistakes: [],
   earnedPoints: 0,

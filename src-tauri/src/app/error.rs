@@ -52,7 +52,7 @@ pub enum AppError {
     #[error("the live engine session has stopped")]
     SessionClosed,
 
-    /// Error for anything network related that happens insde the app(i.e. call to a  llm / call to a external api)
+    /// A request to an outside service, such as Lichess, failed.
     #[error(transparent)]
     Network(#[from] reqwest::Error),
 

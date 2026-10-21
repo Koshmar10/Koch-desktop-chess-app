@@ -27,6 +27,7 @@ import EvalTimeline from "./board/EvalTimeline";
 import EvalBar from "./board/EvalBar";
 import { cpScore, topLineMove, topLineScore } from "./board/evalBar";
 import { clamp } from "../../lib/math";
+import { START_POSITION_PLY } from "../../lib/ply";
 import {
   bestMoveMask,
   ghosted,
@@ -34,13 +35,12 @@ import {
   threatMask,
 } from "./overlays/masks";
 import { useLiveEngine } from "./useLiveEngine";
-import {
-  START_POSITION_PLY,
-  type EngineStatus,
-  type GameActions,
-  type MaskSelection,
-  type SandboxActions,
-  type TimelineMove,
+import type {
+  EngineStatus,
+  GameActions,
+  MaskSelection,
+  SandboxActions,
+  TimelineMove,
 } from "./types";
 import type { Square } from "../../api/bindings/Square";
 import { useAnalyzerContext } from "./AnalyzerContext";

@@ -17,12 +17,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { AnalysisStage } from "../../../api/bindings/AnalysisStage";
 import Dropdown from "../../../components/Dropdown";
 import TooltipButton from "../../../components/TooltipButton";
-import {
-  START_POSITION_PLY,
-  type AnalyzerMode,
-  type GameActions,
-  type SandboxActions,
-} from "../types";
+import { START_POSITION_PLY } from "../../../lib/ply";
+import type { AnalyzerMode, GameActions, SandboxActions } from "../types";
 import MoveNavigation from "../../../components/MoveNavigation";
 import { useAnalyzerContext } from "../AnalyzerContext";
 

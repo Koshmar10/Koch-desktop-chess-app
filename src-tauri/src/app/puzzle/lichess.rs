@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use serde::Deserialize;
 
 use crate::app::error::AppError;
 
 const NEXT_PUZZLE_URL: &str = "https://lichess.org/api/puzzle/next";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Deserialize)]
 pub(super) struct NextPuzzleResponse {
@@ -24,5 +27,14 @@ pub(super) struct Puzzle {
 }
 
 pub(super) async fn fetch_next_puzzle() -> Result<NextPuzzleResponse, AppError> {
-    Ok(reqwest::get(NEXT_PUZZLE_URL).await?.json().await?)
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()?;
+    Ok(client
+        .get(NEXT_PUZZLE_URL)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?)
 }

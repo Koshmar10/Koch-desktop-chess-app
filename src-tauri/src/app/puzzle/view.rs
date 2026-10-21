@@ -15,8 +15,8 @@ pub struct ChessPuzzle {
     /// The game up to the puzzle, then the solution.
     pub positions: Vec<ReplayPosition>,
     /// The first position the solver moves from.
-    pub start: usize,
-    /// Legal moves at `positions[start + i]`, keyed by piece id.
+    pub start_ply: usize,
+    /// Legal moves at `positions[start_ply + i]`, keyed by piece id.
     pub legal_moves: Vec<HashMap<u32, Vec<Square>>>,
     pub solver_color: PieceColor,
 }

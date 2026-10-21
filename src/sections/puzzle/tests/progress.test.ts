@@ -7,7 +7,7 @@ const puzzle = (id: string): ChessPuzzle => ({
   rating: 1500,
   themes: [],
   positions: [],
-  start: 42,
+  start_ply: 42,
   legal_moves: [],
   solver_color: "black",
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
-import { START_POSITION_PLY } from "../../types";
+import { START_POSITION_PLY } from "../../../../lib/ply";
 import { nextMistakePly } from "../nextMistake";
 
 // White's moves on even plies, Black's on odd ones.

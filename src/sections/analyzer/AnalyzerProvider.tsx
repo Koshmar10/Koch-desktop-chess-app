@@ -17,7 +17,8 @@ import type {
   SandboxAnalyzerContextValue,
 } from "./AnalyzerContext";
 import { AnalyzerContext } from "./AnalyzerContext";
-import { START_POSITION_PLY, type PanelTab } from "./types";
+import { START_POSITION_PLY } from "../../lib/ply";
+import type { PanelTab } from "./types";
 import { useGameReplay } from "./useGameReplay";
 
 interface AnalyzerProviderProps {

@@ -8,7 +8,7 @@ export interface PuzzleContextValue {
   error: string | null;
   isLoading: boolean;
   ensureLoaded: () => void;
-  newPuzzle: () => void;
+  requestNewPuzzle: () => void;
   updateProgress: (
     change: (progress: PuzzleProgress) => PuzzleProgress,
   ) => void;

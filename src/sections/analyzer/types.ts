@@ -64,8 +64,6 @@ export interface SandboxActions {
  */
 export type EngineStatus = "running" | "stopped" | "loading";
 
-export { START_POSITION_PLY } from "../../lib/ply";
-
 /**
  * Which overlay masks are on the board, by id, and the way to change
  * that — bundled so the panel's rows can read it as one value, from
