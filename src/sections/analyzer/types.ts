@@ -64,7 +64,6 @@ export interface SandboxActions {
  */
 export type EngineStatus = "running" | "stopped" | "loading";
 
-// Lives in `lib/` so the shared move components can use it too.
 export { START_POSITION_PLY } from "../../lib/ply";
 
 /**

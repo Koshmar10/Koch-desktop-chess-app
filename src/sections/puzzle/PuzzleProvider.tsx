@@ -1,8 +1,8 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { PuzzleContext } from "./PuzzleContext";
+import { progressFor } from "./progress";
 import { puzzlePoints } from "./scoring";
-import { solveFor } from "./solve";
-import type { Solve } from "./types";
+import type { PuzzleProgress } from "./types";
 import { usePuzzle } from "./usePuzzle";
 
 interface PuzzleProviderProps {
@@ -11,28 +11,27 @@ interface PuzzleProviderProps {
 
 const PuzzleProvider = ({ children }: PuzzleProviderProps) => {
   const { puzzle, error, isLoading, ensureLoaded, refresh } = usePuzzle();
-  const [storedSolve, setStoredSolve] = useState<Solve | null>(null);
+  const [storedProgress, setStoredProgress] = useState<PuzzleProgress | null>(
+    null,
+  );
   const [points, setPoints] = useState(0);
   const [streak, setStreak] = useState(0);
 
-  // Asked of what's stored rather than reset when a new puzzle arrives:
-  // progress stored for an older puzzle just isn't this one's.
-  const solve = puzzle === null ? null : solveFor(storedSolve, puzzle);
+  const progress = puzzle === null ? null : progressFor(storedProgress, puzzle);
 
-  // The same function until the puzzle changes, so the screen's timers
-  // that depend on it don't restart whenever the points or streak do.
-  const updateSolve = useCallback(
-    (change: (solve: Solve) => Solve) => {
+  // Stable per puzzle, so the screen's timers don't restart when the points
+  // change.
+  const updateProgress = useCallback(
+    (change: (progress: PuzzleProgress) => PuzzleProgress) => {
       if (puzzle === null) return;
-      setStoredSolve((stored) => change(solveFor(stored, puzzle)));
+      setStoredProgress((stored) => change(progressFor(stored, puzzle)));
     },
     [puzzle],
   );
 
-  const recordSolve = (rating: number, mistakes: number) => {
+  const recordSolvedPuzzle = (rating: number, mistakes: number) => {
     const earned = puzzlePoints(rating, mistakes, streak);
     setPoints(points + earned);
-    // A puzzle with mistakes already ended the streak at its first one.
     setStreak(mistakes === 0 ? streak + 1 : 0);
     return earned;
   };
@@ -41,15 +40,15 @@ const PuzzleProvider = ({ children }: PuzzleProviderProps) => {
     <PuzzleContext.Provider
       value={{
         puzzle,
-        solve,
+        progress,
         error,
         isLoading,
         ensureLoaded,
         newPuzzle: refresh,
-        updateSolve,
+        updateProgress,
         points,
         streak,
-        recordSolve,
+        recordSolvedPuzzle,
         breakStreak: () => setStreak(0),
       }}
     >

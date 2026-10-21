@@ -7,18 +7,11 @@ const BUTTON_ICON_SIZE_PX = 16;
 
 interface SolvedCardProps {
   mistakes: number;
-  // What the solve added to the session's points.
   points: number;
   onNext: () => void;
-  // Closes the card, to look at the finished position.
   onClose: () => void;
 }
 
-/**
- * Shown over the board once the last move of the solution is played. No
- * title: "Solved" is the card's heading, as the verdict is on Play's
- * result card.
- */
 const SolvedCard = ({ mistakes, points, onNext, onClose }: SolvedCardProps) => (
   <DialogCard onClose={onClose} widthPx={NARROW_DIALOG_PX}>
     <div className="flex flex-col items-center gap-2">

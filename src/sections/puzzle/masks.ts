@@ -5,14 +5,8 @@ import type {
   OverlayMask,
 } from "../../components/chessboard/lib/types";
 
-// The puzzle board only ever draws one of these at a time, so there's no
-// order among them to keep; the name says what the number is for.
 const MOVE_RESULT_PRIORITY = 0;
 
-/**
- * A move's two squares, filled in one tone: how the puzzle answers a
- * move, whether it was the solution's or not.
- */
 const moveResultMask = (
   id: string,
   move: LastMove,
@@ -26,8 +20,6 @@ const moveResultMask = (
   })),
 });
 
-// One builder per result, as with the analyzer's engine moves: each fixes
-// its own id and colour, so no call site can mark a mistake in green.
 export const wrongMoveMask = (move: LastMove): OverlayMask =>
   moveResultMask("puzzle:wrong", move, "danger");
 

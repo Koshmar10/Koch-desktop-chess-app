@@ -17,9 +17,6 @@ interface MoveNavigationProps {
   onLast: () => void;
 }
 
-// Steps through a game's positions: first, previous, the ply on screen,
-// next, last. Shared by the analyzer's toolbar and the puzzle panel, so
-// stepping through moves works the same on both.
 const MoveNavigation = ({
   viewedPly,
   totalPlies,

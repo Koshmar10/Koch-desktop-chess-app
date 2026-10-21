@@ -7,11 +7,6 @@ interface StreakGaugeProps {
   streak: number;
 }
 
-/**
- * The clean-solve streak, with a bar for what it's doing to the points:
- * empty with no run, full once the multiplier is capped. A mistake drops
- * it back to empty in front of you, which is the point of drawing it.
- */
 const StreakGauge = ({ streak }: StreakGaugeProps) => {
   const multiplier = streakMultiplier(streak);
   const fill = (multiplier - 1) / (MAX_STREAK_MULTIPLIER - 1);

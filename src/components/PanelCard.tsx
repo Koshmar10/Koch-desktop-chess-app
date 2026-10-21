@@ -2,19 +2,11 @@ import type { ReactNode } from "react";
 
 interface PanelCardProps {
   children: ReactNode;
-  /**
-   * Take the column's leftover height instead of sizing to content, for a
-   * card holding a section that scrolls (`PanelSection fill`). At most one
-   * per column, for the same reason as `PanelSection`'s.
-   */
+  // Takes the column's leftover height, for a card holding a
+  // `PanelSection fill`.
   fill?: boolean;
 }
 
-/**
- * One card of a side panel. Play's cards and the analyzer's panel body
- * draw this same card with their own copies of the classes; it lives here
- * so a new panel doesn't add another.
- */
 const PanelCard = ({ children, fill = false }: PanelCardProps) => {
   const sizing = fill ? "min-h-0 flex-1" : "shrink-0";
 

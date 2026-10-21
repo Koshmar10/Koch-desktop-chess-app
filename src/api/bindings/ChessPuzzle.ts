@@ -3,25 +3,16 @@ import type { PieceColor } from "./PieceColor";
 import type { ReplayPosition } from "./ReplayPosition";
 import type { Square } from "./Square";
 
-export type ChessPuzzle = { 
+export type ChessPuzzle = { id: string, rating: number, themes: Array<string>, 
 /**
- * Lichess's id for the puzzle. The screen keys on it, so a new puzzle
- * starts with nothing left over from the last one.
- */
-id: string, rating: number, themes: Array<string>, 
-/**
- * The game up to the puzzle, then its solution played out.
+ * The game up to the puzzle, then the solution.
  */
 positions: Array<ReplayPosition>, 
 /**
- * Index into `positions` of the first position the solver moves from.
+ * The first position the solver moves from.
  */
 start: number, 
 /**
- * Where each piece may go at `positions[start + i]`.
+ * Legal moves at `positions[start + i]`, keyed by piece id.
  */
-legal_moves: Array<{ [key in number]?: Array<Square> }>, 
-/**
- * Whose move it is when the puzzle starts — the side the solver plays.
- */
-turn: PieceColor, };
+legal_moves: Array<{ [key in number]?: Array<Square> }>, solver_color: PieceColor, };

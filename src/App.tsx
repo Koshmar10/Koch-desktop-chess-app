@@ -3,45 +3,27 @@ import "./App.css";
 import Sidebar from "./sections/sidebar/Sidebar";
 import Home from "./sections/home/Home";
 import Play from "./sections/play/Play";
-import GameProvider from "./sections/play/GameProvider";
 import Analyzer from "./sections/analyzer/Analyzer";
 import History from "./sections/history/History";
 import Puzzle from "./sections/puzzle/Puzzle";
 import Settings from "./sections/settings/Settings";
-import AnalyzerProvider from "./sections/analyzer/AnalyzerProvider";
-import PuzzleProvider from "./sections/puzzle/PuzzleProvider";
 
 const App = () => {
   return (
-    // GameProvider lives here, not inside the /play route itself: it
-    // listens for backend events (engine replies, analysis progress/
-    // completion) that keep arriving after a game ends regardless of what
-    // page is open. Scoping it to /play meant navigating away tore down
-    // those listeners mid-analysis and silently dropped everything the
-    // backend sent from that point on.
-    //
-    // PuzzleProvider is up here for a smaller reason: the session's points
-    // and streak should survive leaving the puzzle screen.
-    <AnalyzerProvider>
-      <GameProvider>
-        <PuzzleProvider>
-          <div className="flex flex-row w-[100vw] h-[100vh]">
-            <Sidebar />
-            <div className="flex-1 min-w-0 overflow-x-auto">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/play" element={<Play />} />
-                {/* No id is the sandbox; with one, a saved game to step through. */}
-                <Route path="/analysis/:gameId?" element={<Analyzer />} />
-                <Route path="/history" element={<History />} />
-                <Route path="/puzzle" element={<Puzzle />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </div>
-          </div>
-        </PuzzleProvider>
-      </GameProvider>
-    </AnalyzerProvider>
+    <div className="flex flex-row w-[100vw] h-[100vh]">
+      <Sidebar />
+      <div className="flex-1 min-w-0 overflow-x-auto">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/play" element={<Play />} />
+          {/* No id is the sandbox; with one, a saved game to step through. */}
+          <Route path="/analysis/:gameId?" element={<Analyzer />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/puzzle" element={<Puzzle />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </div>
+    </div>
   );
 };
 
