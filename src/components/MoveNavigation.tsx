@@ -4,8 +4,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import TooltipButton from "../../../components/TooltipButton";
-import { START_POSITION_PLY } from "../types";
+import { START_POSITION_PLY } from "../lib/ply";
+import TooltipButton from "./TooltipButton";
 
 interface MoveNavigationProps {
   // START_POSITION_PLY (-1) means "before the first move".
@@ -17,9 +17,9 @@ interface MoveNavigationProps {
   onLast: () => void;
 }
 
-// Sits above the board rather than in the side panel: scrubbing is the
-// thing you do most on this screen, so it belongs on the board's own axis
-// where the eye already is, not off in a column of everything else.
+// Steps through a game's positions: first, previous, the ply on screen,
+// next, last. Shared by the analyzer's toolbar and the puzzle panel, so
+// stepping through moves works the same on both.
 const MoveNavigation = ({
   viewedPly,
   totalPlies,

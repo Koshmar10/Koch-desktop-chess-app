@@ -6,7 +6,7 @@ import Play from "./sections/play/Play";
 import GameProvider from "./sections/play/GameProvider";
 import Analyzer from "./sections/analyzer/Analyzer";
 import History from "./sections/history/History";
-import Puzzle from "./sections/Puzzle";
+import Puzzle from "./sections/puzzle/Puzzle";
 import Settings from "./sections/settings/Settings";
 import AnalyzerProvider from "./sections/analyzer/AnalyzerProvider";
 

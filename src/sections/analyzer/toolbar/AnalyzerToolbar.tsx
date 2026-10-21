@@ -23,7 +23,7 @@ import {
   type GameActions,
   type SandboxActions,
 } from "../types";
-import MoveNavigation from "./MoveNavigation";
+import MoveNavigation from "../../../components/MoveNavigation";
 import { useAnalyzerContext } from "../AnalyzerContext";
 
 // For the mode menu's rows. The buttons size their own icons.
@@ -217,6 +217,9 @@ const AnalyzerToolbar = ({
           )}
         </div>
 
+        {/* Above the board rather than in the side panel: scrubbing is the
+            thing you do most on this screen, so it belongs on the board's
+            own axis where the eye already is. */}
         <div className="flex justify-center">
           <MoveNavigation
             viewedPly={viewedPly}

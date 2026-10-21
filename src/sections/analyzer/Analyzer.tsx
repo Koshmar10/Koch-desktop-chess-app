@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MessageSquareText } from "lucide-react";
+import LoadError from "../../components/LoadError";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import Chessboard from "../../components/chessboard/Chessboard";
 import Squares from "../../components/chessboard/layers/Squares";
@@ -50,12 +51,6 @@ import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 
 const CHAT_PANEL_WIDTH_PX = 320;
 const PLACEHOLDER_ICON_SIZE_PX = 28;
-
-const GameLoadError = ({ message }: { message: string }) => (
-  <div className="max-w-sm rounded-lg border-[1px] border-destructive/50 bg-card p-4 text-sm text-foreground/80">
-    Couldn't load this game: {message}
-  </div>
-);
 
 /**
  * The Analyzer screen, in one of two modes.
@@ -422,7 +417,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                 )}
                 {isGameMode && saved.error && (
                   <BoardOverlay>
-                    <GameLoadError message={saved.error} />
+                    <LoadError what="this game" message={saved.error} />
                   </BoardOverlay>
                 )}
                 {isCopyOverlayOpen && (

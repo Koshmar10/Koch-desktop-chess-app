@@ -39,6 +39,18 @@ describe("getPieceVisualState", () => {
     expect(className).toContain("transition-transform");
   });
 
+  it("keeps a resting piece on its own layer", () => {
+    const { className } = getPieceVisualState(
+      false,
+      null,
+      3,
+      5,
+      SQUARE_SIZE_PX,
+    );
+
+    expect(className).toContain("will-change-transform");
+  });
+
   it("follows the cursor and enlarges while being dragged", () => {
     const dragPosition = { x: 100, y: 200 };
     const { className, style } = getPieceVisualState(

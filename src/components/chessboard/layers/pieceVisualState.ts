@@ -34,8 +34,13 @@ export const getPieceVisualState = (
     // jump from one square to the next, while a transform can be
     // interpolated between them, so a move slides — and the browser animates
     // a transform on the GPU, without re-laying-out the board every frame.
+    //
+    // `will-change-transform` keeps every piece on its own GPU layer all the
+    // time, rather than the webview making one as each slide starts. Added
+    // while chasing a flicker in WebKitGTK 2.54 on Wayland, where a slide
+    // can show a frame of the old board; it hasn't removed it on its own.
     className:
-      "absolute top-0 left-0 p-2 box-border select-none cursor-grab transition-transform duration-200 ease-in-out motion-reduce:transition-none",
+      "absolute top-0 left-0 p-2 box-border select-none cursor-grab transition-transform duration-200 ease-in-out will-change-transform motion-reduce:transition-none",
     style: {
       transform: `translate(${col * squareSize}px, ${row * squareSize}px)`,
       width: squareSize,

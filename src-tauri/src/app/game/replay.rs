@@ -114,6 +114,21 @@ pub(crate) fn play_uci(board: &mut Board, uci: &str) -> Result<(LastMove, MoveSt
     Ok((LastMove::from(mv), played))
 }
 
+/// The position a move just played leads to, as the frontend lists it. No
+/// clock, and no analysis to grade it, so those stay `None`.
+pub(crate) fn position_after(
+    board: &Board,
+    last_move: LastMove,
+    played: MoveStruct,
+) -> ReplayPosition {
+    ReplayPosition {
+        last_move: Some(last_move),
+        san: Some(played.san),
+        uci: Some(played.uci),
+        ..ReplayPosition::of(board)
+    }
+}
+
 /// Every position `moves` pass through, start position first.
 ///
 /// Replays from the standard starting position, as the analysis pipeline
@@ -145,6 +160,17 @@ pub(crate) fn replay_positions(moves: &[GameMoveRow]) -> Result<Vec<ReplayPositi
     Ok(positions)
 }
 
+pub(crate) fn replay_uci(
+    board: &mut Board,
+    moves: &[String],
+) -> Result<Vec<ReplayPosition>, String> {
+    let mut positions = vec![ReplayPosition::of(board)];
+    for uci in moves {
+        let (last_move, played) = play_uci(board, uci)?;
+        positions.push(position_after(board, last_move, played));
+    }
+    Ok(positions)
+}
 /// A saved game, every position of it, ready for the analyzer to scrub.
 #[tauri::command]
 pub fn load_game_replay(

@@ -122,9 +122,9 @@ impl Game {
 }
 
 /// Every piece's legal destinations, keyed by piece id — the shape the
-/// board's drag-and-drop highlights from. Shared by the live game and the
-/// analyzer's sandbox, which both let you move pieces.
-pub(super) fn legal_moves_view(board: &Board) -> HashMap<u32, Vec<Square>> {
+/// board's drag-and-drop highlights from. Shared by every screen that lets
+/// you move pieces.
+pub(crate) fn legal_moves_view(board: &Board) -> HashMap<u32, Vec<Square>> {
     board
         .legal_moves
         .iter()

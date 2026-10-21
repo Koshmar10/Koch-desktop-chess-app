@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use koch_engine::{Board, FenString, MoveStruct, PgnError, PgnGame, PieceColor, PieceType, Square};
+use koch_engine::{Board, FenString, PgnError, PgnGame, PieceColor, PieceType, Square};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -9,7 +9,7 @@ use crate::app::{
     error::AppError,
     game::{
         live::legal_moves_view,
-        replay::{play_uci, ReplayPosition},
+        replay::{play_uci, position_after, ReplayPosition},
         view::LastMove,
     },
 };
@@ -40,17 +40,6 @@ pub struct SandboxMoved {
     pub position: ReplayPosition,
     pub turn: PieceColor,
     pub legal_moves: HashMap<u32, Vec<Square>>,
-}
-
-/// The position a move just played leads to, as the frontend lists it. No
-/// clock in the sandbox, and no analysis to grade it, so those stay `None`.
-fn position_after(board: &Board, last_move: LastMove, played: MoveStruct) -> ReplayPosition {
-    ReplayPosition {
-        last_move: Some(last_move),
-        san: Some(played.san),
-        uci: Some(played.uci),
-        ..ReplayPosition::of(board)
-    }
 }
 
 /// A sandbox started on `start_fen` with `moves` (UCI) already played, and
@@ -196,10 +185,7 @@ pub fn sandbox_move(
     let sandbox = slot.as_mut().ok_or("no sandbox open")?;
 
     // Checks legality itself, and hands back the move's SAN and UCI.
-    let played = sandbox
-        .board
-        .move_piece(from, to, promotion)
-        .map_err(|err| format!("illegal move: {err:?}"))?;
+    let played = sandbox.board.move_piece(from, to, promotion)?;
     // So the frontend can show where the next move may go.
     sandbox.board.refresh_legal_moves();
 

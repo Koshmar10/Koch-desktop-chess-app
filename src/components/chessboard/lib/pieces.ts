@@ -1,6 +1,10 @@
 import type { Square } from "../../../api/bindings/Square";
 import { sameSquare } from "./square";
-import type { PlacedPiece } from "./types";
+import type { PieceColor, PlacedPiece } from "./types";
+
+/** The other side. */
+export const opponentOf = (color: PieceColor): PieceColor =>
+  color === "white" ? "black" : "white";
 
 /** The piece standing on `square`, if any. */
 export const pieceAt = (
