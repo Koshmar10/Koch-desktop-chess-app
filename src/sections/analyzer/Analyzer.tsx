@@ -48,6 +48,7 @@ import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
 import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
 import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
 import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
+import ChatPannel from "../../components/ChatPannel";
 
 const CHAT_PANEL_WIDTH_PX = 320;
 const PLACEHOLDER_ICON_SIZE_PX = 28;
@@ -323,10 +324,10 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     // never flashes up first.
     onTryInSandbox: position
       ? () =>
-          sandbox
-            .start(position.fen)
-            .then(() => navigate("/analysis"))
-            .catch(console.error)
+        sandbox
+          .start(position.fen)
+          .then(() => navigate("/analysis"))
+          .catch(console.error)
       : null,
     onNextMistake: nextMistake === null ? null : () => goToPly(nextMistake),
   };
@@ -486,15 +487,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         </div>
       </div>
 
-      {isChatOpen && (
-        <PanelPlaceholder
-          title="Assistant"
-          icon={<MessageSquareText size={PLACEHOLDER_ICON_SIZE_PX} />}
-          blockedOn="KOCH-16 — blocked on the AI layer (KOCH-19)"
-          widthPx={CHAT_PANEL_WIDTH_PX}
-          borderSide="left"
-        />
-      )}
+      <ChatPannel isOpen={isChatOpen} gameId={gameId} viewedPly={viewedPly} />
     </div>
   );
 };

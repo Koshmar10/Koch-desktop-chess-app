@@ -14,3 +14,4 @@ pub mod rating;
 pub mod sessions;
 pub mod settings;
 pub mod stats;
+pub mod assistent;
