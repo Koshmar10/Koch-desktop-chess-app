@@ -62,6 +62,10 @@ pub fn run() {
             app::game::sandbox::sandbox_undo,
             app::puzzle::commands::get_puzzle,
             app::assistent::commands::send_assistent_request,
+            app::assistent::commands::get_assistent_conversation,
+            app::assistent::commands::list_assistent_chats,
+            app::assistent::commands::open_assistent_chat,
+            app::assistent::commands::start_new_assistent_chat,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

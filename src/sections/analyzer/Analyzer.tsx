@@ -487,9 +487,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         </div>
       </div>
 
-      {isChatOpen && (
-        <ChatPannel viewedPly={viewedPly} />
-      )}
+      <ChatPannel isOpen={isChatOpen} gameId={gameId} viewedPly={viewedPly} />
     </div>
   );
 };

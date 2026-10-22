@@ -3,16 +3,45 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::message::{ChatMessage, ChatRole, TurnUsage};
+
 pub const OPENAI_RESPONSES_API_URL: &str = "https://api.openai.com/v1/responses";
 
 #[derive(Serialize)]
 pub(super) struct ModelTextRequest {
-  pub model: String,
-  pub input: String
+    pub model: String,
+    pub input: Vec<InputMessage>,
+    pub store: bool,
 }
+
+/// One earlier turn, sent back so the model sees the conversation so far.
+#[derive(Serialize)]
+pub(super) struct InputMessage {
+    pub role: InputRole,
+    pub content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum InputRole {
+    User,
+    Assistant,
+}
+
+impl From<&ChatMessage> for InputMessage {
+    fn from(message: &ChatMessage) -> Self {
+        Self {
+            role: match message.role {
+                ChatRole::User => InputRole::User,
+                ChatRole::Assistant => InputRole::Assistant,
+            },
+            content: message.content.clone(),
+        }
+    }
+}
+
 /// The body of a Responses API reply. Only the fields Koch reads are
 /// declared; serde skips the rest, most of which echo the request back.
-
 #[derive(Deserialize)]
 pub(super) struct ModelResponse {
     pub id: String,
@@ -22,6 +51,19 @@ pub(super) struct ModelResponse {
     pub incomplete_details: Option<IncompleteDetails>,
     pub output: Vec<OutputItem>,
     pub usage: Option<Usage>,
+}
+
+impl ModelResponse {
+    pub fn turn_usage(&self) -> Option<TurnUsage> {
+        self.usage.as_ref().map(|usage| TurnUsage {
+            model: self.model.clone(),
+            input_tokens: usage.input_tokens,
+            cached_input_tokens: usage.input_tokens_details.cached_tokens,
+            cache_write_tokens: usage.input_tokens_details.cache_write_tokens,
+            output_tokens: usage.output_tokens,
+            reasoning_tokens: usage.output_tokens_details.reasoning_tokens,
+        })
+    }
 }
 
 #[derive(Deserialize)]
