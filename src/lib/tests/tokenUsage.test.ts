@@ -5,7 +5,7 @@ import { compactCount, conversationTokens, latestModel } from "../tokenUsage";
 const question = (content: string): ChatMessage => ({
   role: "User",
   content,
-  ply: 0,
+  turn_context: { game_id: null, ply: 0 },
   sent_at: "",
   usage: null,
 });
@@ -13,7 +13,7 @@ const question = (content: string): ChatMessage => ({
 const answer = (model: string, input: number, output: number): ChatMessage => ({
   role: "Assistant",
   content: "",
-  ply: 0,
+  turn_context: { game_id: null, ply: 0 },
   sent_at: "",
   usage: {
     model,

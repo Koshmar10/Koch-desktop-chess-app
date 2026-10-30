@@ -100,6 +100,25 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
+@theme {
+  /* The chat panel's "answer on its way" dots: each rises and brightens in
+     turn, staggered by `animation-delay`. */
+  --animate-typing-dot: typing-dot 1.2s ease-in-out infinite;
+
+  @keyframes typing-dot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+}
+
 body {
   @apply bg-background text-foreground;
 }

@@ -11,6 +11,7 @@ pub const OPENAI_RESPONSES_API_URL: &str = "https://api.openai.com/v1/responses"
 pub(super) struct ModelTextRequest {
     pub model: String,
     pub input: Vec<InputMessage>,
+    pub instructions: String,
     pub store: bool,
 }
 
@@ -26,6 +27,15 @@ pub(super) struct InputMessage {
 pub(super) enum InputRole {
     User,
     Assistant,
+}
+
+impl InputMessage {
+    /// Puts `context` ahead of the text, for this request only: the saved
+    /// chat keeps the plain message.
+    pub fn with_context(mut self, context: &str) -> Self {
+        self.content = format!("{context}\n{}", self.content);
+        self
+    }
 }
 
 impl From<&ChatMessage> for InputMessage {

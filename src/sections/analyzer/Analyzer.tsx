@@ -30,6 +30,7 @@ import { clamp } from "../../lib/math";
 import { START_POSITION_PLY } from "../../lib/ply";
 import {
   bestMoveMask,
+  chatMoveMask,
   ghosted,
   positionMasks,
   threatMask,
@@ -110,6 +111,9 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   // because the board is the panel's sibling, not its child — the panel
   // decides what to light up, the board draws it.
   const [previewMaskId, setPreviewMaskId] = useState<string | null>(null);
+  // The move in the chat the pointer is on, in UCI. Separate from the
+  // masks above: it comes from the chat, not from a row of the panel.
+  const [chatMoveUci, setChatMoveUci] = useState<string | null>(null);
 
   // ---- The position on screen ----
   // `positions[0]` is the start position, so the viewed ply is offset by
@@ -226,6 +230,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     if (shownMasks.has(mask.id)) return [mask];
     return mask.id === previewMaskId ? [ghosted(mask)] : [];
   });
+  if (chatMoveUci !== null) drawnMasks.push(chatMoveMask(chatMoveUci));
 
   // Anything switched on, for the toolbar's clear button — including ids
   // with nothing to draw on this ply, which would otherwise be "on" with
@@ -246,6 +251,9 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
       // may not exist on the new ply, and a row that unmounts under the
       // pointer never gets its pointer-leave to clear it.
       setPreviewMaskId(null);
+      // The chip the pointer was on may belong to a ply that's gone, and
+      // its pointer-leave won't come if it unmounts.
+      setChatMoveUci(null);
     },
     [moves.length, viewedPly, engineStatus, searchPosition, setViewedPly],
   );
@@ -487,7 +495,13 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         </div>
       </div>
 
-      <ChatPannel isOpen={isChatOpen} gameId={gameId} viewedPly={viewedPly} />
+      <ChatPannel
+        isOpen={isChatOpen}
+        gameId={gameId}
+        viewedPly={viewedPly}
+        onGoToPly={goToPly}
+        onPreviewMove={setChatMoveUci}
+      />
     </div>
   );
 };

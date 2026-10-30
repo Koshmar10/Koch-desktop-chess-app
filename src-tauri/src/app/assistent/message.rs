@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::segments::Segment;
+
 /// Who wrote a chat message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -37,12 +39,25 @@ pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
     /// The ply on the board when the message was sent.
-    pub ply: i32,
+    pub turn_context: TurnContext,
     /// RFC 3339, UTC.
     pub sent_at: String,
     /// `None` on the user's own messages: a question costs nothing until
     /// it's answered.
     pub usage: Option<TurnUsage>,
+}
+
+/// A message as the frontend gets it: the stored one plus, for the
+/// assistant's, its text split into plain text and checked move tags. Never
+/// saved or sent to the model.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+pub struct RenderedMessage {
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub message: ChatMessage,
+    /// Empty on your own messages.
+    pub segments: Vec<Segment>,
 }
 
 /// What answering one question cost. Once the tool loop makes several API
@@ -58,6 +73,13 @@ pub struct TurnUsage {
     pub cache_write_tokens: u32,
     pub output_tokens: u32,
     pub reasoning_tokens: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TurnContext { 
+  pub game_id: Option<u32>, 
+  pub ply: i32 
 }
 
 /// One saved chat about a game, as the "past chats" list shows it.

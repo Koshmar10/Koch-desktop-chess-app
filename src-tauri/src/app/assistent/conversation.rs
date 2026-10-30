@@ -117,7 +117,7 @@ impl Conversation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::assistent::message::ChatRole;
+    use crate::app::assistent::message::{ChatRole, TurnContext};
     use crate::db::migrations::MIGRATIONS;
 
     fn test_conn() -> Connection {
@@ -144,7 +144,7 @@ mod tests {
         ChatMessage {
             role,
             content: content.to_string(),
-            ply: 0,
+            turn_context: TurnContext{game_id:Some(0), ply: 0},
             sent_at: "2026-10-22T10:00:00Z".to_string(),
             usage: None,
         }

@@ -1,6 +1,8 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use crate::app::assistent::message::{ChatMessage, ChatRole, ChatSummary, TurnUsage};
+use crate::app::assistent::message::{
+    ChatMessage, ChatRole, ChatSummary, TurnContext, TurnUsage,
+};
 use crate::db::columns::parse_text;
 
 /// Saved assistant chats. Only saved games have them; the sandbox's chat
@@ -70,10 +72,11 @@ impl<'a> ChatService<'a> {
     /// A chat's messages, oldest first.
     pub fn messages(&self, chat_id: u32) -> rusqlite::Result<Vec<ChatMessage>> {
         let mut stmt = self.conn.prepare(
-            "SELECT m.role, m.content, m.ply, m.sent_at,
+            "SELECT m.role, m.content, m.ply, m.sent_at, c.game_id,
                     u.model, u.input_tokens, u.cached_input_tokens, u.cache_write_tokens,
                     u.output_tokens, u.reasoning_tokens
              FROM messages m
+             JOIN chats c ON c.chat_id = m.chat_id
              LEFT JOIN message_usage u ON u.message_id = m.message_id
              WHERE m.chat_id = ?1
              ORDER BY m.message_id",
@@ -93,7 +96,7 @@ fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rus
             chat_id,
             message.role.as_db_str(),
             message.content,
-            message.ply,
+            message.turn_context.ply,
             message.sent_at,
         ],
     )?;
@@ -117,8 +120,9 @@ fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rus
     Ok(())
 }
 
-/// A `messages` row joined with its `message_usage` row. The usage columns
-/// are all NULL for a question, which has no usage row.
+/// A `messages` row joined with its chat and its `message_usage` row. The
+/// game isn't stored per message: it's the chat's. The usage columns are all
+/// NULL for a question, which has no usage row.
 fn message_from_row(row: &Row<'_>) -> rusqlite::Result<ChatMessage> {
     let usage = match row.get::<_, Option<String>>("model")? {
         Some(model) => Some(TurnUsage {
@@ -134,7 +138,10 @@ fn message_from_row(row: &Row<'_>) -> rusqlite::Result<ChatMessage> {
     Ok(ChatMessage {
         role: parse_text(row, "role", ChatRole::from_db_str)?,
         content: row.get("content")?,
-        ply: row.get("ply")?,
+        turn_context: TurnContext {
+            game_id: Some(row.get("game_id")?),
+            ply: row.get("ply")?,
+        },
         sent_at: row.get("sent_at")?,
         usage,
     })
@@ -169,7 +176,10 @@ mod tests {
         ChatMessage {
             role: ChatRole::User,
             content: content.to_string(),
-            ply: 14,
+            turn_context: TurnContext {
+                game_id: None,
+                ply: 14,
+            },
             sent_at: "2026-10-22T10:00:00Z".to_string(),
             usage: None,
         }
@@ -179,7 +189,10 @@ mod tests {
         ChatMessage {
             role: ChatRole::Assistant,
             content: content.to_string(),
-            ply: 14,
+            turn_context: TurnContext {
+                game_id: None,
+                ply: 14,
+            },
             sent_at: "2026-10-22T10:00:05Z".to_string(),
             usage: Some(TurnUsage {
                 model: "gpt-6-luna".to_string(),
@@ -206,6 +219,9 @@ mod tests {
         let messages = chats.messages(chat_id).unwrap();
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[0].role, ChatRole::User);
+        // The game comes back from the chat, not from the message.
+        assert_eq!(messages[0].turn_context.game_id, Some(game_id));
+        assert_eq!(messages[0].turn_context.ply, 14);
         assert!(messages[0].usage.is_none());
         assert_eq!(messages[1].content, "because");
         assert_eq!(messages[1].usage.as_ref().unwrap().cached_input_tokens, 800);
