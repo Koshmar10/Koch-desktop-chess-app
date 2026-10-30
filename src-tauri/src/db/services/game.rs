@@ -330,13 +330,20 @@ impl<'a> GameService<'a> {
     }
 
     /// Deletes a game and everything hanging off it — moves, analysis, and
-    /// its chat. The `games` foreign keys carry no `ON DELETE` clause (and
-    /// SQLite FK enforcement is off on this connection anyway), so the
-    /// children are removed explicitly, all in one transaction. Returns
+    /// its chats. The foreign keys carry no `ON DELETE` clause and SQLite
+    /// enforces them on this connection, so the children are removed
+    /// explicitly, deepest first, all in one transaction. Returns
     /// the number of `games` rows removed: 0 if `game_id` didn't exist,
     /// 1 otherwise.
     pub fn delete_game(&self, game_id: u32) -> rusqlite::Result<usize> {
         let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM message_usage
+             WHERE message_id IN (
+                 SELECT message_id FROM messages
+                 WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1))",
+            params![game_id],
+        )?;
         tx.execute(
             "DELETE FROM messages
              WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1)",
@@ -607,12 +614,24 @@ mod tests {
             params![game_id],
         )
         .unwrap();
-        conn.execute("INSERT INTO chats (game_id) VALUES (?1)", params![game_id])
-            .unwrap();
+        conn.execute(
+            "INSERT INTO chats (game_id, started_at) VALUES (?1, '')",
+            params![game_id],
+        )
+        .unwrap();
         let chat_id = conn.last_insert_rowid();
         conn.execute(
-            "INSERT INTO messages (chat_id, role, content) VALUES (?1, 'user', 'hi')",
+            "INSERT INTO messages (chat_id, role, content, ply, sent_at)
+             VALUES (?1, 'assistant', 'hi', 0, '')",
             params![chat_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO message_usage
+                 (message_id, model, input_tokens, cached_input_tokens,
+                  cache_write_tokens, output_tokens, reasoning_tokens)
+             VALUES (?1, 'm', 1, 0, 0, 1, 0)",
+            params![conn.last_insert_rowid()],
         )
         .unwrap();
 
@@ -645,6 +664,10 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
             .unwrap();
         assert_eq!(orphan_messages, 1, "only the other game's message remains");
+        let orphan_usage: i64 = conn
+            .query_row("SELECT COUNT(*) FROM message_usage", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(orphan_usage, 1, "only the other game's usage remains");
 
         // The untouched game is intact.
         assert_eq!(count(&conn, "games", other), 1);

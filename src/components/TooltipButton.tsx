@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import type { LucideIcon } from "lucide-react";
 import Tooltip from "./Tooltip";
 
@@ -23,6 +24,9 @@ interface TooltipButtonProps {
   // half-circle that rotates to show which colour you'll play.
   iconClassName?: string;
   tooltip: string | null;
+  // For a button at the top of the window or near an edge (see `Tooltip`).
+  tooltipSide?: ComponentProps<typeof Tooltip>["side"];
+  tooltipAlign?: ComponentProps<typeof Tooltip>["align"];
   onClick?: () => void;
   disabled?: boolean;
   // For buttons that toggle something rather than fire and forget. Left
@@ -36,12 +40,19 @@ const TooltipButton = ({
   icon: Icon,
   iconClassName,
   tooltip,
+  tooltipSide,
+  tooltipAlign,
   onClick,
   disabled,
   active = false,
 }: TooltipButtonProps) => {
   return (
-    <Tooltip label={tooltip} color="primary">
+    <Tooltip
+      label={tooltip}
+      color="primary"
+      side={tooltipSide}
+      align={tooltipAlign}
+    >
       <button
         type="button"
         className={`${BUTTON_CLASS} ${active ? ACTIVE_CLASS : INACTIVE_CLASS}`}

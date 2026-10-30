@@ -16,6 +16,12 @@ The previous implementation is at `../chess_app/Koch/` — treat it as **read-on
 reference** until feature parity is reached. All file:line references in the handoff
 point there.
 
+**AI assistant scenarios.** [docs/assistant-scenarios.md](docs/assistant-scenarios.md) is
+the working list (context, tools, golden questions).
+[docs/assistant-scenarios-proposed.md](docs/assistant-scenarios-proposed.md) holds five
+proposed coach scenarios and the tool set they imply. It is **proposed, not agreed** —
+reconcile it with the working list before building tools from it.
+
 ## How work is organised
 
 - GitHub Issues + Projects, one issue per shippable slice, milestone-labeled.

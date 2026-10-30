@@ -54,6 +54,7 @@ export const maskIdFor = {
   control: "control",
   bestMove: "engine:best",
   threat: "engine:threat",
+  chatMove: "chat:move",
   king: (color: PieceColor) => `king:${color}`,
   pawns: (color: PieceColor, flag: PawnFlagKey) => `pawns:${color}:${flag}`,
   pin: (pin: Pin) => `pin:${pin.pinner_piece_id}-${pin.pinned_piece_id}`,
@@ -222,6 +223,13 @@ export const bestMoveMask = (uci: string | null): OverlayMask =>
 
 export const threatMask = (uci: string | null): OverlayMask =>
   engineMoveMask(maskIdFor.threat, uci, "danger");
+
+/**
+ * A move the assistant named, drawn ghosted while the pointer is on it in
+ * the chat: it's a look at the move, not something switched on.
+ */
+export const chatMoveMask = (uci: string): OverlayMask =>
+  ghosted(engineMoveMask(maskIdFor.chatMove, uci, "good"));
 
 /**
  * Every mask the viewed position's findings can draw.
