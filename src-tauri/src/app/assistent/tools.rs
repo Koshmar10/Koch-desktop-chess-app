@@ -80,14 +80,13 @@ pub struct GetPositionArgs {
 pub fn get_position() -> Tool {
     Tool::function(
         GET_POSITION,
-        "Koch's analysis of the position after a ply, the current one \
-         included: the stored engine evaluation, how good the move that led \
-         there was, and computed findings — hanging pieces, pins, forks, king \
-         safety per side, and passed, isolated, backward and doubled pawns. \
-         <current_fen> only gives where the pieces stand; call this before \
-         describing any position, its threats, or who is better, instead of \
-         working them out from the FEN yourself. Call it again for every \
-         other ply you discuss.",
+        "Koch's analysis of the position after a ply: the stored engine \
+         evaluation, how good the move that led there was, and computed \
+         findings — hanging pieces, pins, forks, king safety per side, and \
+         passed, isolated, backward and doubled pawns. The current ply's \
+         analysis is already in <current_analysis>, so don't call this for \
+         it. Call it before describing any other ply, its threats, or who is \
+         better there, instead of working them out from a FEN yourself.",
         json!({
             "type": "object",
             "properties": {
@@ -117,7 +116,8 @@ fn run_get_position(ply: i32, context: &ToolContext) -> String {
 
 /// A position as the model reads it: pieces by colour, kind and square
 /// rather than by the ids the findings use, which mean nothing outside Koch.
-fn position_summary(ply: i32, position: &ReplayPosition) -> Value {
+/// Also sent unasked as `<current_analysis>` for the position on the board.
+pub(super) fn position_summary(ply: i32, position: &ReplayPosition) -> Value {
     let describe = |id: &u32| {
         position
             .pieces

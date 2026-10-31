@@ -16,6 +16,10 @@ pub(super) struct ModelTextRequest {
     pub store: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<Tool>,
+    /// Sends requests with the same key to the same cache, so a chat's
+    /// growing prefix keeps hitting it. `None` for the sandbox.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_key: Option<String>,
 }
 
 /// One item of the request's `input`. Within one answer, each round sends
@@ -64,6 +68,14 @@ impl InputMessage {
     /// chat keeps the plain message.
     pub fn with_context(mut self, context: &str) -> Self {
         self.content = format!("{context}\n{}", self.content);
+        self
+    }
+
+    /// Puts `analysis` after the text. After, not before: on the next turn
+    /// it's gone, and the request then differs from this one only from here
+    /// on, so everything ahead of it stays cached.
+    pub fn with_analysis(mut self, analysis: &str) -> Self {
+        self.content = format!("{}\n{analysis}", self.content);
         self
     }
 }

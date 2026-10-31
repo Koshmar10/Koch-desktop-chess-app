@@ -5,6 +5,7 @@ use koch_engine::{Board, FenString};
 use tauri::{AppHandle, Emitter};
 
 use crate::app::app_state::AppState;
+use crate::app::assistent::conversation::ChatKey;
 use crate::app::assistent::message::{
     ChatMessage, ChatRole, ChatSummary, RenderedMessage, ToolCallRecord, ToolCallStarted,
     TurnContext, TurnUsage,
@@ -14,7 +15,7 @@ use crate::app::assistent::openai::{
     OutputItem, OPENAI_RESPONSES_API_URL,
 };
 use crate::app::assistent::segments::segment_reply;
-use crate::app::assistent::tools::{all, run_tool, ToolContext};
+use crate::app::assistent::tools::{all, position_summary, run_tool, ToolContext};
 use crate::app::error::AppError;
 use crate::app::events;
 use crate::app::game::replay::{replay_positions, ReplayPosition};
@@ -31,67 +32,127 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 /// spend tokens without end.
 const MAX_TOOL_ROUNDS: usize = 5;
 
-pub(super) async fn send_model_request(
+/// What every round of one answer sends unchanged. Built once, so each round
+/// repeats the last one exactly and only adds tool items to its end.
+struct Prompt {
+    api_key: String,
+    /// The system prompt, with the game's PGN.
+    instructions: String,
+    /// The conversation, each question with the board it was asked about.
+    messages: Vec<InputItem>,
+    cache_key: Option<String>,
+}
+
+/// The board a question was asked about, as the model reads it. Rebuilt the
+/// same way on every turn, so a past question is sent byte for byte as it
+/// was the first time and the cached prefix holds.
+fn question_context(ply: i32, positions: &[ReplayPosition]) -> String {
+    // The model counts plies from 1, as the board shows them; `ply` is an
+    // index from -1, so the same number is the position's place in the list.
+    let model_ply = ply + 1;
+    let fen = usize::try_from(model_ply)
+        .ok()
+        .and_then(|index| positions.get(index))
+        .map(|position| position.fen.as_str())
+        .unwrap_or_default();
+    format!("<current_fen>{fen}</current_fen>\n<current_ply>{model_ply}</current_ply>")
+}
+
+/// What `get_position` would answer for the position the question is about,
+/// sent with the newest question only, so the commonest question needs no
+/// tool round.
+fn current_analysis(ply: i32, positions: &[ReplayPosition]) -> Option<String> {
+    let model_ply = ply + 1;
+    let position = positions.get(usize::try_from(model_ply).ok()?)?;
+    Some(format!(
+        "<current_analysis>\n{}\n</current_analysis>",
+        position_summary(model_ply, position)
+    ))
+}
+
+/// The conversation as the model gets it: every question with the board it
+/// was asked about, and the newest one also with `<current_analysis>`.
+fn conversation_items(history: &[ChatMessage], positions: &[ReplayPosition]) -> Vec<InputItem> {
+    let newest_question = history
+        .iter()
+        .rposition(|message| message.role == ChatRole::User);
+    history
+        .iter()
+        .enumerate()
+        .map(|(index, message)| {
+            let input = InputMessage::from(message);
+            let input = match message.role {
+                ChatRole::User => {
+                    input.with_context(&question_context(message.turn_context.ply, positions))
+                }
+                ChatRole::Assistant => input,
+            };
+            let analysis = (Some(index) == newest_question)
+                .then(|| current_analysis(message.turn_context.ply, positions))
+                .flatten();
+            InputItem::Message(match analysis {
+                Some(analysis) => input.with_analysis(&analysis),
+                None => input,
+            })
+        })
+        .collect()
+}
+
+fn build_prompt(
     db: &db::Db,
     history: &[ChatMessage],
     turn_context: &TurnContext,
-    question_context: &str,
-    tool_items: &[InputItem],
-) -> Result<ModelResponse, AppError> {
-    // Scoped so the lock is released before any `.await` below.
-    let api_key = {
+    chat: ChatKey,
+    positions: &[ReplayPosition],
+) -> Result<Prompt, AppError> {
+    let (api_key, pgn) = {
         let conn = db.lock()?;
-        let service = SettingsService::new(&conn);
-        service
+        let api_key = SettingsService::new(&conn)
             .get_latest_app_settings()?
             .and_then(|settings| settings.openai_key)
-            .ok_or("No OpenAI key set. Add one in Settings.")?
+            .ok_or("No OpenAI key set. Add one in Settings.")?;
+        let pgn = match turn_context.game_id {
+            Some(game_id) => Some(
+                GameService::new(&conn)
+                    .find_game(game_id)?
+                    .ok_or_else(|| format!("no saved game with id {game_id}"))?
+                    .pgn_data,
+            ),
+            None => None,
+        };
+        (api_key, pgn)
     };
 
-    let game_data = {
-        let conn = db.lock()?;
-        let game_service = GameService::new(&conn);
-        if let Some(id) = turn_context.game_id {
-            Some(game_service.find_game(id)?.unwrap().pgn_data)
-        } else {
-            None
-        }
-    };
-    let system_prompt = format!(
-        "{}\n<game_pgn>\n{}\n</game_pgn>\n",
-        include_str!("system-prompt.md"),
-        game_data.unwrap_or(String::from("No game"))
-    );
-    let client = reqwest::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .build()?;
+    Ok(Prompt {
+        api_key,
+        instructions: format!(
+            "{}\n<game_pgn>\n{}\n</game_pgn>\n",
+            include_str!("system-prompt.md"),
+            pgn.as_deref().unwrap_or("No game")
+        ),
+        messages: conversation_items(history, positions),
+        cache_key: chat.chat_id().map(|chat_id| format!("koch-chat-{chat_id}")),
+    })
+}
 
-    // Only the question being asked carries the board; earlier turns would
-    // repeat positions that are no longer the one on screen.
-    let mut messages: Vec<InputMessage> = history.iter().map(InputMessage::from).collect();
-    if let Some(question) = messages.pop() {
-        messages.push(question.with_context(question_context));
-    }
-
-    // The calls made so far for this answer go after the question, so each
-    // round repeats the previous one exactly and adds to its end.
-    let input = messages
-        .into_iter()
-        .map(InputItem::Message)
-        .chain(tool_items.iter().cloned())
-        .collect();
-
+async fn send_model_request(
+    client: &reqwest::Client,
+    prompt: &Prompt,
+    tool_items: &[InputItem],
+) -> Result<ModelResponse, AppError> {
     let request_body = ModelTextRequest {
         model: String::from("gpt-6-luna"),
-        input,
+        // The calls made so far for this answer go after the conversation.
+        input: prompt.messages.iter().chain(tool_items).cloned().collect(),
+        instructions: prompt.instructions.clone(),
         // The transcript lives in Koch; OpenAI doesn't need to keep a copy.
-        instructions: system_prompt,
         store: false,
         tools: all(),
+        prompt_cache_key: prompt.cache_key.clone(),
     };
     let response = client
         .post(OPENAI_RESPONSES_API_URL)
-        .bearer_auth(&api_key)
+        .bearer_auth(&prompt.api_key)
         .json(&request_body)
         .send()
         .await?
@@ -110,16 +171,19 @@ async fn ask_model(
     db: &db::Db,
     history: &[ChatMessage],
     turn_context: TurnContext,
-    question_context: &str,
+    chat: ChatKey,
     tool_context: &ToolContext,
 ) -> Result<ChatMessage, AppError> {
+    let prompt = build_prompt(db, history, &turn_context, chat, &tool_context.positions)?;
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()?;
     let mut tool_items: Vec<InputItem> = Vec::new();
     let mut tool_calls: Vec<ToolCallRecord> = Vec::new();
     let mut usage: Option<TurnUsage> = None;
 
     for _ in 0..MAX_TOOL_ROUNDS {
-        let response =
-            send_model_request(db, history, &turn_context, question_context, &tool_items).await?;
+        let response = send_model_request(&client, &prompt, &tool_items).await?;
 
         if let Some(failure) = response.failure() {
             return Err(failure.into());
@@ -262,16 +326,6 @@ pub async fn send_assistent_request(
     let tool_context = ToolContext {
         positions: positions_of(&state, &db, game_id)?,
     };
-    // The model counts plies from 1, as the board shows them; `ply` is an
-    // index from -1, so the same number is the position's place in the list.
-    let model_ply = ply + 1;
-    let board_fen = usize::try_from(model_ply)
-        .ok()
-        .and_then(|index| tool_context.positions.get(index))
-        .map(|position| position.fen.as_str())
-        .unwrap_or_default();
-    let question_context =
-        format!("<current_fen>{board_fen}</current_fen>\n<current_ply>{model_ply}</current_ply>");
     let question = ChatMessage {
         role: ChatRole::User,
         content: message,
@@ -297,7 +351,7 @@ pub async fn send_assistent_request(
         &db,
         &history,
         TurnContext { game_id, ply },
-        &question_context,
+        chat,
         &tool_context,
     )
     .await?;
@@ -358,4 +412,89 @@ pub fn start_new_assistent_chat(state: tauri::State<'_, AppState>) -> Result<(),
     let mut conversation = state.assistent_conversation.lock()?;
     conversation.start_new();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::game::replay::{play_uci, position_after};
+
+    fn positions(uci_moves: &[&str]) -> Vec<ReplayPosition> {
+        let mut board = Board::default();
+        let mut positions = vec![ReplayPosition::of(&board)];
+        for uci in uci_moves {
+            let (last_move, played) = play_uci(&mut board, uci).unwrap();
+            positions.push(position_after(&board, last_move, played));
+        }
+        positions
+    }
+
+    fn message(role: ChatRole, content: &str, ply: i32) -> ChatMessage {
+        ChatMessage {
+            role,
+            content: content.to_string(),
+            turn_context: TurnContext { game_id: None, ply },
+            sent_at: String::new(),
+            usage: None,
+            tool_calls: Vec::new(),
+        }
+    }
+
+    fn contents(items: &[InputItem]) -> Vec<String> {
+        items
+            .iter()
+            .map(|item| serde_json::to_value(item).unwrap()["content"].to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_past_question_is_resent_as_it_was_without_its_analysis() {
+        let positions = positions(&["e2e4", "e7e5"]);
+        let first_question = message(ChatRole::User, "why e5?", 1);
+        let first_turn = contents(&conversation_items(
+            std::slice::from_ref(&first_question),
+            &positions,
+        ));
+        let second_turn = contents(&conversation_items(
+            &[
+                first_question,
+                message(ChatRole::Assistant, "because", 1),
+                message(ChatRole::User, "and now?", 0),
+            ],
+            &positions,
+        ));
+
+        // What the cached prefix needs: the question's text as first sent,
+        // minus only the analysis that ended it.
+        let first_sent = first_turn[0].trim_end_matches('"');
+        let resent = second_turn[0].trim_end_matches('"');
+        assert!(first_sent.starts_with(resent), "{first_sent}\n{resent}");
+        assert!(first_sent.contains("current_analysis"));
+        assert!(!resent.contains("current_analysis"));
+        assert!(second_turn[2].contains("current_analysis"));
+    }
+
+    #[test]
+    fn a_question_carries_its_own_ply_counted_from_one() {
+        let positions = positions(&["e2e4", "e7e5"]);
+        let sent = contents(&conversation_items(
+            &[
+                message(ChatRole::User, "start?", -1),
+                message(ChatRole::Assistant, "yes", -1),
+                message(ChatRole::User, "after e5?", 1),
+            ],
+            &positions,
+        ));
+        assert!(
+            sent[0].contains("<current_ply>0</current_ply>"),
+            "{}",
+            sent[0]
+        );
+        assert!(
+            sent[2].contains("<current_ply>2</current_ply>"),
+            "{}",
+            sent[2]
+        );
+        assert!(!sent[1].contains("current_"), "{}", sent[1]);
+    }
 }

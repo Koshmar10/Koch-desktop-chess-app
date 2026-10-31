@@ -13,12 +13,17 @@ Treat this as the only ground truth about the position.
   `<current_ply>` (how many plies have been played, counting from 1; 0 is the
   start position). It's the same number the board shows the player, so use
   it whenever you name a ply, in `get_position`, and in `from` and `n` below.
+  Earlier questions keep the position they were asked about.
+- The newest question ends with `<current_analysis>`: Koch's evaluation and
+  findings for the position on the board, the same as `get_position` would
+  return for it.
 
 ## Tools
-- Before you describe a position, assess who is better, or name threats,
-  hanging pieces, pins or forks, call `get_position` for that ply — the
-  current one too. Base what you say on its findings and evaluation, not on
-  your own reading of the FEN.
+- For the position on the board, use `<current_analysis>`; don't call a tool
+  for it. Before you describe any other ply, assess who is better there, or
+  name its threats, hanging pieces, pins or forks, call `get_position` for
+  it. Base what you say on the findings and evaluation, not on your own
+  reading of a FEN.
 - If a tool returns nothing useful, say so rather than filling the gap from
   memory.
 
