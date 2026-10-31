@@ -9,10 +9,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::app::game::replay::ReplayPosition;
+use crate::app::game::replay::{board_of, play_san, ReplayPosition};
 use crate::app::{assistent::openai::FunctionCall, error::AppError};
 
 const GET_POSITION: &str = "get_position";
+const EXPLORE_LINE: &str = "explore_line";
+#[expect(dead_code, reason = "lookup_opening (KOCH-33) isn't wired up yet")]
+const LOOKUP_OPENING: &str = "lookup_opening";
 
 /// What tools read from the app. Built once per question, from the saved
 /// game or the sandbox, whichever the chat is about.
@@ -59,7 +62,7 @@ impl Tool {
 }
 
 pub fn all() -> Vec<Tool> {
-    vec![get_position()]
+    vec![get_position(), explore_line()]
 }
 
 pub(super) fn run_tool(call: &FunctionCall, context: &ToolContext) -> Result<String, AppError> {
@@ -67,6 +70,10 @@ pub(super) fn run_tool(call: &FunctionCall, context: &ToolContext) -> Result<Str
         GET_POSITION => {
             let args: GetPositionArgs = serde_json::from_str(&call.arguments)?;
             Ok(run_get_position(args.ply, context))
+        }
+        EXPLORE_LINE => {
+            let args: ExploreLineArgs = serde_json::from_str(&call.arguments)?;
+            Ok(run_explore_line(&args, context))
         }
         other => Ok(format!("There is no tool called {other}.")),
     }
@@ -102,16 +109,96 @@ pub fn get_position() -> Tool {
 }
 
 fn run_get_position(ply: i32, context: &ToolContext) -> String {
-    let position = usize::try_from(ply)
-        .ok()
-        .and_then(|index| context.positions.get(index));
-    match position {
+    match position_at(ply, context) {
         Some(position) => position_summary(ply, position).to_string(),
-        None => format!(
-            "There is no ply {ply}: plies run from 0 (the start) to {}.",
-            context.positions.len().saturating_sub(1)
-        ),
+        None => no_such_ply(ply, context),
     }
+}
+
+/// Longest line `explore_line` plays, so a runaway one gets a clear no.
+const MAX_LINE_PLIES: usize = 16;
+
+#[derive(Deserialize)]
+pub struct ExploreLineArgs {
+    pub from_ply: i32,
+    pub moves: Vec<String>,
+}
+
+pub fn explore_line() -> Tool {
+    Tool::function(
+        EXPLORE_LINE,
+        "Plays a line of moves from a ply and returns Koch's findings for \
+         the position it reaches: hanging pieces, pins, forks, king safety \
+         and pawns, with each move written as Koch normalised it. If a move \
+         isn't legal, says which one and returns no position. Call it before \
+         writing a <line> you aren't sure of, with from_ply the same number \
+         as the tag's `from`. It runs no engine: the reached position has no \
+         evaluation, so don't call a line good or bad from it alone.",
+        json!({
+            "type": "object",
+            "properties": {
+                "from_ply": {
+                    "type": "integer",
+                    "description": "Ply the line starts after, counting from 1; 0 is the start position. Same as <current_ply> for the position on the board."
+                },
+                "moves": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "The line in standard algebraic notation, one move per item, without move numbers: [\"Nf3\", \"Nc6\", \"Bb5\"]."
+                }
+            },
+            "required": ["from_ply", "moves"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn run_explore_line(args: &ExploreLineArgs, context: &ToolContext) -> String {
+    if args.moves.len() > MAX_LINE_PLIES {
+        return format!("A line can be at most {MAX_LINE_PLIES} moves long.");
+    }
+    let Some(mut board) = position_at(args.from_ply, context).and_then(board_of) else {
+        return no_such_ply(args.from_ply, context);
+    };
+    let mut line = Vec::new();
+    for (index, san) in args.moves.iter().enumerate() {
+        match play_san(&mut board, san) {
+            Ok(played) => line.push(played.san),
+            Err(_) => {
+                return json!({
+                    "from_ply": args.from_ply,
+                    "played": line,
+                    "illegal": format!("Move {}, {san}, isn't legal there.", index + 1),
+                })
+                .to_string()
+            }
+        }
+    }
+    let reached = ReplayPosition {
+        san: line.last().cloned(),
+        ..ReplayPosition::of(&board)
+    };
+    let reached_ply = args.from_ply + line.len() as i32;
+    json!({
+        "from_ply": args.from_ply,
+        "line": line,
+        "position": position_summary(reached_ply, &reached),
+    })
+    .to_string()
+}
+
+/// The position after the model's ply `ply`, counted from 1 with 0 the start.
+fn position_at(ply: i32, context: &ToolContext) -> Option<&ReplayPosition> {
+    usize::try_from(ply)
+        .ok()
+        .and_then(|index| context.positions.get(index))
+}
+
+fn no_such_ply(ply: i32, context: &ToolContext) -> String {
+    format!(
+        "There is no ply {ply}: plies run from 0 (the start) to {}.",
+        context.positions.len().saturating_sub(1)
+    )
 }
 
 /// A position as the model reads it: pieces by colour, kind and square
@@ -125,7 +212,9 @@ pub(super) fn position_summary(ply: i32, position: &ReplayPosition) -> Value {
             .find(|piece| piece.id == *id)
             .map(|piece| format!("{} {} on {}", piece.color, piece.kind, piece.square))
     };
+
     let describe_all = |ids: &[u32]| ids.iter().filter_map(describe).collect::<Vec<_>>();
+
     let findings = &position.findings;
     let side_to_move = match position.fen.split_whitespace().nth(1) {
         Some("b") => "Black",
@@ -257,5 +346,60 @@ mod tests {
         let after_bxc6 = run_get_position(7, &context);
         assert!(after_bxc6.contains("on c6"), "{after_bxc6}");
         assert!(!after_bxc6.contains("\"id\""), "{after_bxc6}");
+    }
+
+    fn explore(from_ply: i32, moves: &[&str], context: &ToolContext) -> Value {
+        let args = ExploreLineArgs {
+            from_ply,
+            moves: moves.iter().map(|san| san.to_string()).collect(),
+        };
+        serde_json::from_str(&run_explore_line(&args, context)).unwrap()
+    }
+
+    #[test]
+    fn explore_line_returns_the_position_the_line_reaches() {
+        let context = context(&[]);
+        let reached = explore(0, &["e4", "e5", "Nf3"], &context);
+        assert_eq!(
+            reached["position"]["fen"],
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+        );
+        assert_eq!(reached["position"]["move_played"], "Nf3");
+    }
+
+    #[test]
+    fn explore_line_starts_from_the_ply_it_is_given() {
+        let context = context(&["e2e4", "e7e5"]);
+        let reached = explore(2, &["Nf3"], &context);
+        assert_eq!(reached["line"], json!(["Nf3"]));
+        assert_eq!(reached["position"]["ply"], 3);
+        assert_eq!(reached["position"]["side_to_move"], "Black");
+    }
+
+    #[test]
+    fn explore_line_writes_moves_as_koch_normalises_them() {
+        let context = context(&[]);
+        let reached = explore(0, &["e4", "e5", "Ngf3"], &context);
+        assert_eq!(reached["line"], json!(["e4", "e5", "Nf3"]));
+    }
+
+    #[test]
+    fn explore_line_names_the_first_illegal_move_and_reaches_no_position() {
+        let context = context(&[]);
+        let answer = explore(0, &["e4", "Ke2", "Nf3"], &context);
+        assert_eq!(answer["played"], json!(["e4"]));
+        assert!(answer["illegal"].as_str().unwrap().contains("Move 2, Ke2"));
+        assert_eq!(answer["position"], Value::Null);
+    }
+
+    #[test]
+    fn explore_line_refuses_a_ply_outside_the_game() {
+        let context = context(&["e2e4"]);
+        let args = ExploreLineArgs {
+            from_ply: 5,
+            moves: vec!["e5".to_string()],
+        };
+        let answer = run_explore_line(&args, &context);
+        assert!(answer.contains("There is no ply 5"), "{answer}");
     }
 }

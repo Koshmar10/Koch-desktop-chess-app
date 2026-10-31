@@ -14,9 +14,15 @@ describe("toolCallLabel", () => {
     );
   });
 
+  it("shows the line being tried", () => {
+    expect(
+      toolCallLabel("explore_line", '{"from_ply":4,"moves":["Nf3","Nc6"]}'),
+    ).toBe("Trying Nf3 Nc6");
+  });
+
   it("shows an unlabelled tool as it was called", () => {
-    expect(toolCallLabel("explore_line", '{"moves":["e4"]}')).toBe(
-      'explore_line({"moves":["e4"]})',
+    expect(toolCallLabel("some_new_tool", '{"ply":4}')).toBe(
+      'some_new_tool({"ply":4})',
     );
   });
 });

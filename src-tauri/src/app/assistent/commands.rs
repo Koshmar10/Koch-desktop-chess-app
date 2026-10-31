@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use koch_engine::{Board, FenString};
+use koch_engine::Board;
 use tauri::{AppHandle, Emitter};
 
 use crate::app::app_state::AppState;
@@ -18,7 +18,7 @@ use crate::app::assistent::segments::segment_reply;
 use crate::app::assistent::tools::{all, position_summary, run_tool, ToolContext};
 use crate::app::error::AppError;
 use crate::app::events;
-use crate::app::game::replay::{replay_positions, ReplayPosition};
+use crate::app::game::replay::{board_of, replay_positions, ReplayPosition};
 use crate::db::services::game::GameService;
 use crate::db::{
     self,
@@ -285,14 +285,9 @@ fn positions_of(
     }
 }
 
-/// The board after ply `ply` (an index, -1 the start), rebuilt from that
-/// position's FEN — which also keeps a sandbox's custom start position.
+/// The board after ply `ply` (an index, -1 the start).
 fn board_at(positions: &[ReplayPosition]) -> impl Fn(i32) -> Option<Board> + '_ {
-    move |ply| {
-        let position = positions.get(usize::try_from(ply + 1).ok()?)?;
-        let fen = FenString::try_from(position.fen.as_str()).ok()?;
-        Some(Board::from(&fen))
-    }
+    move |ply| board_of(positions.get(usize::try_from(ply + 1).ok()?)?)
 }
 
 /// Adds each assistant message's move tags, checked against `positions`.

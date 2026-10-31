@@ -9,6 +9,10 @@ const TOOL_LABEL: Record<string, (args: ToolArguments) => string> = {
     typeof args.ply === "number"
       ? `Looking at ply ${args.ply}`
       : "Looking at a position",
+  explore_line: (args) =>
+    Array.isArray(args.moves) && args.moves.length > 0
+      ? `Trying ${args.moves.join(" ")}`
+      : "Trying a line",
 };
 
 const parseArguments = (raw: string): ToolArguments => {
