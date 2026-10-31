@@ -15,6 +15,13 @@ pub struct ChatKey {
     chat_id: Option<u32>,
 }
 
+impl ChatKey {
+    /// The saved chat's id; `None` for the sandbox and a chat not yet saved.
+    pub fn chat_id(self) -> Option<u32> {
+        self.chat_id
+    }
+}
+
 /// The chat open on the analyzer screen. Kept in memory so the panel can
 /// close and reopen, and saved to the database for saved games.
 #[derive(Default)]
@@ -144,9 +151,13 @@ mod tests {
         ChatMessage {
             role,
             content: content.to_string(),
-            turn_context: TurnContext{game_id:Some(0), ply: 0},
+            turn_context: TurnContext {
+                game_id: Some(0),
+                ply: 0,
+            },
             sent_at: "2026-10-22T10:00:00Z".to_string(),
             usage: None,
+            tool_calls: Vec::new(),
         }
     }
 

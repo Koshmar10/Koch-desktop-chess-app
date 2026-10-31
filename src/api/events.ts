@@ -3,6 +3,7 @@ import type { AnalysisStatus } from "./bindings/AnalysisStatus";
 import type { EngineSnapshot } from "./bindings/EngineSnapshot";
 import type { GameAnalysis } from "./bindings/GameAnalysis";
 import type { GameStateView } from "./bindings/GameStateView";
+import type { ToolCallStarted } from "./bindings/ToolCallStarted";
 
 /**
  * Every event the backend pushes, each with the payload it carries — the
@@ -21,6 +22,7 @@ export interface AppEvents {
   "update-analysis-progress": number;
   "game-analysis-complete": GameAnalysis;
   pvline: EngineSnapshot;
+  "assistant-tool-call": ToolCallStarted;
 }
 
 export type AppEventName = keyof AppEvents;

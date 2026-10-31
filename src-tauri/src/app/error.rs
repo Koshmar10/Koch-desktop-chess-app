@@ -56,6 +56,11 @@ pub enum AppError {
     #[error(transparent)]
     Network(#[from] reqwest::Error),
 
+    /// The assistant called a tool with arguments that don't fit its schema.
+    /// Strict tools shouldn't let this happen, so it fails the answer.
+    #[error("the assistant sent tool arguments that don't parse: {0}")]
+    ToolArguments(#[from] serde_json::Error),
+
     /// Anything else, already worded for whoever reads it — "no game with
     /// id 4", "Paste a FEN or a PGN to load."
     #[error("{0}")]

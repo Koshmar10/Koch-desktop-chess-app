@@ -9,7 +9,12 @@ export interface TokenTotals {
   reasoning: number;
 }
 
-const NO_TOKENS: TokenTotals = { input: 0, cachedInput: 0, output: 0, reasoning: 0 };
+const NO_TOKENS: TokenTotals = {
+  input: 0,
+  cachedInput: 0,
+  output: 0,
+  reasoning: 0,
+};
 
 /** Every answer's tokens, added up. Questions carry no usage of their own. */
 export const conversationTokens = (messages: ChatMessage[]): TokenTotals =>
@@ -28,7 +33,8 @@ export const conversationTokens = (messages: ChatMessage[]): TokenTotals =>
 
 /** The model that wrote the latest answer, or null before the first one. */
 export const latestModel = (messages: ChatMessage[]): string | null =>
-  [...messages].reverse().find((message) => message.usage !== null)?.usage?.model ?? null;
+  [...messages].reverse().find((message) => message.usage !== null)?.usage
+    ?.model ?? null;
 
 const COMPACT_COUNT_FORMAT = new Intl.NumberFormat("en", {
   notation: "compact",
@@ -36,4 +42,5 @@ const COMPACT_COUNT_FORMAT = new Intl.NumberFormat("en", {
 });
 
 /** 950 → "950", 12 400 → "12.4K". */
-export const compactCount = (count: number): string => COMPACT_COUNT_FORMAT.format(count);
+export const compactCount = (count: number): string =>
+  COMPACT_COUNT_FORMAT.format(count);

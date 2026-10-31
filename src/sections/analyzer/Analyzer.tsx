@@ -6,7 +6,6 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { MessageSquareText } from "lucide-react";
 import LoadError from "../../components/LoadError";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import Chessboard from "../../components/chessboard/Chessboard";
@@ -22,7 +21,6 @@ import SidePanel from "./panel/SidePanel";
 import { MaskSelectionContext } from "./panel/maskSelection";
 import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
 import { nextMistakePly } from "./toolbar/nextMistake";
-import PanelPlaceholder from "./PanelPlaceholder";
 import EvalTimeline from "./board/EvalTimeline";
 import EvalBar from "./board/EvalBar";
 import { cpScore, topLineMove, topLineScore } from "./board/evalBar";
@@ -50,9 +48,6 @@ import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
 import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
 import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 import ChatPannel from "../../components/ChatPannel";
-
-const CHAT_PANEL_WIDTH_PX = 320;
-const PLACEHOLDER_ICON_SIZE_PX = 28;
 
 /**
  * The Analyzer screen, in one of two modes.
@@ -133,16 +128,15 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     () => positions.slice(1).map((p) => p.uci ?? ""),
     [positions],
   );
-  // One point per move that has both a stored eval and a grade, so an
-  // unanalysed game — and the sandbox — has none.
+  // One point per move with a stored eval, so an unanalysed game — and the
+  // sandbox — has none. Not filtered on the grade: only the player's moves
+  // are graded, and the engine's would drop out of the curve.
   const timelineMoves: TimelineMove[] = useMemo(
     () =>
       positions
         .slice(1)
         .flatMap((p, index) =>
-          p.eval_cp === null || p.quality === null
-            ? []
-            : [{ index: index + 1, score: p.eval_cp, quality: p.quality }],
+          p.eval_cp === null ? [] : [{ index: index + 1, score: p.eval_cp }],
         ),
     [positions],
   );
@@ -332,10 +326,10 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     // never flashes up first.
     onTryInSandbox: position
       ? () =>
-        sandbox
-          .start(position.fen)
-          .then(() => navigate("/analysis"))
-          .catch(console.error)
+          sandbox
+            .start(position.fen)
+            .then(() => navigate("/analysis"))
+            .catch(console.error)
       : null,
     onNextMistake: nextMistake === null ? null : () => goToPly(nextMistake),
   };

@@ -1,5 +1,4 @@
 import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
-import type { MoveQuality } from "../../api/bindings/MoveQuality";
 
 // What the Analyzer screen renders. The engine's output types are generated
 // by ts-rs from the live engine's Rust structs (KOCH-10) and re-exported
@@ -31,14 +30,13 @@ export type AnalyzerMode = "game" | "sandbox";
 export type PanelTab = "game" | "position" | "engine";
 
 /**
- * One point on the eval timeline: a move with both a stored eval and a
- * grade. `index` is the move's ply — the number `goToPly` takes — and
- * `score` is White-relative centipawns.
+ * One point on the eval timeline: a move with a stored eval. `index` is the
+ * move's ply counted from 1, as the axis shows it — `goToPly` takes
+ * `index - 1` — and `score` is White-relative centipawns.
  */
 export interface TimelineMove {
   index: number;
   score: number;
-  quality: MoveQuality;
 }
 
 // The toolbar's mode-specific buttons. A null handler means the action has

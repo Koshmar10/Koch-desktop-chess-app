@@ -5,12 +5,11 @@ subprocess for analysis, SQLite history, and an AI position assistant.
 
 This is a **deliberate rebuild** of a previous implementation, started 2026-08-16.
 
-## Read first
+## Background
 
-**[KOCH-HANDOFF.md](KOCH-HANDOFF.md)** — audit of the old codebase, the decisions taken,
-the carry/rebuild/drop triage, and the M0–M7 milestone plan. Read it before writing code
-or proposing architecture here. In particular §3 records a sign-convention landmine in
-the eval pipeline that has already caused one wrong fix.
+**Eval sign convention.** §3 of [KOCH-HANDOFF.md](KOCH-HANDOFF.md) records a
+sign-convention landmine in the eval pipeline that has already caused one wrong fix.
+Read it before touching eval code.
 
 The previous implementation is at `../chess_app/Koch/` — treat it as **read-only
 reference** until feature parity is reached. All file:line references in the handoff
@@ -24,7 +23,7 @@ reconcile it with the working list before building tools from it.
 
 ## How work is organised
 
-- GitHub Issues + Projects, one issue per shippable slice, milestone-labeled.
+- Tickets live in Lira (project key `KOCH`), one ticket per shippable slice.
 - Feature branch per ticket → PR into `main` → CI green before merge. No direct pushes.
 - Conventional commits.
 - Engine changes require tests. Frontend changes require lint + typecheck to pass.
@@ -35,8 +34,8 @@ reconcile it with the working list before building tools from it.
   pin legality. This crate has no Tauri dependency and must stay that way.
 - Persistence and command layers get integration tests.
 - Frontend gets ESLint + `tsc`; unit tests only for pure logic.
-- CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`, `eslint`,
-  and `tsc --noEmit` on every PR.
+- CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`, Prettier,
+  `eslint`, `tsc --noEmit` and `vitest` on every PR.
 
 ## Conventions
 

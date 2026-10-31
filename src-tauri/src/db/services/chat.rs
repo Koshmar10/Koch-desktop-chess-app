@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use crate::app::assistent::message::{
-    ChatMessage, ChatRole, ChatSummary, TurnContext, TurnUsage,
+    ChatMessage, ChatRole, ChatSummary, ToolCallRecord, TurnContext, TurnUsage,
 };
 use crate::db::columns::parse_text;
 
@@ -71,8 +73,9 @@ impl<'a> ChatService<'a> {
 
     /// A chat's messages, oldest first.
     pub fn messages(&self, chat_id: u32) -> rusqlite::Result<Vec<ChatMessage>> {
+        let mut tool_calls = self.tool_calls(chat_id)?;
         let mut stmt = self.conn.prepare(
-            "SELECT m.role, m.content, m.ply, m.sent_at, c.game_id,
+            "SELECT m.message_id, m.role, m.content, m.ply, m.sent_at, c.game_id,
                     u.model, u.input_tokens, u.cached_input_tokens, u.cache_write_tokens,
                     u.output_tokens, u.reasoning_tokens
              FROM messages m
@@ -81,13 +84,50 @@ impl<'a> ChatService<'a> {
              WHERE m.chat_id = ?1
              ORDER BY m.message_id",
         )?;
-        let rows = stmt.query_map([chat_id], message_from_row)?;
-        rows.collect()
+        let rows = stmt.query_map([chat_id], |row| {
+            Ok((row.get::<_, i64>("message_id")?, message_from_row(row)?))
+        })?;
+        rows.map(|row| {
+            let (message_id, message) = row?;
+            Ok(ChatMessage {
+                tool_calls: tool_calls.remove(&message_id).unwrap_or_default(),
+                ..message
+            })
+        })
+        .collect()
+    }
+
+    /// A chat's tool calls by the message they were made for, each list in
+    /// the order they were made.
+    fn tool_calls(&self, chat_id: u32) -> rusqlite::Result<HashMap<i64, Vec<ToolCallRecord>>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT t.message_id, t.name, t.arguments, t.output
+             FROM message_tool_calls t
+             JOIN messages m ON m.message_id = t.message_id
+             WHERE m.chat_id = ?1
+             ORDER BY t.message_id, t.position",
+        )?;
+        let rows = stmt.query_map([chat_id], |row| {
+            Ok((
+                row.get::<_, i64>("message_id")?,
+                ToolCallRecord {
+                    name: row.get("name")?,
+                    arguments: row.get("arguments")?,
+                    output: row.get("output")?,
+                },
+            ))
+        })?;
+        let mut by_message: HashMap<i64, Vec<ToolCallRecord>> = HashMap::new();
+        for row in rows {
+            let (message_id, call) = row?;
+            by_message.entry(message_id).or_default().push(call);
+        }
+        Ok(by_message)
     }
 }
 
-/// Writes one message and, for an answer, its usage. Runs inside the
-/// caller's transaction, so the two rows land together or not at all.
+/// Writes one message and, for an answer, its usage and tool calls. Runs
+/// inside the caller's transaction, so they land together or not at all.
 fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO messages (chat_id, role, content, ply, sent_at)
@@ -100,6 +140,7 @@ fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rus
             message.sent_at,
         ],
     )?;
+    let message_id = conn.last_insert_rowid();
     if let Some(usage) = &message.usage {
         conn.execute(
             "INSERT INTO message_usage
@@ -107,7 +148,7 @@ fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rus
                   cache_write_tokens, output_tokens, reasoning_tokens)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
-                conn.last_insert_rowid(),
+                message_id,
                 usage.model,
                 usage.input_tokens,
                 usage.cached_input_tokens,
@@ -117,12 +158,26 @@ fn insert_message(conn: &Connection, chat_id: u32, message: &ChatMessage) -> rus
             ],
         )?;
     }
+    for (position, call) in message.tool_calls.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO message_tool_calls (message_id, position, name, arguments, output)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                message_id,
+                position as i64,
+                call.name,
+                call.arguments,
+                call.output
+            ],
+        )?;
+    }
     Ok(())
 }
 
 /// A `messages` row joined with its chat and its `message_usage` row. The
 /// game isn't stored per message: it's the chat's. The usage columns are all
-/// NULL for a question, which has no usage row.
+/// NULL for a question, which has no usage row. Tool calls come from their
+/// own query, so they're left empty here.
 fn message_from_row(row: &Row<'_>) -> rusqlite::Result<ChatMessage> {
     let usage = match row.get::<_, Option<String>>("model")? {
         Some(model) => Some(TurnUsage {
@@ -144,6 +199,7 @@ fn message_from_row(row: &Row<'_>) -> rusqlite::Result<ChatMessage> {
         },
         sent_at: row.get("sent_at")?,
         usage,
+        tool_calls: Vec::new(),
     })
 }
 
@@ -182,6 +238,15 @@ mod tests {
             },
             sent_at: "2026-10-22T10:00:00Z".to_string(),
             usage: None,
+            tool_calls: Vec::new(),
+        }
+    }
+
+    fn tool_call(name: &str, output: &str) -> ToolCallRecord {
+        ToolCallRecord {
+            name: name.to_string(),
+            arguments: r#"{"ply":3}"#.to_string(),
+            output: output.to_string(),
         }
     }
 
@@ -202,7 +267,36 @@ mod tests {
                 output_tokens: 300,
                 reasoning_tokens: 120,
             }),
+            tool_calls: Vec::new(),
         }
+    }
+
+    #[test]
+    fn an_answers_tool_calls_come_back_with_it_in_order() {
+        let conn = test_conn();
+        let chats = ChatService::new(&conn);
+        let chat_id = chats
+            .start_chat(seed_game(&conn), &question("why?"))
+            .unwrap();
+        let calls = vec![
+            tool_call("get_position", "first"),
+            tool_call("get_position", "second"),
+        ];
+        chats
+            .add_message(
+                chat_id,
+                &ChatMessage {
+                    tool_calls: calls.clone(),
+                    ..answer("because")
+                },
+            )
+            .unwrap();
+        chats.add_message(chat_id, &answer("no tools")).unwrap();
+
+        let messages = chats.messages(chat_id).unwrap();
+        assert!(messages[0].tool_calls.is_empty());
+        assert_eq!(messages[1].tool_calls, calls);
+        assert!(messages[2].tool_calls.is_empty());
     }
 
     #[test]
