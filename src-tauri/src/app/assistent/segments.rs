@@ -10,6 +10,8 @@ use koch_engine::Board;
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::app::game::replay;
+
 const TAG_NAMES: [&str; 3] = ["move", "line", "ply"];
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -181,11 +183,7 @@ fn resolve_line(inner: &str, start_ply: i32, mut board: Option<Board>) -> Segmen
 /// Plays `san` on `board` and returns the move in UCI, or `None` if it isn't
 /// legal there.
 fn play_san(board: &mut Board, san: &str) -> Option<String> {
-    let mv = board.san_to_move(san).ok()?;
-    board
-        .move_piece(mv.from, mv.to, mv.promotion)
-        .ok()
-        .map(|played| played.uci)
+    replay::play_san(board, san).ok().map(|played| played.uci)
 }
 
 /// Appends `segment`, joining it to a text segment before it and dropping

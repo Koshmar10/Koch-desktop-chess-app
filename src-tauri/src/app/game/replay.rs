@@ -114,6 +114,24 @@ pub(crate) fn play_uci(board: &mut Board, uci: &str) -> Result<(LastMove, MoveSt
     Ok((LastMove::from(mv), played))
 }
 
+/// Plays a move given in SAN, as people and the assistant write it. Errors
+/// name the move, like `play_uci`'s.
+pub(crate) fn play_san(board: &mut Board, san: &str) -> Result<MoveStruct, String> {
+    let mv = board
+        .san_to_move(san)
+        .map_err(|err| format!("move {san} doesn't fit the position: {err:?}"))?;
+    board
+        .move_piece(mv.from, mv.to, mv.promotion)
+        .map_err(|err| format!("move {san} is illegal: {err:?}"))
+}
+
+/// The board at `position`, rebuilt from its FEN — which also keeps a
+/// sandbox's custom start position.
+pub(crate) fn board_of(position: &ReplayPosition) -> Option<Board> {
+    let fen = FenString::try_from(position.fen.as_str()).ok()?;
+    Some(Board::from(&fen))
+}
+
 /// The position a move just played leads to, as the frontend lists it. No
 /// clock, and no analysis to grade it, so those stay `None`.
 pub(crate) fn position_after(
