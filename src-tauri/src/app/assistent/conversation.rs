@@ -144,9 +144,13 @@ mod tests {
         ChatMessage {
             role,
             content: content.to_string(),
-            turn_context: TurnContext{game_id:Some(0), ply: 0},
+            turn_context: TurnContext {
+                game_id: Some(0),
+                ply: 0,
+            },
             sent_at: "2026-10-22T10:00:00Z".to_string(),
             usage: None,
+            tool_calls: Vec::new(),
         }
     }
 

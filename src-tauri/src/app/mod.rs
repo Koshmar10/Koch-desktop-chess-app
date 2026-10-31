@@ -5,6 +5,7 @@ pub const ENGINE_PATH: &str = "stockfish";
 
 pub mod analysis;
 pub mod app_state;
+pub mod assistent;
 pub mod error;
 pub mod events;
 pub mod game;
@@ -14,4 +15,3 @@ pub mod rating;
 pub mod sessions;
 pub mod settings;
 pub mod stats;
-pub mod assistent;

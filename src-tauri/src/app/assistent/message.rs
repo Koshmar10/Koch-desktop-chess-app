@@ -45,6 +45,29 @@ pub struct ChatMessage {
     /// `None` on the user's own messages: a question costs nothing until
     /// it's answered.
     pub usage: Option<TurnUsage>,
+    /// The tools called while writing an answer, in order; from
+    /// `message_tool_calls`. Empty on the user's own messages.
+    pub tool_calls: Vec<ToolCallRecord>,
+}
+
+/// A tool call the assistant has just started, shown while the answer is
+/// still on its way. The output isn't known yet.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(export)]
+pub struct ToolCallStarted {
+    pub name: String,
+    /// JSON, as the model sent it.
+    pub arguments: String,
+}
+
+/// One tool call made while answering, with what it returned.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ToolCallRecord {
+    pub name: String,
+    /// JSON, as the model sent it.
+    pub arguments: String,
+    pub output: String,
 }
 
 /// A message as the frontend gets it: the stored one plus, for the
@@ -75,11 +98,25 @@ pub struct TurnUsage {
     pub reasoning_tokens: u32,
 }
 
+impl TurnUsage {
+    /// Both rounds' tokens together, under the later round's model.
+    pub fn plus(self, later: TurnUsage) -> TurnUsage {
+        TurnUsage {
+            model: later.model,
+            input_tokens: self.input_tokens + later.input_tokens,
+            cached_input_tokens: self.cached_input_tokens + later.cached_input_tokens,
+            cache_write_tokens: self.cache_write_tokens + later.cache_write_tokens,
+            output_tokens: self.output_tokens + later.output_tokens,
+            reasoning_tokens: self.reasoning_tokens + later.reasoning_tokens,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct TurnContext { 
-  pub game_id: Option<u32>, 
-  pub ply: i32 
+pub struct TurnContext {
+    pub game_id: Option<u32>,
+    pub ply: i32,
 }
 
 /// One saved chat about a game, as the "past chats" list shows it.

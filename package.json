@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "install:local": "tauri build --no-bundle && install -Dm755 target/release/koch ~/.local/bin/koch",
     "typecheck": "tsc --noEmit",
     "test": "npm run format && npm run lint && npm run typecheck && vitest run --coverage"
   },

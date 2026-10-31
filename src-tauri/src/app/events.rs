@@ -21,3 +21,6 @@ pub const GAME_ANALYSIS_COMPLETE: &str = "game-analysis-complete";
 /// The live engine's latest lines for the position it's searching — an
 /// `EngineSnapshot`.
 pub const LIVE_ENGINE_SNAPSHOT: &str = "pvline";
+
+/// The assistant started a tool call while answering — a `ToolCallStarted`.
+pub const ASSISTANT_TOOL_CALL: &str = "assistant-tool-call";

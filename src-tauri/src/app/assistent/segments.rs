@@ -2,6 +2,9 @@
 //! asks for (`<move>`, `<line>`, `<ply>`), checking each move against the
 //! board. Replies are stored as the model wrote them; this runs when they go
 //! to the frontend, so a fix here applies to chats saved earlier too.
+//!
+//! The model counts plies from 1 with 0 the start, as the board shows them,
+//! so `from` and `n` are turned into Koch's index (-1 the start) here.
 
 use koch_engine::Board;
 use serde::Serialize;
@@ -98,6 +101,11 @@ fn find_tag(text: &str) -> Option<(usize, usize, RawTag<'_>)> {
     })
 }
 
+/// A ply as the model counts it (from 1, 0 the start) as Koch's index.
+fn index_of(model_ply: i32) -> i32 {
+    model_ply - 1
+}
+
 fn attribute<'a>(attrs: &'a str, key: &str) -> Option<&'a str> {
     let after_key = attrs.split_once(&format!("{key}=\""))?.1;
     after_key.split_once('"').map(|(value, _)| value)
@@ -117,7 +125,7 @@ fn resolve(tag: &RawTag, current_ply: i32, board_at: &impl Fn(i32) -> Option<Boa
             // A `from` that doesn't parse or points outside the game leaves
             // the line unchecked, not checked from the wrong position.
             let start_ply = match attribute(tag.attrs, "from") {
-                Some(value) => value.parse().ok(),
+                Some(value) => value.parse::<i32>().ok().map(index_of),
                 None => Some(current_ply),
             };
             resolve_line(
@@ -129,6 +137,7 @@ fn resolve(tag: &RawTag, current_ply: i32, board_at: &impl Fn(i32) -> Option<Boa
         _ => {
             let ply = attribute(tag.attrs, "n")
                 .and_then(|value| value.parse::<i32>().ok())
+                .map(index_of)
                 .filter(|ply| board_at(*ply).is_some());
             match ply {
                 Some(n) => Segment::Ply {
@@ -307,13 +316,13 @@ mod tests {
 
     #[test]
     fn a_line_can_start_from_an_earlier_ply() {
-        // After 3...Nc6 White is to move, so Bb5 is legal from ply 3 and
-        // not from the current position, where Black is.
+        // After 3...Nc6, the model's ply 4, White is to move, so Bb5 is
+        // legal from there and not from the current position, where Black is.
         let Segment::Line {
             first_illegal,
             start_ply,
             ..
-        } = &segments("<line from=\"3\">Bb5 a6</line>")[0]
+        } = &segments("<line from=\"4\">Bb5 a6</line>")[0]
         else {
             panic!("expected a line");
         };
@@ -347,8 +356,9 @@ mod tests {
 
     #[test]
     fn a_ply_tag_needs_a_ply_inside_the_game() {
+        // The model's ply 3 is index 2.
         assert_eq!(
-            segments("<ply n=\"2\">move 2</ply>"),
+            segments("<ply n=\"3\">move 2</ply>"),
             [Segment::Ply {
                 n: 2,
                 label: "move 2".to_string()

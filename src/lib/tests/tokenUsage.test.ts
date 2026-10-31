@@ -8,6 +8,7 @@ const question = (content: string): ChatMessage => ({
   turn_context: { game_id: null, ply: 0 },
   sent_at: "",
   usage: null,
+  tool_calls: [],
 });
 
 const answer = (model: string, input: number, output: number): ChatMessage => ({
@@ -23,11 +24,17 @@ const answer = (model: string, input: number, output: number): ChatMessage => ({
     output_tokens: output,
     reasoning_tokens: output / 2,
   },
+  tool_calls: [],
 });
 
 describe("conversationTokens", () => {
   it("adds up the answers and skips the questions", () => {
-    const messages = [question("a"), answer("m", 100, 20), question("b"), answer("m", 300, 40)];
+    const messages = [
+      question("a"),
+      answer("m", 100, 20),
+      question("b"),
+      answer("m", 300, 40),
+    ];
     expect(conversationTokens(messages)).toEqual({
       input: 400,
       cachedInput: 200,
@@ -48,7 +55,12 @@ describe("conversationTokens", () => {
 
 describe("latestModel", () => {
   it("names the model of the newest answer", () => {
-    const messages = [answer("old", 1, 1), question("a"), answer("new", 1, 1), question("b")];
+    const messages = [
+      answer("old", 1, 1),
+      question("a"),
+      answer("new", 1, 1),
+      question("b"),
+    ];
     expect(latestModel(messages)).toBe("new");
   });
 

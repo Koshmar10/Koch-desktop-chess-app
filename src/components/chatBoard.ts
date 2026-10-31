@@ -19,7 +19,9 @@ export const ChatBoardContext = createContext<ChatBoard | null>(null);
 export const useChatBoard = (): ChatBoard => {
   const board = useContext(ChatBoardContext);
   if (board === null) {
-    throw new Error("useChatBoard must be used inside a ChatBoardContext provider");
+    throw new Error(
+      "useChatBoard must be used inside a ChatBoardContext provider",
+    );
   }
   return board;
 };

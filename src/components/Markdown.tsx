@@ -1,5 +1,8 @@
 import { memo, type ReactNode } from "react";
-import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
+import ReactMarkdown, {
+  defaultUrlTransform,
+  type Components,
+} from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { SEGMENT_LINK_PREFIX, segmentIndexOf } from "../lib/segments";
@@ -100,7 +103,11 @@ const Markdown = ({ text, chips = [] }: MarkdownProps) => {
     ...MARKDOWN_COMPONENTS,
     a: (props) => {
       const index = segmentIndexOf(props.href);
-      return index === null ? <ExternalLink {...props} /> : (chips[index] ?? null);
+      return index === null ? (
+        <ExternalLink {...props} />
+      ) : (
+        (chips[index] ?? null)
+      );
     },
   };
   return (

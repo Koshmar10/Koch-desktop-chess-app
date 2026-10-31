@@ -4,25 +4,55 @@
 use serde::{Deserialize, Serialize};
 
 use super::message::{ChatMessage, ChatRole, TurnUsage};
+use super::tools::Tool;
 
 pub const OPENAI_RESPONSES_API_URL: &str = "https://api.openai.com/v1/responses";
 
 #[derive(Serialize)]
 pub(super) struct ModelTextRequest {
     pub model: String,
-    pub input: Vec<InputMessage>,
+    pub input: Vec<InputItem>,
     pub instructions: String,
     pub store: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<Tool>,
+}
+
+/// One item of the request's `input`. Within one answer, each round sends
+/// the conversation, then every call the model made so far followed by its
+/// result.
+#[derive(Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub(super) enum InputItem {
+    Message(InputMessage),
+    /// A call the model made, sent back so it sees which result is which.
+    FunctionCall(FunctionCall),
+    /// What running a call produced, matched to it by `call_id`.
+    FunctionCallOutput {
+        call_id: String,
+        output: String,
+    },
+}
+
+/// The model asking for a tool to be run. Comes in a reply's `output` and
+/// goes back unchanged in the next round's `input`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(super) struct FunctionCall {
+    pub call_id: String,
+    /// A `Tool::name`.
+    pub name: String,
+    /// The arguments as a JSON string, to parse against the tool's schema.
+    pub arguments: String,
 }
 
 /// One earlier turn, sent back so the model sees the conversation so far.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub(super) struct InputMessage {
     pub role: InputRole,
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum InputRole {
     User,
@@ -54,7 +84,6 @@ impl From<&ChatMessage> for InputMessage {
 /// declared; serde skips the rest, most of which echo the request back.
 #[derive(Deserialize)]
 pub(super) struct ModelResponse {
-    pub id: String,
     pub model: String,
     pub status: ResponseStatus,
     pub error: Option<ResponseError>,
@@ -64,6 +93,22 @@ pub(super) struct ModelResponse {
 }
 
 impl ModelResponse {
+    /// Why the model gave no full answer, worded for the chat; `None` when
+    /// it finished.
+    pub fn failure(&self) -> Option<String> {
+        match self.status {
+            ResponseStatus::Failed => Some(match &self.error {
+                Some(error) => format!("The model failed: {} ({})", error.message, error.code),
+                None => "The model failed without saying why.".to_string(),
+            }),
+            ResponseStatus::Incomplete => Some(match &self.incomplete_details {
+                Some(details) => format!("The answer was cut off ({}).", details.reason),
+                None => "The answer was cut off.".to_string(),
+            }),
+            ResponseStatus::Completed | ResponseStatus::Other => None,
+        }
+    }
+
     pub fn turn_usage(&self) -> Option<TurnUsage> {
         self.usage.as_ref().map(|usage| TurnUsage {
             model: self.model.clone(),
@@ -101,9 +146,12 @@ pub(super) struct IncompleteDetails {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(super) enum OutputItem {
-    Message { content: Vec<ContentPart> },
-    /// Kinds not handled yet (`function_call`, `reasoning`, …) land here
-    /// instead of failing the whole response.
+    Message {
+        content: Vec<ContentPart>,
+    },
+    FunctionCall(FunctionCall),
+    /// Kinds not handled yet (`reasoning`, …) land here instead of failing
+    /// the whole response.
     #[serde(other)]
     Other,
 }
@@ -111,7 +159,14 @@ impl OutputItem {
     pub fn message_content(&self) -> Option<&[ContentPart]> {
         match self {
             OutputItem::Message { content } => Some(content),
-            OutputItem::Other => None,
+            _ => None,
+        }
+    }
+
+    pub fn function_call(&self) -> Option<&FunctionCall> {
+        match self {
+            OutputItem::FunctionCall(call) => Some(call),
+            _ => None,
         }
     }
 }
@@ -119,7 +174,9 @@ impl OutputItem {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(super) enum ContentPart {
-    OutputText { text: String },
+    OutputText {
+        text: String,
+    },
     #[serde(other)]
     Other,
 }
