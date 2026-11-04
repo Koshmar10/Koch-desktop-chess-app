@@ -3,6 +3,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::app::error::AppError;
 use crate::app::events;
+use crate::app::moments::scan_game;
 use crate::db::{
     self,
     services::{analysis::AnalysisService, game::GameService},
@@ -66,7 +67,14 @@ async fn analyse_and_save(job: &AnalysisJob, app: &AppHandle) -> Result<GameAnal
         job.game_id,
         &analysis.move_qualities,
         &analysis.centipawn_history,
+        &analysis.best_moves,
     )?;
     AnalysisService::new(&conn).save(job.game_id, &analysis)?;
+    // Moments are found from what was just saved, and are found again on
+    // the next launch if this fails, so it doesn't fail an analysis that's
+    // already stored.
+    if let Err(err) = scan_game(&conn, job.game_id) {
+        eprintln!("could not find moments in game {}: {err}", job.game_id);
+    }
     Ok(analysis)
 }

@@ -13,6 +13,16 @@ const TOOL_LABEL: Record<string, (args: ToolArguments) => string> = {
     Array.isArray(args.moves) && args.moves.length > 0
       ? `Trying ${args.moves.join(" ")}`
       : "Trying a line",
+  candidate_moves: (args) =>
+    Array.isArray(args.moves) && args.moves.length > 0
+      ? `Asking the engine about ${args.moves.join(" ")}`
+      : "Asking the engine for the best moves",
+  lookup_opening: (args) =>
+    typeof args.ply === "number"
+      ? `Looking up the opening at ply ${args.ply}`
+      : "Looking up the opening",
+  get_game_review: () => "Reviewing the game",
+  get_player_profile: () => "Looking at how you usually play",
 };
 
 const parseArguments = (raw: string): ToolArguments => {

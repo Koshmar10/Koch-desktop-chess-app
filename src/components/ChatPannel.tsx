@@ -38,7 +38,7 @@ import type { RenderedMessage } from "../api/bindings/RenderedMessage";
 import type { ToolCallStarted } from "../api/bindings/ToolCallStarted";
 import { useAppEvent } from "../app/useAppEvent";
 import { toolCallLabel } from "../lib/assistantTools";
-import { segmentsToMarkdown } from "../lib/segments";
+import { segmentsToMarkdown, type MovePreview } from "../lib/segments";
 import {
   compactCount,
   conversationTokens,
@@ -214,22 +214,23 @@ const BUBBLE_CLASS: Record<ChatRole, string> = {
   Assistant: "self-start border border-border/60 bg-card text-card-foreground",
 };
 
-// A message about another position fades back, but comes forward again under
-// the pointer so it stays readable: it's out of date, not gone.
-const OFF_BOARD_CLASS = "opacity-45 hover:opacity-100";
+// The text of a message asked at another position fades back, but comes
+// forward again under the pointer so it stays readable: it's out of date,
+// not gone. Only the text: its move chips keep their colour, since each
+// one works from wherever the board is.
+const OFF_BOARD_TEXT_CLASS =
+  "text-muted-foreground transition-colors duration-200 hover:text-foreground motion-reduce:transition-none";
 
 // The shape every bubble shares; who it's from decides its side and colours.
 const Bubble = ({
   role,
-  isOffBoard = false,
   children,
 }: {
   role: ChatRole;
-  isOffBoard?: boolean;
   children: ReactNode;
 }) => (
   <div
-    className={`flex max-w-[85%] flex-col gap-1 rounded-lg px-3 py-2 text-base transition-opacity duration-200 motion-reduce:transition-none ${BUBBLE_CLASS[role]} ${isOffBoard ? OFF_BOARD_CLASS : ""}`}
+    className={`flex max-w-[85%] flex-col gap-1 rounded-lg px-3 py-2 text-base ${BUBBLE_CLASS[role]}`}
   >
     {children}
   </div>
@@ -340,15 +341,17 @@ const MessageBubble = memo(
       [message.segments, messagePly],
     );
     return (
-      <Bubble role={message.role} isOffBoard={isOffBoard}>
+      <Bubble role={message.role}>
         <MessageHeader message={message} isOffBoard={isOffBoard} />
         {/* Answers are markdown, with their move tags as chips; your own
           messages show exactly as typed. */}
-        {message.role === "Assistant" ? (
-          <Markdown text={markdownText} chips={chips} />
-        ) : (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        )}
+        <div className={isOffBoard ? OFF_BOARD_TEXT_CLASS : undefined}>
+          {message.role === "Assistant" ? (
+            <Markdown text={markdownText} chips={chips} />
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          )}
+        </div>
       </Bubble>
     );
   },
@@ -399,8 +402,12 @@ interface ChatPannelProps {
   viewedPly: number;
   // Moves the board when you click a move reference in an answer.
   onGoToPly: (ply: number) => void;
-  // The move the pointer is on in an answer, as UCI; null once it leaves.
-  onPreviewMove: (uci: string | null) => void;
+  // The move the pointer is on in an answer, on the board it's played
+  // from; null once it leaves.
+  onPreviewMove: (preview: MovePreview | null) => void;
+  // Each new value focuses the question box: how the screen's `/`
+  // shortcut asks for it. Zero, the first value, asks for nothing.
+  focusRequest: number;
 }
 
 const ChatPannel = ({
@@ -409,7 +416,14 @@ const ChatPannel = ({
   viewedPly,
   onGoToPly,
   onPreviewMove,
+  focusRequest,
 }: ChatPannelProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // An effect, so it runs once the panel has rendered open: a closed
+  // panel is `inert`, and its box can't take focus.
+  useEffect(() => {
+    if (focusRequest > 0) inputRef.current?.focus();
+  }, [focusRequest]);
   const [message, setMessage] = useState<string>("");
   const [messages, setMessages] = useState<RenderedMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -572,8 +586,14 @@ const ChatPannel = ({
             name="message"
             id="msg-inpt"
             className="w-full bg-secondary/50  rounded-md px-2"
+            ref={inputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            // Hands the keys back to the board: while the box has focus,
+            // the arrows move the cursor in it instead.
+            onKeyDown={(e) => {
+              if (e.key === "Escape") e.currentTarget.blur();
+            }}
             placeholder="write a message"
           />
           <TooltipButton

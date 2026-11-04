@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod chat;
 pub mod game;
+pub mod moment;
 pub mod opening;
 pub mod player_rating;
 pub mod session;

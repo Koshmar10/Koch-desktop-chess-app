@@ -52,4 +52,10 @@ total_duration_ms: number,
  * gets analyzed, not just the human's moves, so any point in the game
  * can be explained later, not only the ones that were scored.
  */
-position_findings: Array<PositionFindings>, };
+position_findings: Array<PositionFindings>, 
+/**
+ * The engine's best move in every position, in UCI, same indexing as
+ * `centipawn_history`. `None` where there's no move to make: mate or
+ * stalemate.
+ */
+best_moves: Array<string | null>, };

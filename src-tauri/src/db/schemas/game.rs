@@ -66,6 +66,9 @@ pub struct GameMoveRow {
     pub eval_cp: Option<i32>,
     /// `MoveQuality`'s `Display` form, e.g. "blunder".
     pub quality: Option<String>,
+    /// The engine's best move, in UCI, in the position this move was
+    /// played from.
+    pub best_uci: Option<String>,
 }
 
 impl TryFrom<&Row<'_>> for GameMoveRow {
@@ -79,6 +82,7 @@ impl TryFrom<&Row<'_>> for GameMoveRow {
             time_ms: row.get("time_ms")?,
             eval_cp: row.get("eval_cp")?,
             quality: row.get("quality")?,
+            best_uci: row.get("best_uci")?,
         })
     }
 }

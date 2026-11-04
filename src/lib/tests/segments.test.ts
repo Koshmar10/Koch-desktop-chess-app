@@ -1,12 +1,43 @@
 import { describe, expect, it } from "vitest";
+import type { PieceView } from "../../api/bindings/PieceView";
 import type { Segment } from "../../api/bindings/Segment";
-import { segmentIndexOf, segmentsToMarkdown } from "../segments";
+import type { SegmentMove } from "../../api/bindings/SegmentMove";
+import { movePreview, segmentIndexOf, segmentsToMarkdown } from "../segments";
+
+const PAWN: PieceView = {
+  id: 1,
+  kind: "pawn",
+  color: "black",
+  square: { rank: 1, file: 0 },
+};
+
+const move = (san: string, uci: string | null): SegmentMove => ({
+  san,
+  uci,
+  pieces_before: uci === null ? [] : [PAWN],
+});
+
+describe("movePreview", () => {
+  it("shows a move on its own board with the line before it as the trail", () => {
+    const line = [move("a6", "a7a6"), move("Ba4", "b5a4"), move("Nf6", "g8f6")];
+    expect(movePreview(line, 2)).toEqual({
+      pieces: [PAWN],
+      uci: "g8f6",
+      trail: ["a7a6", "b5a4"],
+    });
+    expect(movePreview(line, 0)?.trail).toEqual([]);
+  });
+
+  it("is null for a move that isn't verified", () => {
+    expect(movePreview([move("Bxe8", null)], 0)).toBeNull();
+  });
+});
 
 describe("segmentsToMarkdown", () => {
   it("keeps text and swaps each tag for a link to its position", () => {
     const segments: Segment[] = [
       { kind: "Text", text: "Play " },
-      { kind: "Move", san: "a6", uci: "a7a6" },
+      { kind: "Move", ...move("a6", "a7a6") },
       { kind: "Text", text: " or " },
       { kind: "Ply", n: 2, label: "move 2" },
     ];

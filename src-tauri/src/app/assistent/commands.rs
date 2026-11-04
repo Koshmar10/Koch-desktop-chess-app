@@ -12,13 +12,14 @@ use crate::app::assistent::message::{
 };
 use crate::app::assistent::openai::{
     ContentPart, FunctionCall, InputItem, InputMessage, ModelResponse, ModelTextRequest,
-    OutputItem, OPENAI_RESPONSES_API_URL,
+    OutputItem, Reasoning, ReasoningEffort, ToolChoice, OPENAI_RESPONSES_API_URL,
 };
 use crate::app::assistent::segments::segment_reply;
 use crate::app::assistent::tools::{all, position_summary, run_tool, ToolContext};
 use crate::app::error::AppError;
 use crate::app::events;
-use crate::app::game::replay::{board_of, replay_positions, ReplayPosition};
+use crate::app::game::replay::{board_of, play_uci, replay_positions, ReplayPosition};
+use crate::db::schemas::game::Game;
 use crate::db::services::game::GameService;
 use crate::db::{
     self,
@@ -27,10 +28,10 @@ use crate::db::{
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
-/// How many times one answer may go back to the model with tool results
-/// before it's given up on: a model calling tools in a circle would otherwise
-/// spend tokens without end.
-const MAX_TOOL_ROUNDS: usize = 5;
+/// How many requests one answer may take. The last is sent with tools
+/// switched off, so the model answers with what it has found instead of
+/// calling tools without end.
+const MAX_MODEL_ROUNDS: usize = 10;
 
 /// What every round of one answer sends unchanged. Built once, so each round
 /// repeats the last one exactly and only adds tool items to its end.
@@ -98,6 +99,35 @@ fn conversation_items(history: &[ChatMessage], positions: &[ReplayPosition]) -> 
         .collect()
 }
 
+/// Who played the game and which side is the person asking, so "how did I
+/// play" has an answer.
+fn players_of(game: &Game) -> String {
+    let asking = match game.human_color {
+        Some(color) => format!(" The player asking you played {color}."),
+        None => String::new(),
+    };
+    format!(
+        "White: {} ({}). Black: {} ({}). Result: {}.{asking}",
+        game.white_player, game.white_elo, game.black_player, game.black_elo, game.result
+    )
+}
+
+/// The game's moves as numbered SAN, "1. e4 e5 2. Nf3", built from the
+/// positions rather than the stored PGN text: a game played in Koch is saved
+/// without one, and the sandbox has none.
+fn move_text(positions: &[ReplayPosition]) -> String {
+    positions
+        .iter()
+        .filter_map(|position| position.san.as_deref())
+        .enumerate()
+        .map(|(index, san)| match index % 2 {
+            0 => format!("{}. {san}", index / 2 + 1),
+            _ => san.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn build_prompt(
     db: &db::Db,
     history: &[ChatMessage],
@@ -105,30 +135,30 @@ fn build_prompt(
     chat: ChatKey,
     positions: &[ReplayPosition],
 ) -> Result<Prompt, AppError> {
-    let (api_key, pgn) = {
+    let (api_key, players) = {
         let conn = db.lock()?;
         let api_key = SettingsService::new(&conn)
             .get_latest_app_settings()?
             .and_then(|settings| settings.openai_key)
             .ok_or("No OpenAI key set. Add one in Settings.")?;
-        let pgn = match turn_context.game_id {
-            Some(game_id) => Some(
-                GameService::new(&conn)
+        let players = match turn_context.game_id {
+            Some(game_id) => players_of(
+                &GameService::new(&conn)
                     .find_game(game_id)?
-                    .ok_or_else(|| format!("no saved game with id {game_id}"))?
-                    .pgn_data,
+                    .ok_or_else(|| format!("no saved game with id {game_id}"))?,
             ),
-            None => None,
+            None => "The sandbox: moves played on the analysis board, no players.".to_string(),
         };
-        (api_key, pgn)
+        (api_key, players)
     };
 
     Ok(Prompt {
         api_key,
         instructions: format!(
-            "{}\n<game_pgn>\n{}\n</game_pgn>\n",
+            "{}\n<game>\n{players}\nMoves ({} plies): {}\n</game>\n",
             include_str!("system-prompt.md"),
-            pgn.as_deref().unwrap_or("No game")
+            positions.len().saturating_sub(1),
+            move_text(positions),
         ),
         messages: conversation_items(history, positions),
         cache_key: chat.chat_id().map(|chat_id| format!("koch-chat-{chat_id}")),
@@ -139,6 +169,7 @@ async fn send_model_request(
     client: &reqwest::Client,
     prompt: &Prompt,
     tool_items: &[InputItem],
+    tool_choice: ToolChoice,
 ) -> Result<ModelResponse, AppError> {
     let request_body = ModelTextRequest {
         model: String::from("gpt-6-luna"),
@@ -148,6 +179,12 @@ async fn send_model_request(
         // The transcript lives in Koch; OpenAI doesn't need to keep a copy.
         store: false,
         tools: all(),
+        tool_choice,
+        // The tools do the chess work, so the model needs little thinking of
+        // its own; at the default (medium) thinking was ~85% of the output.
+        reasoning: Reasoning {
+            effort: ReasoningEffort::Low,
+        },
         prompt_cache_key: prompt.cache_key.clone(),
     };
     let response = client
@@ -172,7 +209,7 @@ async fn ask_model(
     history: &[ChatMessage],
     turn_context: TurnContext,
     chat: ChatKey,
-    tool_context: &ToolContext,
+    tool_context: &ToolContext<'_>,
 ) -> Result<ChatMessage, AppError> {
     let prompt = build_prompt(db, history, &turn_context, chat, &tool_context.positions)?;
     let client = reqwest::Client::builder()
@@ -182,8 +219,13 @@ async fn ask_model(
     let mut tool_calls: Vec<ToolCallRecord> = Vec::new();
     let mut usage: Option<TurnUsage> = None;
 
-    for _ in 0..MAX_TOOL_ROUNDS {
-        let response = send_model_request(&client, &prompt, &tool_items).await?;
+    for round in 1..=MAX_MODEL_ROUNDS {
+        let tool_choice = if round == MAX_MODEL_ROUNDS {
+            ToolChoice::None
+        } else {
+            ToolChoice::Auto
+        };
+        let response = send_model_request(&client, &prompt, &tool_items, tool_choice).await?;
 
         if let Some(failure) = response.failure() {
             return Err(failure.into());
@@ -202,7 +244,7 @@ async fn ask_model(
             .collect();
 
         if !calls.is_empty() {
-            run_calls(app, tool_context, calls, &mut tool_items, &mut tool_calls)?;
+            run_calls(app, tool_context, calls, &mut tool_items, &mut tool_calls).await?;
             continue;
         }
 
@@ -224,14 +266,16 @@ async fn ask_model(
         });
     }
 
-    Err(format!("The model was still calling tools after {MAX_TOOL_ROUNDS} rounds.").into())
+    // Only reached if the model calls tools even when told it can't.
+    Err(format!("The model was still calling tools after {MAX_MODEL_ROUNDS} rounds.").into())
 }
 
 /// Runs one round's calls. Each goes into the next request ahead of its
 /// output, the way the model made it, and into the record kept with the reply.
-fn run_calls(
+/// Async because a tool may wait on the engine; no lock is held across it.
+async fn run_calls(
     app: &AppHandle,
-    tool_context: &ToolContext,
+    tool_context: &ToolContext<'_>,
     calls: Vec<FunctionCall>,
     tool_items: &mut Vec<InputItem>,
     tool_calls: &mut Vec<ToolCallRecord>,
@@ -246,7 +290,19 @@ fn run_calls(
         if let Err(err) = app.emit(events::ASSISTANT_TOOL_CALL, started) {
             eprintln!("failed to emit {}: {err}", events::ASSISTANT_TOOL_CALL);
         }
-        let output = run_tool(&call, tool_context)?;
+        // A repeat would send the same result again, every round after; the
+        // model already has it above.
+        let repeated = tool_calls
+            .iter()
+            .any(|earlier| earlier.name == call.name && earlier.arguments == call.arguments);
+        let output = if repeated {
+            format!(
+                "Already called {} with these arguments: use that result above.",
+                call.name
+            )
+        } else {
+            run_tool(&call, tool_context).await?
+        };
         tool_calls.push(ToolCallRecord {
             name: call.name.clone(),
             arguments: call.arguments.clone(),
@@ -286,14 +342,40 @@ fn positions_of(
 }
 
 /// The board after ply `ply` (an index, -1 the start).
-fn board_at(positions: &[ReplayPosition]) -> impl Fn(i32) -> Option<Board> + '_ {
-    move |ply| board_of(positions.get(usize::try_from(ply + 1).ok()?)?)
+fn board_at(boards: &[Board]) -> impl Fn(i32) -> Option<Board> + '_ {
+    move |ply| boards.get(usize::try_from(ply + 1).ok()?).cloned()
+}
+
+/// Every position's board, `boards[n]` the one after ply n, played forward
+/// from the start as the replay and the sandbox were. That keeps each
+/// piece's id the one the board on screen gives it: a board rebuilt from
+/// its FEN numbers the pieces afresh, and a chat move shown on it slides
+/// every piece whose number changed, even with nothing moved. Stops at a
+/// move that won't replay, so later plies have no board.
+fn boards_of(positions: &[ReplayPosition]) -> Vec<Board> {
+    let Some(mut board) = positions.first().and_then(board_of) else {
+        return Vec::new();
+    };
+    let mut boards = vec![board.clone()];
+    for uci in positions
+        .iter()
+        .skip(1)
+        .map(|position| position.uci.as_deref())
+    {
+        let Some(uci) = uci else { break };
+        if play_uci(&mut board, uci).is_err() {
+            break;
+        }
+        boards.push(board.clone());
+    }
+    boards
 }
 
 /// Adds each assistant message's move tags, checked against `positions`.
 /// Your own messages are shown as typed, so they get none.
 fn render_messages(positions: &[ReplayPosition], messages: &[ChatMessage]) -> Vec<RenderedMessage> {
-    let board_at = board_at(positions);
+    let boards = boards_of(positions);
+    let board_at = board_at(&boards);
     messages
         .iter()
         .map(|message| RenderedMessage {
@@ -320,6 +402,7 @@ pub async fn send_assistent_request(
     // Before the conversation lock: it takes the database or sandbox lock.
     let tool_context = ToolContext {
         positions: positions_of(&state, &db, game_id)?,
+        db: &db,
     };
     let question = ChatMessage {
         role: ChatRole::User,
@@ -412,7 +495,7 @@ pub fn start_new_assistent_chat(state: tauri::State<'_, AppState>) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::game::replay::{play_uci, position_after};
+    use crate::app::game::replay::{pieces_of, position_after};
 
     fn positions(uci_moves: &[&str]) -> Vec<ReplayPosition> {
         let mut board = Board::default();
@@ -491,5 +574,28 @@ mod tests {
             sent[2]
         );
         assert!(!sent[1].contains("current_"), "{}", sent[1]);
+    }
+
+    #[test]
+    fn the_move_text_numbers_white_moves_only() {
+        let positions = positions(&["e2e4", "e7e5", "g1f3"]);
+        assert_eq!(move_text(&positions), "1. e4 e5 2. Nf3");
+        assert_eq!(move_text(&positions[..1]), "");
+    }
+
+    #[test]
+    fn the_chats_boards_keep_the_replays_piece_ids() {
+        // Knights out and a capture, so pieces have moved and one is gone:
+        // a board rebuilt from the FEN would number these differently.
+        let positions = positions(&["e2e4", "d7d5", "e4d5", "g8f6", "b1c3"]);
+        let boards = boards_of(&positions);
+        assert_eq!(boards.len(), positions.len());
+        for (board, position) in boards.iter().zip(&positions) {
+            let mut ours = pieces_of(board);
+            let mut replays = position.pieces.clone();
+            ours.sort_by_key(|piece| piece.id);
+            replays.sort_by_key(|piece| piece.id);
+            assert_eq!(ours, replays);
+        }
     }
 }

@@ -30,6 +30,16 @@ impl<'a> OpeningService<'a> {
             .optional()
     }
 
+    /// Whether some catalogued line starts with `played_uci` (same form as
+    /// above): the moves so far are still book.
+    pub fn is_book(&self, played_uci: &str) -> rusqlite::Result<bool> {
+        self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM openings WHERE uci = ?1 OR uci LIKE ?1 || ' %')",
+            params![played_uci],
+            |row| row.get(0),
+        )
+    }
+
     /// Resolves an `opening_id` (as saved on a `games` row) back into its
     /// name — the app layer's own lookup for a history / library view,
     /// which only has the bare id off `db::schemas::game::Game`.
@@ -68,6 +78,19 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(opening.opening_name, "Amar Opening: Paris Gambit");
+    }
+
+    #[test]
+    fn moves_are_book_while_a_catalogued_line_continues_them() {
+        let conn = seeded_conn();
+        let service = OpeningService::new(&conn);
+
+        assert!(service.is_book("g1h3").unwrap());
+        // Part way into the Paris Gambit's line, not a line of its own.
+        assert!(service.is_book("g1h3 d7d5 g2g3 e7e5").unwrap());
+        assert!(!service.is_book("g1h3 d7d5 g2g3 e7e5 f2f4 z9z9").unwrap());
+        // A move that only shares a prefix with a catalogued one isn't it.
+        assert!(!service.is_book("g1h").unwrap());
     }
 
     #[test]

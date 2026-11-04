@@ -1,12 +1,14 @@
 import { createContext, useContext } from "react";
+import type { MovePreview } from "../lib/segments";
 
 /** What the chat needs from the board it sits beside. */
 export interface ChatBoard {
   // The ply on the board, as an index (-1 is the start position).
   viewedPly: number;
   onGoToPly: (ply: number) => void;
-  // The move the pointer is on in an answer, as UCI; null once it leaves.
-  onPreviewMove: (uci: string | null) => void;
+  // The move the pointer is on in an answer, shown on its own board; null
+  // once it leaves.
+  onPreviewMove: (preview: MovePreview | null) => void;
 }
 
 /**

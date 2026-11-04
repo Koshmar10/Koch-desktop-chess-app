@@ -7,3 +7,6 @@ mod session;
 mod snapshot;
 
 pub use session::LiveEngineHandle;
+// Also how the assistant's `candidate_moves` reads a score, so a sign is
+// flipped in one place only (KOCH-HANDOFF.md §3).
+pub use snapshot::EvalScore;

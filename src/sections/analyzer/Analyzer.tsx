@@ -20,7 +20,7 @@ import { stopLiveEngine, updateLiveEnginePosition } from "../../api/analyzer";
 import SidePanel from "./panel/SidePanel";
 import { MaskSelectionContext } from "./panel/maskSelection";
 import AnalyzerToolbar from "./toolbar/AnalyzerToolbar";
-import { nextMistakePly } from "./toolbar/nextMistake";
+import { nextMistakePly, previousMistakePly } from "./toolbar/nextMistake";
 import EvalTimeline from "./board/EvalTimeline";
 import EvalBar from "./board/EvalBar";
 import { cpScore, topLineMove, topLineScore } from "./board/evalBar";
@@ -48,6 +48,14 @@ import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
 import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
 import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 import ChatPannel from "../../components/ChatPannel";
+import { isTyping } from "./utils";
+import CommandPaletteOverlay from "./board-overlays/CommandPaletteOverlay";
+import { commandForKey, type PaletteCommand } from "../../lib/commandPalette";
+import type { MovePreview } from "../../lib/segments";
+
+// Key repeat outpaces a step's render, so a held key queues up events. One
+// that waited this long is a backlog from earlier, not where you are now.
+const STALE_KEY_REPEAT_MS = 100;
 
 /**
  * The Analyzer screen, in one of two modes.
@@ -67,9 +75,11 @@ import ChatPannel from "../../components/ChatPannel";
 const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const {
     game: saved,
+    game: { setSelectedTab },
     sandbox,
     openGame,
     isCopyOverlayOpen,
+    setIsCopyOverlayOpen,
     isGameSelectOverlayOpen,
     setIsGameSelectOverlayOpen,
     isImportOverlayOpen,
@@ -102,13 +112,19 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
 
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("running");
   const [isChatOpen, setIsChatOpen] = useState(true);
+  // Only for this visit: coming back to the screen shouldn't find it open.
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  // Counts up each time the chat box is asked for: a new number is what
+  // tells the panel to focus it.
+  const [chatFocusRequest, setChatFocusRequest] = useState(0);
   // What's on the board, by mask id. Lives here rather than in the panel
   // because the board is the panel's sibling, not its child — the panel
   // decides what to light up, the board draws it.
   const [previewMaskId, setPreviewMaskId] = useState<string | null>(null);
-  // The move in the chat the pointer is on, in UCI. Separate from the
-  // masks above: it comes from the chat, not from a row of the panel.
-  const [chatMoveUci, setChatMoveUci] = useState<string | null>(null);
+  // The move in the chat the pointer is on, on the board it's played from.
+  // Separate from the masks above: it comes from the chat, not from a row
+  // of the panel, and it brings a board of its own.
+  const [chatPreview, setChatPreview] = useState<MovePreview | null>(null);
 
   // ---- The position on screen ----
   // `positions[0]` is the start position, so the viewed ply is offset by
@@ -224,7 +240,13 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     if (shownMasks.has(mask.id)) return [mask];
     return mask.id === previewMaskId ? [ghosted(mask)] : [];
   });
-  if (chatMoveUci !== null) drawnMasks.push(chatMoveMask(chatMoveUci));
+  // A chat move shows its own board for as long as the pointer is on it.
+  // The position's masks belong to the real board, so only the move is
+  // drawn over it.
+  const boardPieces = chatPreview?.pieces ?? pieces;
+  const boardMasks = chatPreview
+    ? [chatMoveMask(chatPreview.uci, chatPreview.trail)]
+    : drawnMasks;
 
   // Anything switched on, for the toolbar's clear button — including ids
   // with nothing to draw on this ply, which would otherwise be "on" with
@@ -245,12 +267,21 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
       // may not exist on the new ply, and a row that unmounts under the
       // pointer never gets its pointer-leave to clear it.
       setPreviewMaskId(null);
-      // The chip the pointer was on may belong to a ply that's gone, and
-      // its pointer-leave won't come if it unmounts.
-      setChatMoveUci(null);
+      // The chip the pointer was on may be swapped for another when the
+      // board moves, and its pointer-leave won't come if it unmounts.
+      setChatPreview(null);
     },
     [moves.length, viewedPly, engineStatus, searchPosition, setViewedPly],
   );
+
+  const flipBoard = () => saved.setIsFlipped((flipped) => !flipped);
+
+  // Opens the chat too if it's closed; the panel focuses the box once
+  // that's rendered.
+  const focusChat = () => {
+    setIsChatOpen(true);
+    setChatFocusRequest((request) => request + 1);
+  };
 
   // A click ends the preview it happened over: switching something on
   // makes the preview redundant, and switching it off has to take it off
@@ -316,6 +347,11 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     viewedPly,
     game?.human_color ?? null,
   );
+  const previousMistake = previousMistakePly(
+    qualities,
+    viewedPly,
+    game?.human_color ?? null,
+  );
   const gameActions: GameActions = {
     analysisStage: saved.analysisStage,
     onReanalyze:
@@ -354,6 +390,192 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     navigate(`/analysis/${pickedId}`);
     setIsGameSelectOverlayOpen(false);
   };
+
+  const isDialogOpen =
+    isCopyOverlayOpen || isImportOverlayOpen || isGameSelectOverlayOpen;
+  const closeDialogs = () => {
+    setIsCopyOverlayOpen(false);
+    setIsImportOverlayOpen(false);
+    setIsGameSelectOverlayOpen(false);
+  };
+
+  // Everything the palette offers and the keys do, each only while it can
+  // run, so nothing listed does nothing and no key acts out of turn. Where
+  // two share a key, the earlier wins: Esc closes a dialog before it
+  // clears the board.
+  const possibleCommands: (PaletteCommand | false | null)[] = [
+    isDialogOpen && {
+      id: "close-dialog",
+      label: "Close the dialog",
+      // Even from the dialog's own text field.
+      shortcuts: [{ key: "escape", whileTyping: true }],
+      run: closeDialogs,
+    },
+    {
+      id: "start",
+      label: "Go to the start",
+      shortcuts: [{ key: "home" }, { key: "arrowleft", shift: true }],
+      run: () => goToPly(START_POSITION_PLY),
+    },
+    {
+      id: "previous",
+      label: "Previous move",
+      shortcuts: [{ key: "arrowleft", shift: false }],
+      run: () => goToPly(viewedPly - 1),
+    },
+    {
+      id: "next",
+      label: "Next move",
+      shortcuts: [{ key: "arrowright", shift: false }],
+      run: () => goToPly(viewedPly + 1),
+    },
+    {
+      id: "end",
+      label: "Go to the end",
+      shortcuts: [{ key: "end" }, { key: "arrowright", shift: true }],
+      run: () => goToPly(moves.length - 1),
+    },
+    previousMistake !== null && {
+      id: "previous-mistake",
+      label: "Previous mistake",
+      shortcuts: [{ key: "arrowup" }],
+      run: () => goToPly(previousMistake),
+    },
+    gameActions.onNextMistake && {
+      id: "next-mistake",
+      label: "Next mistake",
+      shortcuts: [{ key: "arrowdown" }],
+      run: gameActions.onNextMistake,
+    },
+    {
+      id: "flip",
+      label: "Flip the board",
+      shortcuts: [{ key: "f" }],
+      run: flipBoard,
+    },
+    {
+      id: "tab-game",
+      label: "Show the Game tab",
+      shortcuts: [{ key: "1" }],
+      run: () => setSelectedTab("game"),
+    },
+    {
+      id: "tab-position",
+      label: "Show the Position tab",
+      shortcuts: [{ key: "2" }],
+      run: () => setSelectedTab("position"),
+    },
+    {
+      id: "tab-engine",
+      label: "Show the Engine tab",
+      shortcuts: [{ key: "3" }],
+      run: () => setSelectedTab("engine"),
+    },
+    {
+      id: "engine",
+      label:
+        engineStatus === "running" ? "Stop the engine" : "Start the engine",
+      shortcuts: [{ key: "e" }],
+      run: toggleEngine,
+    },
+    hasOverlays && {
+      id: "clear-overlays",
+      label: "Clear the board's overlays",
+      shortcuts: [{ key: "escape" }],
+      run: clearOverlays,
+    },
+    {
+      id: "chat",
+      label: isChatOpen ? "Close the chat" : "Open the chat",
+      shortcuts: [{ key: "c" }],
+      run: () => setIsChatOpen((open) => !open),
+    },
+    {
+      id: "ask",
+      label: "Ask the assistant",
+      shortcuts: [{ key: "/" }],
+      run: focusChat,
+    },
+    {
+      id: "copy",
+      label: "Copy the PGN or FEN",
+      shortcuts: [],
+      run: () => setIsCopyOverlayOpen(true),
+    },
+    {
+      id: "open-game",
+      label: "Open a saved game",
+      shortcuts: [],
+      run: () => setIsGameSelectOverlayOpen(true),
+    },
+    isGameMode &&
+      gameActions.onReanalyze && {
+        id: "reanalyze",
+        label: "Analyse the game again",
+        shortcuts: [],
+        run: gameActions.onReanalyze,
+      },
+    isGameMode &&
+      gameActions.onTryInSandbox && {
+        id: "try-in-sandbox",
+        label: "Try this position in the sandbox",
+        shortcuts: [],
+        run: gameActions.onTryInSandbox,
+      },
+    !isGameMode && {
+      id: "import",
+      label: "Import a FEN or PGN",
+      shortcuts: [],
+      run: () => setIsImportOverlayOpen(true),
+    },
+    !isGameMode && {
+      id: "new-sandbox",
+      label: "New sandbox",
+      // No key: one press would throw the sandbox away for good.
+      shortcuts: [],
+      run: sandboxActions.onReset,
+    },
+    !isGameMode &&
+      sandboxActions.onUndo && {
+        id: "undo",
+        label: "Undo the last move",
+        // Not repeated: a held Ctrl+Z would take back a burst of moves.
+        shortcuts: [{ key: "z", ctrl: true, repeat: false }],
+        run: sandboxActions.onUndo,
+      },
+  ];
+  const paletteCommands = possibleCommands.filter(
+    (command): command is PaletteCommand => Boolean(command),
+  );
+
+  // An effect event, so the listener added once below still reads the
+  // latest commands on every key press. A key no command takes is left
+  // to the webview.
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    // The palette's own key, outside the list it opens. It types nothing,
+    // so it works from the chat box too.
+    if (event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      setIsPaletteOpen((open) => !open);
+      return;
+    }
+    const isStale =
+      event.repeat && performance.now() - event.timeStamp > STALE_KEY_REPEAT_MS;
+    if (isStale) return;
+    const command = commandForKey(
+      paletteCommands,
+      event,
+      isTyping(event.target),
+    );
+    if (!command) return;
+    event.preventDefault();
+    command.run();
+  });
+
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const maskSelection: MaskSelection = {
     shown: shownMasks,
@@ -398,19 +620,21 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
 
             {/* A saved game is read-only. In the sandbox, whichever side is
                 to move is the one you drag — `humanColor` follows the turn —
-                and only while you're on the latest position. */}
+                and only while you're on the latest position. A chat move's
+                board isn't one to play on: its trail arrows say how it got
+                there, so there's no last move to mark either. */}
             <div className="col-start-2 row-start-2">
               <Chessboard
-                pieces={pieces}
+                pieces={boardPieces}
                 flipped={saved.isFlipped}
-                lastMove={position?.last_move ?? null}
-                canPlayerMove={canMove}
+                lastMove={chatPreview ? null : (position?.last_move ?? null)}
+                canPlayerMove={canMove && chatPreview === null}
                 humanColor={sandbox.turn}
                 legalMoves={canMove ? sandbox.legalMoves : undefined}
                 onMove={playSandboxMove}
               >
                 <Squares />
-                <OverlayLayer masks={drawnMasks} />
+                <OverlayLayer masks={boardMasks} />
                 <PieceLayer />
                 <ArrowLayer />
                 {isGameMode && saved.isLoading && (
@@ -441,6 +665,14 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                 {!isGameMode && isImportOverlayOpen && (
                   <BoardOverlay>
                     <ImportPgnFenOverlay onLoad={loadIntoSandbox} />
+                  </BoardOverlay>
+                )}
+                {isPaletteOpen && (
+                  <BoardOverlay>
+                    <CommandPaletteOverlay
+                      commands={paletteCommands}
+                      onClose={() => setIsPaletteOpen(false)}
+                    />
                   </BoardOverlay>
                 )}
                 {/* Either mode — the Game tab's button opens it from both. */}
@@ -494,7 +726,8 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         gameId={gameId}
         viewedPly={viewedPly}
         onGoToPly={goToPly}
-        onPreviewMove={setChatMoveUci}
+        onPreviewMove={setChatPreview}
+        focusRequest={chatFocusRequest}
       />
     </div>
   );

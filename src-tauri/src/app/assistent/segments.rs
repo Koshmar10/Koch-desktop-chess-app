@@ -10,7 +10,7 @@ use koch_engine::Board;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::app::game::replay;
+use crate::app::game::{replay, PieceView};
 
 const TAG_NAMES: [&str; 3] = ["move", "line", "ply"];
 
@@ -20,6 +20,39 @@ pub struct SegmentMove {
     pub san: String,
     /// `None` if the move isn't legal where it was played.
     pub uci: Option<String>,
+    /// The board the move is played from, so the chat can show it where it
+    /// happens whatever ply the board is on, and step through a line with
+    /// its pieces moving. Empty for a move that isn't verified: there's no
+    /// board it can be shown on.
+    pub pieces_before: Vec<PieceView>,
+}
+
+impl SegmentMove {
+    /// Plays `san` on `board` if there is one, keeping the board from
+    /// before it. Without a board, or for a move that doesn't play, the
+    /// move is listed unverified and `board` is left as it was.
+    fn play(board: Option<&mut Board>, san: &str) -> Self {
+        let Some(board) = board else {
+            return Self::unverified(san);
+        };
+        let pieces_before = replay::pieces_of(board);
+        match play_san(board, san) {
+            Some(uci) => Self {
+                san: san.to_string(),
+                uci: Some(uci),
+                pieces_before,
+            },
+            None => Self::unverified(san),
+        }
+    }
+
+    fn unverified(san: &str) -> Self {
+        Self {
+            san: san.to_string(),
+            uci: None,
+            pieces_before: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -115,14 +148,23 @@ fn attribute<'a>(attrs: &'a str, key: &str) -> Option<&'a str> {
 
 fn resolve(tag: &RawTag, current_ply: i32, board_at: &impl Fn(i32) -> Option<Board>) -> Segment {
     match tag.name {
-        "move" => {
-            let san = tag.inner.trim();
-            let uci = board_at(current_ply).and_then(|mut board| play_san(&mut board, san));
-            Segment::Move(SegmentMove {
-                san: san.to_string(),
-                uci,
-            })
-        }
+        "move" => match attribute(tag.attrs, "ply") {
+            // The move made as ply N — played, or an alternative to it — is
+            // played from the position after ply N - 1. It goes out as a
+            // one-move line, which already carries the ply it starts from.
+            Some(value) => {
+                let start_ply = value.parse::<i32>().ok().map(|ply| index_of(ply) - 1);
+                resolve_line(
+                    tag.inner,
+                    start_ply.unwrap_or(current_ply),
+                    start_ply.and_then(board_at),
+                )
+            }
+            None => Segment::Move(SegmentMove::play(
+                board_at(current_ply).as_mut(),
+                tag.inner.trim(),
+            )),
+        },
         "line" => {
             // A `from` that doesn't parse or points outside the game leaves
             // the line unchecked, not checked from the wrong position.
@@ -160,17 +202,14 @@ fn resolve_line(inner: &str, start_ply: i32, mut board: Option<Board>) -> Segmen
         .split_whitespace()
         .enumerate()
         .map(|(index, san)| {
-            let uci = match (&mut board, first_illegal) {
-                (Some(board), None) => play_san(board, san),
-                _ => None,
-            };
-            if uci.is_none() && first_illegal.is_none() {
+            // Past the first illegal move the board no longer matches the
+            // line, so nothing after it is checked.
+            let board = board.as_mut().filter(|_| first_illegal.is_none());
+            let played = SegmentMove::play(board, san);
+            if played.uci.is_none() && first_illegal.is_none() {
                 first_illegal = Some(index as u32);
             }
-            SegmentMove {
-                san: san.to_string(),
-                uci,
-            }
+            played
         })
         .collect();
     Segment::Line {
@@ -217,8 +256,29 @@ mod tests {
         Some(board)
     }
 
+    /// The reply's segments with the boards left out, so a test can spell
+    /// out what it expects; the boards have tests of their own below.
     fn segments(reply: &str) -> Vec<Segment> {
+        let without_board = |mut played: SegmentMove| {
+            played.pieces_before.clear();
+            played
+        };
         segment_reply(reply, 4, board_at)
+            .into_iter()
+            .map(|segment| match segment {
+                Segment::Move(played) => Segment::Move(without_board(played)),
+                Segment::Line {
+                    moves,
+                    first_illegal,
+                    start_ply,
+                } => Segment::Line {
+                    moves: moves.into_iter().map(without_board).collect(),
+                    first_illegal,
+                    start_ply,
+                },
+                other => other,
+            })
+            .collect()
     }
 
     fn text(text: &str) -> Segment {
@@ -231,14 +291,45 @@ mod tests {
         SegmentMove {
             san: san.to_string(),
             uci: Some(uci.to_string()),
+            pieces_before: Vec::new(),
         }
     }
 
     fn rejected(san: &str) -> SegmentMove {
-        SegmentMove {
-            san: san.to_string(),
-            uci: None,
-        }
+        SegmentMove::unverified(san)
+    }
+
+    /// What's on `square` in the board a move was played from.
+    fn piece_on(played: &SegmentMove, square: &str) -> Option<String> {
+        played
+            .pieces_before
+            .iter()
+            .find(|piece| piece.square.to_string() == square)
+            .map(|piece| format!("{} {}", piece.color, piece.kind))
+    }
+
+    #[test]
+    fn each_move_of_a_line_carries_the_board_it_is_played_from() {
+        let Segment::Line { moves, .. } = &segment_reply("<line>a6 Ba4</line>", 4, board_at)[0]
+        else {
+            panic!("not a line");
+        };
+        // ...a6 is played with the pawn still on a7; Ba4 once it's on a6.
+        assert_eq!(piece_on(&moves[0], "a7").as_deref(), Some("Black Pawn"));
+        assert_eq!(piece_on(&moves[1], "a7"), None);
+        assert_eq!(piece_on(&moves[1], "a6").as_deref(), Some("Black Pawn"));
+    }
+
+    #[test]
+    fn a_move_that_isnt_verified_has_no_board() {
+        let Segment::Line { moves, .. } =
+            &segment_reply("<line>a6 Bxe8 Nf6</line>", 4, board_at)[0]
+        else {
+            panic!("not a line");
+        };
+        assert!(!moves[0].pieces_before.is_empty());
+        assert!(moves[1].pieces_before.is_empty());
+        assert!(moves[2].pieces_before.is_empty());
     }
 
     #[test]
@@ -270,6 +361,39 @@ mod tests {
         assert_eq!(
             segments("<move>Bxc6</move>"),
             [Segment::Move(rejected("Bxc6"))]
+        );
+    }
+
+    #[test]
+    fn a_move_tag_with_a_ply_is_checked_before_that_ply() {
+        // Ply 3 is White's Nf3, played after 1.e4 e5; the board is at ply 5.
+        assert_eq!(
+            segments(r#"<move ply="3">Nf3</move> or <move ply="3">Bc4</move>"#),
+            [
+                Segment::Line {
+                    moves: vec![played("Nf3", "g1f3")],
+                    first_illegal: None,
+                    start_ply: 1,
+                },
+                text(" or "),
+                Segment::Line {
+                    moves: vec![played("Bc4", "f1c4")],
+                    first_illegal: None,
+                    start_ply: 1,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_move_tag_for_the_wrong_side_at_its_ply_is_rejected() {
+        assert_eq!(
+            segments(r#"<move ply="3">Nc6</move>"#),
+            [Segment::Line {
+                moves: vec![rejected("Nc6")],
+                first_illegal: Some(0),
+                start_ply: 1,
+            }]
         );
     }
 

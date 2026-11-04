@@ -17,13 +17,18 @@ struct Args {
 pub(super) fn tool() -> Tool {
     Tool::function(
         NAME,
-        "Koch's analysis of the position after a ply: the stored engine \
-         evaluation, how good the move that led there was, and computed \
+        "Koch's analysis of the position after one ply of the game: the \
+         stored engine evaluation, how good the move that led there was, and \
          findings — hanging pieces, pins, forks, king safety per side, and \
-         passed, isolated, backward and doubled pawns. The current ply's \
-         analysis is already in <current_analysis>, so don't call this for \
-         it. Call it before describing any other ply, its threats, or who is \
-         better there, instead of working them out from a FEN yourself.",
+         passed, isolated, backward and doubled pawns.\n\
+         Use when: you explain one specific earlier or later ply in detail — \
+         its threats, its tactics, who is better there — and need facts you \
+         don't already have.\n\
+         Don't use when: the ply is the current one (that's \
+         <current_analysis>); get_game_review already gave what you need \
+         (eval, quality, best move); you only mention the ply in passing; \
+         you already called it for that ply in this answer; the position \
+         comes from moves the game didn't play (use explore_line).",
         json!({
             "type": "object",
             "properties": {
@@ -53,7 +58,7 @@ fn summary_at(ply: i32, context: &ToolContext) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::assistent::tools::test_context;
+    use crate::app::assistent::tools::{test_context, test_db};
     use serde_json::Value;
 
     fn summary(ply: i32, context: &ToolContext) -> Value {
@@ -62,7 +67,8 @@ mod tests {
 
     #[test]
     fn counts_plies_from_one_with_zero_the_start() {
-        let context = test_context(&["e2e4", "e7e5"]);
+        let db = test_db();
+        let context = test_context(&db, &["e2e4", "e7e5"]);
 
         let start = summary(0, &context);
         assert_eq!(start["move_played"], Value::Null);
@@ -75,7 +81,8 @@ mod tests {
 
     #[test]
     fn says_which_plies_exist_when_asked_for_another() {
-        let context = test_context(&["e2e4", "e7e5"]);
+        let db = test_db();
+        let context = test_context(&db, &["e2e4", "e7e5"]);
         for ply in [3, -1] {
             let answer = summary_at(ply, &context);
             assert!(
@@ -90,7 +97,11 @@ mod tests {
     fn names_pieces_by_square_not_id() {
         // 1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Bxc6: White's bishop on c6 shows up
         // in the findings, by its square.
-        let context = test_context(&["e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5c6"]);
+        let db = test_db();
+        let context = test_context(
+            &db,
+            &["e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5c6"],
+        );
         let after_bxc6 = summary_at(7, &context);
         assert!(after_bxc6.contains("on c6"), "{after_bxc6}");
         assert!(!after_bxc6.contains("\"id\""), "{after_bxc6}");

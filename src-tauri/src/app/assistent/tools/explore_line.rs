@@ -26,10 +26,16 @@ pub(super) fn tool() -> Tool {
         "Plays a line of moves from a ply and returns Koch's findings for \
          the position it reaches: hanging pieces, pins, forks, king safety \
          and pawns, with each move written as Koch normalised it. If a move \
-         isn't legal, says which one and returns no position. Call it before \
-         writing a <line> you aren't sure of, with from_ply the same number \
-         as the tag's `from`. It runs no engine: the reached position has no \
-         evaluation, so don't call a line good or bad from it alone.",
+         isn't legal, says which one and returns no position. It runs no \
+         engine: the reached position has no evaluation.\n\
+         Use when: you want to suggest moves the game didn't play and \
+         aren't sure they're legal or what they lead to — before tagging \
+         them in a <line>, with from_ply the same number as the tag's \
+         `from`.\n\
+         Don't use when: the moves are the game's own (use get_position); \
+         the line is a single obvious legal move; you want to know whether \
+         a line is good — it can't tell you; you already played that line \
+         in this answer.",
         json!({
             "type": "object",
             "properties": {
@@ -91,7 +97,7 @@ fn play_line(args: &Args, context: &ToolContext) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::assistent::tools::test_context;
+    use crate::app::assistent::tools::{test_context, test_db};
     use serde_json::Value;
 
     fn args(from_ply: i32, moves: &[&str]) -> Args {
@@ -107,7 +113,8 @@ mod tests {
 
     #[test]
     fn returns_the_position_the_line_reaches() {
-        let context = test_context(&[]);
+        let db = test_db();
+        let context = test_context(&db, &[]);
         let reached = explore(0, &["e4", "e5", "Nf3"], &context);
         assert_eq!(
             reached["position"]["fen"],
@@ -118,7 +125,8 @@ mod tests {
 
     #[test]
     fn starts_from_the_ply_it_is_given() {
-        let context = test_context(&["e2e4", "e7e5"]);
+        let db = test_db();
+        let context = test_context(&db, &["e2e4", "e7e5"]);
         let reached = explore(2, &["Nf3"], &context);
         assert_eq!(reached["line"], json!(["Nf3"]));
         assert_eq!(reached["position"]["ply"], 3);
@@ -127,14 +135,16 @@ mod tests {
 
     #[test]
     fn writes_moves_as_koch_normalises_them() {
-        let context = test_context(&[]);
+        let db = test_db();
+        let context = test_context(&db, &[]);
         let reached = explore(0, &["e4", "e5", "Ngf3"], &context);
         assert_eq!(reached["line"], json!(["e4", "e5", "Nf3"]));
     }
 
     #[test]
     fn names_the_first_illegal_move_and_reaches_no_position() {
-        let context = test_context(&[]);
+        let db = test_db();
+        let context = test_context(&db, &[]);
         let answer = explore(0, &["e4", "Ke2", "Nf3"], &context);
         assert_eq!(answer["played"], json!(["e4"]));
         assert!(answer["illegal"].as_str().unwrap().contains("Move 2, Ke2"));
@@ -143,7 +153,8 @@ mod tests {
 
     #[test]
     fn refuses_a_ply_outside_the_game() {
-        let context = test_context(&["e2e4"]);
+        let db = test_db();
+        let context = test_context(&db, &["e2e4"]);
         let answer = play_line(&args(5, &["e5"]), &context);
         assert!(answer.contains("There is no ply 5"), "{answer}");
     }

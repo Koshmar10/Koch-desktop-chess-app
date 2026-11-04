@@ -2,7 +2,7 @@ import type { MoveQuality } from "../api/bindings/MoveQuality";
 
 /**
  * One colour per grade, ordered so the set reads as a scale rather than
- * seven unrelated colours: cool for the best moves, through greens for
+ * eight unrelated colours: a muted brown for book moves, cool for the best moves, through greens for
  * the sound ones, to yellow, orange and red as the mistakes get worse —
  * so a run of dots down the move list shows where a game went wrong
  * without reading a single label.
@@ -13,8 +13,9 @@ import type { MoveQuality } from "../api/bindings/MoveQuality";
  * fails to compile here until it has a colour.
  */
 export const MOVE_QUALITY_COLOR: Record<MoveQuality, string> = {
+  Book: "#a88865",
   Brilliant: "#1baca6",
-  Great: "#4f8fca",
+  Best: "#4f8fca",
   Excellent: "#5f9e3b",
   Good: "#9ab66b",
   Inaccuracy: "#e3b324",
@@ -24,8 +25,9 @@ export const MOVE_QUALITY_COLOR: Record<MoveQuality, string> = {
 
 /** Best to worst — the order a breakdown lists them in. */
 export const MOVE_QUALITY_ORDER: readonly MoveQuality[] = [
+  "Book",
   "Brilliant",
-  "Great",
+  "Best",
   "Excellent",
   "Good",
   "Inaccuracy",
@@ -35,8 +37,9 @@ export const MOVE_QUALITY_ORDER: readonly MoveQuality[] = [
 
 /** What a count of each is called in a breakdown — "3 Mistakes". */
 export const MOVE_QUALITY_COUNT_LABEL: Record<MoveQuality, string> = {
+  Book: "Book",
   Brilliant: "Brilliant",
-  Great: "Great",
+  Best: "Best",
   Excellent: "Excellent",
   Good: "Good",
   Inaccuracy: "Inaccuracies",
@@ -54,8 +57,9 @@ export const countByQuality = (
   // Spelled out rather than built from a list: as a `Record` over the
   // binding's union, a grade added in the backend fails to compile here.
   const counts: Record<MoveQuality, number> = {
+    Book: 0,
     Brilliant: 0,
-    Great: 0,
+    Best: 0,
     Excellent: 0,
     Good: 0,
     Inaccuracy: 0,

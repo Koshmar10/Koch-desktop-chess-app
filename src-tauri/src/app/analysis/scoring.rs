@@ -1,5 +1,5 @@
 use koch_engine::analyzer::PositionFindings;
-use koch_engine::{Board, PieceColor};
+use koch_engine::{Board, PieceColor, PieceType, Square};
 use koch_uci::{Engine, GoLimits, Score, SearchEvent, UciError};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -13,25 +13,37 @@ use crate::app::events;
 use crate::app::game::replay::play_uci;
 use crate::app::settings::{AnalyzerEngineSettings, SearchLimit, SearchLimitMode};
 use crate::app::ENGINE_PATH;
-use crate::db::{self, services::settings::SettingsService};
+use crate::db::{
+    self,
+    services::{opening::OpeningService, settings::SettingsService},
+};
 
 /// The search depth when no analyzer settings have been saved.
 const ANALYSIS_DEPTH: u32 = 20;
 
-// Chess.com-style tiers, cheapest (centipawn-loss threshold) approximation
-// of them — no sacrifice/complexity detection, just how much the move cost.
-const BRILLIANT_MAX_CP: i32 = 0;
-const GREAT_MAX_CP: i32 = 15;
+// The weak grades go by win% given up, not centipawns: two pawns thrown
+// away at +9 still wins, two pawns from a level position loses. Lichess's
+// thresholds (0.1 / 0.2 / 0.3 of its -1..1 winning chances), in win%
+// points.
+const INACCURACY_MIN_WIN_LOSS: f64 = 5.0;
+const MISTAKE_MIN_WIN_LOSS: f64 = 10.0;
+const BLUNDER_MIN_WIN_LOSS: f64 = 15.0;
+/// Close enough to the engine's choice to be Best: within the noise
+/// between one search depth and the next.
+const BEST_MAX_CP: i32 = 10;
 const EXCELLENT_MAX_CP: i32 = 30;
-const GOOD_MAX_CP: i32 = 60;
-const INACCURACY_MAX_CP: i32 = 100;
-const MISTAKE_MAX_CP: i32 = 200;
+/// A side this likely to win already gives material away at no risk, so
+/// its sacrifices aren't brilliant.
+const ALREADY_WINNING_PERCENT: f64 = 90.0;
 
-#[derive(Clone, Copy, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub enum MoveQuality {
+    /// Still inside a catalogued opening line.
+    Book,
+    /// A best move that gives material up.
     Brilliant,
-    Great,
+    Best,
     Excellent,
     Good,
     Inaccuracy,
@@ -39,17 +51,39 @@ pub enum MoveQuality {
     Blunder,
 }
 
+/// What the board and the engine say about a move, beyond the evals.
+#[derive(Clone, Copy, Default)]
+struct MoveFacts {
+    book: bool,
+    /// It's the move the engine would have played.
+    engine_best: bool,
+    /// It left the moved piece where the opponent wins it.
+    sacrifice: bool,
+}
+
 impl MoveQuality {
-    /// The tier a move's centipawn loss falls into.
-    fn from_centipawn_loss(loss_cp: i32) -> Self {
-        match loss_cp {
-            l if l <= BRILLIANT_MAX_CP => MoveQuality::Brilliant,
-            l if l <= GREAT_MAX_CP => MoveQuality::Great,
-            l if l <= EXCELLENT_MAX_CP => MoveQuality::Excellent,
-            l if l <= GOOD_MAX_CP => MoveQuality::Good,
-            l if l <= INACCURACY_MAX_CP => MoveQuality::Inaccuracy,
-            l if l <= MISTAKE_MAX_CP => MoveQuality::Mistake,
-            _ => MoveQuality::Blunder,
+    /// `win_before` / `win_after` are the mover's win% either side of the
+    /// move, `loss_cp` what it cost them in centipawns.
+    fn of(facts: MoveFacts, loss_cp: i32, win_before: f64, win_after: f64) -> Self {
+        let win_loss = win_before - win_after;
+        if facts.book {
+            MoveQuality::Book
+        } else if win_loss >= BLUNDER_MIN_WIN_LOSS {
+            MoveQuality::Blunder
+        } else if win_loss >= MISTAKE_MIN_WIN_LOSS {
+            MoveQuality::Mistake
+        } else if win_loss >= INACCURACY_MIN_WIN_LOSS {
+            MoveQuality::Inaccuracy
+        } else if facts.engine_best || loss_cp <= BEST_MAX_CP {
+            if facts.sacrifice && win_before < ALREADY_WINNING_PERCENT {
+                MoveQuality::Brilliant
+            } else {
+                MoveQuality::Best
+            }
+        } else if loss_cp <= EXCELLENT_MAX_CP {
+            MoveQuality::Excellent
+        } else {
+            MoveQuality::Good
         }
     }
 }
@@ -60,8 +94,9 @@ impl MoveQuality {
     /// a corrupted value shows as ungraded instead of as a wrong grade.
     pub fn parse(stored: &str) -> Option<MoveQuality> {
         match stored {
+            "book" => Some(MoveQuality::Book),
             "brilliant" => Some(MoveQuality::Brilliant),
-            "great" => Some(MoveQuality::Great),
+            "best" => Some(MoveQuality::Best),
             "excellent" => Some(MoveQuality::Excellent),
             "good" => Some(MoveQuality::Good),
             "inaccuracy" => Some(MoveQuality::Inaccuracy),
@@ -75,8 +110,9 @@ impl MoveQuality {
 impl std::fmt::Display for MoveQuality {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
+            MoveQuality::Book => "book",
             MoveQuality::Brilliant => "brilliant",
-            MoveQuality::Great => "great",
+            MoveQuality::Best => "best",
             MoveQuality::Excellent => "excellent",
             MoveQuality::Good => "good",
             MoveQuality::Inaccuracy => "inaccuracy",
@@ -150,10 +186,11 @@ impl SideTotals {
 ///
 /// `evals[i]` is the eval after `i` plies from the point of view of the
 /// side to move then (UCI's convention), so `evals[0]` is the start
-/// position with White to move. Both sides are graded: a game between two
-/// people has no "engine side" to skip, and the opponent's moves are
-/// worth reading even when it was the engine.
-fn grade_moves(evals: &[i32]) -> GradedMoves {
+/// position with White to move. `facts[i]` is about the move to ply
+/// `i + 1`; a missing one counts as nothing known. Both sides are graded: a
+/// game between two people has no "engine side" to skip, and the
+/// opponent's moves are worth reading even when it was the engine.
+fn grade_moves(evals: &[i32], facts: &[MoveFacts]) -> GradedMoves {
     let mut entries = Vec::with_capacity(evals.len().saturating_sub(1));
     let mut white = SideTotals::default();
     let mut black = SideTotals::default();
@@ -172,8 +209,9 @@ fn grade_moves(evals: &[i32]) -> GradedMoves {
         let before = pair[0];
         let after = -pair[1];
         let loss = (before - after).max(0);
-        let accuracy =
-            move_accuracy_percent(expected_win_percent(before), expected_win_percent(after));
+        let (win_before, win_after) = (expected_win_percent(before), expected_win_percent(after));
+        let accuracy = move_accuracy_percent(win_before, win_after);
+        let move_facts = facts.get(idx).copied().unwrap_or_default();
 
         match mover {
             PieceColor::White => white.add(accuracy, loss),
@@ -182,7 +220,7 @@ fn grade_moves(evals: &[i32]) -> GradedMoves {
         entries.push(MoveQualityEntry {
             ply_number,
             mover,
-            quality: MoveQuality::from_centipawn_loss(loss),
+            quality: MoveQuality::of(move_facts, loss, win_before, win_after),
             centipawn_loss: loss as u32,
         });
     }
@@ -232,6 +270,10 @@ pub struct GameAnalysis {
     /// gets analyzed, not just the human's moves, so any point in the game
     /// can be explained later, not only the ones that were scored.
     pub position_findings: Vec<PositionFindings>,
+    /// The engine's best move in every position, in UCI, same indexing as
+    /// `centipawn_history`. `None` where there's no move to make: mate or
+    /// stalemate.
+    pub best_moves: Vec<Option<String>>,
 }
 
 /// The saved analyzer settings, or `None` when nothing has been saved yet —
@@ -243,6 +285,28 @@ fn saved_settings(app: &AppHandle) -> Result<Option<AnalyzerEngineSettings>, App
     let conn = db.lock()?;
     let row = SettingsService::new(&conn).get_latest_analyzer_engine_settings()?;
     Ok(row.map(AnalyzerEngineSettings::try_from).transpose()?)
+}
+
+/// How many of the game's first moves follow a catalogued opening line.
+/// Once a move leaves the catalogue, nothing after it is book again.
+fn book_plies(app: &AppHandle, uci_moves: &[String]) -> Result<usize, AppError> {
+    let db = app.state::<db::Db>();
+    let conn = db.lock()?;
+    let openings = OpeningService::new(&conn);
+    let mut plies = 0;
+    while plies < uci_moves.len() && openings.is_book(&uci_moves[..=plies].join(" "))? {
+        plies += 1;
+    }
+    Ok(plies)
+}
+
+/// Whether the piece just moved to `to` was left where the opponent wins
+/// it. Pawns and the king don't count: a pawn left en prise is rarely the
+/// point of the move, and a king can't be.
+fn is_sacrifice(board: &Board, findings: &PositionFindings, to: Square) -> bool {
+    let moved = board.squares[to.rank][to.file];
+    moved.is_some_and(|piece| !matches!(piece.kind, PieceType::Pawn | PieceType::King))
+        && findings.hanging_squares.contains(&to)
 }
 
 /// One position's search, bounded by the saved limit.
@@ -265,11 +329,14 @@ fn go_limits(limit: SearchLimit) -> GoLimits {
 
 /// Runs a bounded search on the engine's current position and returns the
 /// score from the last `info` line seen before `bestmove` — the deepest
-/// (most accurate) one the search reached. No cancellation here: unlike
-/// live play, where a new position can supersede a search still in
-/// flight, analysis evaluates one position fully before moving to the next
-/// — there's nothing to cancel.
-async fn search_eval(engine: &mut Engine, limits: &GoLimits) -> Result<Score, UciError> {
+/// (most accurate) one the search reached — with the best move itself. No
+/// cancellation here: unlike live play, where a new position can supersede
+/// a search still in flight, analysis evaluates one position fully before
+/// moving to the next — there's nothing to cancel.
+async fn search_eval(
+    engine: &mut Engine,
+    limits: &GoLimits,
+) -> Result<(Score, Option<String>), UciError> {
     let mut latest = Score::Centipawns(0);
     engine.go(limits).await?;
     loop {
@@ -279,8 +346,17 @@ async fn search_eval(engine: &mut Engine, limits: &GoLimits) -> Result<Score, Uc
                     latest = score;
                 }
             }
-            SearchEvent::BestMove { .. } => return Ok(latest),
+            SearchEvent::BestMove { mv, .. } => return Ok((latest, playable(mv))),
         }
+    }
+}
+
+/// `bestmove`'s move, or `None` for the placeholder an engine sends when
+/// there's nothing to play: Stockfish's `(none)`, the UCI spec's `0000`.
+fn playable(mv: String) -> Option<String> {
+    match mv.as_str() {
+        "(none)" | "0000" => None,
+        _ => Some(mv),
     }
 }
 
@@ -319,6 +395,7 @@ pub async fn run_analysis(
 
     let uci_moves: Vec<String> = move_list.iter().map(|m| m.uci.clone()).collect();
     let total_positions = uci_moves.len() + 1;
+    let book_plies = book_plies(app, &uci_moves)?;
 
     // Mirrors the engine's position exactly, one uci move behind: applied
     // *before* scoring index i, so it holds the same position the engine
@@ -332,14 +409,29 @@ pub async fn run_analysis(
     // move.
     let mut evals = Vec::with_capacity(total_positions);
     let mut position_findings = Vec::with_capacity(total_positions);
+    let mut best_moves: Vec<Option<String>> = Vec::with_capacity(total_positions);
+    let mut move_facts = Vec::with_capacity(uci_moves.len());
     for i in 0..=uci_moves.len() {
-        if i > 0 {
-            play_uci(&mut board, &uci_moves[i - 1])?;
-        }
+        let last_move = match i {
+            0 => None,
+            _ => Some(play_uci(&mut board, &uci_moves[i - 1])?.0),
+        };
 
         engine.set_position_startpos(&uci_moves[..i]).await?;
-        evals.push(to_centipawns(search_eval(&mut engine, &limits).await?));
-        position_findings.push(PositionFindings::from(&board));
+        let (score, best_move) = search_eval(&mut engine, &limits).await?;
+        evals.push(to_centipawns(score));
+        best_moves.push(best_move);
+        let findings = PositionFindings::from(&board);
+        if let Some(last_move) = last_move {
+            move_facts.push(MoveFacts {
+                book: i <= book_plies,
+                // The engine's choice in the position before, searched last
+                // time round.
+                engine_best: best_moves[i - 1].as_deref() == Some(uci_moves[i - 1].as_str()),
+                sacrifice: is_sacrifice(&board, &findings, last_move.to),
+            });
+        }
+        position_findings.push(findings);
 
         let percent = (((i + 1) * 100) / total_positions) as u8;
         // `update-analysis-progress` stays for the play view's progress bar;
@@ -361,7 +453,7 @@ pub async fn run_analysis(
         .map(|(i, &cp)| if i % 2 == 0 { cp } else { -cp })
         .collect();
 
-    let graded = grade_moves(&evals);
+    let graded = grade_moves(&evals, &move_facts);
     let human = match analysis_job.human_color {
         PieceColor::White => graded.white,
         PieceColor::Black => graded.black,
@@ -387,6 +479,7 @@ pub async fn run_analysis(
         human_move_times_ms: time_stats.human_move_times_ms,
         total_duration_ms: time_stats.total_duration_ms,
         position_findings,
+        best_moves,
     })
 }
 
@@ -408,8 +501,9 @@ mod tests {
     #[test]
     fn every_quality_round_trips_through_its_stored_form() {
         let all = [
+            MoveQuality::Book,
             MoveQuality::Brilliant,
-            MoveQuality::Great,
+            MoveQuality::Best,
             MoveQuality::Excellent,
             MoveQuality::Good,
             MoveQuality::Inaccuracy,
@@ -426,7 +520,7 @@ mod tests {
     #[test]
     fn both_sides_moves_are_graded_and_attributed() {
         // evals after 0..=4 plies, each from the side to move's view.
-        let graded = grade_moves(&[20, -20, 30, -30, 40]);
+        let graded = grade_moves(&[20, -20, 30, -30, 40], &[]);
 
         let movers: Vec<PieceColor> = graded.entries.iter().map(|e| e.mover).collect();
         assert_eq!(
@@ -443,12 +537,12 @@ mod tests {
     #[test]
     fn a_blunder_counts_against_only_the_side_that_made_it() {
         // White keeps a steady +0.20. Black's second move drops Black from
-        // -0.20 to -3.00 (an eval of +300 for White, who's to move after).
-        let graded = grade_moves(&[20, -20, 20, -20, 300]);
+        // -0.20 to -5.00 (an eval of +500 for White, who's to move after).
+        let graded = grade_moves(&[20, -20, 20, -20, 500], &[]);
 
         let black_blunder = &graded.entries[3];
         assert_eq!(black_blunder.mover, PieceColor::Black);
-        assert_eq!(black_blunder.centipawn_loss, 280);
+        assert_eq!(black_blunder.centipawn_loss, 480);
         assert_eq!(black_blunder.quality.to_string(), "blunder");
 
         // White never lost anything, so Black's mistake doesn't drag
@@ -461,16 +555,89 @@ mod tests {
     #[test]
     fn a_side_with_no_moves_reads_as_perfect() {
         // Only the start position: nobody has moved.
-        let graded = grade_moves(&[20]);
+        let graded = grade_moves(&[20], &[]);
 
         assert!(graded.entries.is_empty());
         assert_eq!(graded.white.average_centipawn_loss, 0);
         assert_eq!(graded.white.accuracy_percent, 100.0);
     }
 
+    /// White's first move, from a level +0.20, to an eval of `after_cp`
+    /// for White.
+    fn first_move_quality(after_cp: i32, facts: MoveFacts) -> MoveQuality {
+        // The eval after it is Black's view, so White's is negated.
+        grade_moves(&[20, -after_cp], &[facts]).entries[0].quality
+    }
+
+    #[test]
+    fn a_move_that_loses_nothing_is_best_not_brilliant() {
+        assert_eq!(
+            first_move_quality(20, MoveFacts::default()),
+            MoveQuality::Best
+        );
+    }
+
+    #[test]
+    fn the_engines_own_move_is_best_even_if_the_eval_dips() {
+        let engine_best = MoveFacts {
+            engine_best: true,
+            ..Default::default()
+        };
+        assert_eq!(first_move_quality(-5, engine_best), MoveQuality::Best);
+        assert_eq!(
+            first_move_quality(-5, MoveFacts::default()),
+            MoveQuality::Excellent
+        );
+    }
+
+    #[test]
+    fn a_sound_sacrifice_is_brilliant_unless_already_winning() {
+        let sacrifice = MoveFacts {
+            engine_best: true,
+            sacrifice: true,
+            ..Default::default()
+        };
+        assert_eq!(first_move_quality(20, sacrifice), MoveQuality::Brilliant);
+
+        let already_winning = grade_moves(&[900, -900], &[sacrifice]).entries[0].quality;
+        assert_eq!(already_winning, MoveQuality::Best);
+    }
+
+    #[test]
+    fn a_book_move_is_book_whatever_it_costs() {
+        let book = MoveFacts {
+            book: true,
+            ..Default::default()
+        };
+        assert_eq!(first_move_quality(-20, book), MoveQuality::Book);
+    }
+
+    #[test]
+    fn weak_grades_go_by_win_percent_not_centipawns() {
+        // Two pawns given up at +9 still leaves White winning: not a blunder.
+        let at_plus_nine = grade_moves(&[900, -700], &[]).entries[0].quality;
+        assert!(!matches!(
+            at_plus_nine,
+            MoveQuality::Mistake | MoveQuality::Blunder
+        ));
+        // The same two pawns from a level position is.
+        assert_eq!(
+            first_move_quality(-180, MoveFacts::default()),
+            MoveQuality::Blunder
+        );
+    }
+
     #[test]
     fn unknown_stored_quality_is_ungraded() {
+        assert!(MoveQuality::parse("great").is_none());
         assert!(MoveQuality::parse("superb").is_none());
         assert!(MoveQuality::parse("").is_none());
+    }
+
+    #[test]
+    fn a_best_move_placeholder_means_no_move() {
+        assert_eq!(playable("e2e4".to_string()), Some("e2e4".to_string()));
+        assert_eq!(playable("(none)".to_string()), None);
+        assert_eq!(playable("0000".to_string()), None);
     }
 }

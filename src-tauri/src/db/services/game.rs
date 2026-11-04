@@ -238,12 +238,15 @@ impl<'a> GameService<'a> {
     /// every ply (index 0 is the start position, which has no `game_moves`
     /// row of its own, so it's skipped); `quality`/`centipawn_loss` come
     /// from `move_qualities`, which grades every move — both sides — so a
-    /// fresh analysis fills them on every row.
+    /// fresh analysis fills them on every row. `best_moves` is indexed like
+    /// `centipawn_history`, and each goes on the row of the move played from
+    /// that position, so the last position's has no row.
     pub fn save_move_analysis(
         &self,
         game_id: u32,
         move_qualities: &[MoveQualityEntry],
         centipawn_history: &[i32],
+        best_moves: &[Option<String>],
     ) -> rusqlite::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
 
@@ -264,6 +267,13 @@ impl<'a> GameService<'a> {
                     game_id,
                     entry.ply_number
                 ],
+            )?;
+        }
+
+        for (idx, best_move) in best_moves.iter().enumerate() {
+            self.conn.execute(
+                "UPDATE game_moves SET best_uci = ?1 WHERE game_id = ?2 AND ply_number = ?3",
+                params![best_move, game_id, (idx + 1) as u32],
             )?;
         }
 
@@ -303,7 +313,7 @@ impl<'a> GameService<'a> {
     /// analyzer.
     pub fn game_moves(&self, game_id: u32) -> rusqlite::Result<Vec<GameMoveRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT ply_number, san, uci, time_ms, eval_cp, quality FROM game_moves
+            "SELECT ply_number, san, uci, time_ms, eval_cp, quality, best_uci FROM game_moves
              WHERE game_id = ?1 ORDER BY ply_number",
         )?;
         let rows = stmt.query_map(params![game_id], |row| GameMoveRow::try_from(row))?;
@@ -329,21 +339,52 @@ impl<'a> GameService<'a> {
         rows.collect()
     }
 
-    /// Deletes a game and everything hanging off it — moves, analysis, and
-    /// its chats. The foreign keys carry no `ON DELETE` clause and SQLite
+    /// Every game with a side picked for the player: its opening's name
+    /// (`None` when it left the catalogue before any named line, or
+    /// predates it), the player's side and the result.
+    pub fn human_games_by_opening(
+        &self,
+    ) -> rusqlite::Result<Vec<(Option<String>, PieceColor, GameResult)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT o.opening_name, g.human_color, g.result FROM games g
+             LEFT JOIN openings o ON o.opening_id = g.opening_id
+             WHERE g.human_color IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get("opening_name")?,
+                parse_text(row, "human_color", color_from_db)?,
+                parse_text(row, "result", GameResult::parse)?,
+            ))
+        })?;
+        rows.collect()
+    }
+
+    /// Deletes a game and everything hanging off it — moves, analysis,
+    /// moments, and its chats with their usage and tool calls. The foreign keys carry no `ON DELETE` clause and SQLite
     /// enforces them on this connection, so the children are removed
     /// explicitly, deepest first, all in one transaction. Returns
     /// the number of `games` rows removed: 0 if `game_id` didn't exist,
     /// 1 otherwise.
     pub fn delete_game(&self, game_id: u32) -> rusqlite::Result<usize> {
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute(
-            "DELETE FROM message_usage
-             WHERE message_id IN (
-                 SELECT message_id FROM messages
-                 WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1))",
-            params![game_id],
-        )?;
+        for message_child in ["message_usage", "message_tool_calls"] {
+            tx.execute(
+                &format!(
+                    "DELETE FROM {message_child}
+                     WHERE message_id IN (
+                         SELECT message_id FROM messages
+                         WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1))"
+                ),
+                params![game_id],
+            )?;
+        }
+        for game_child in ["game_moments", "game_phase_stats", "moment_scans"] {
+            tx.execute(
+                &format!("DELETE FROM {game_child} WHERE game_id = ?1"),
+                params![game_id],
+            )?;
+        }
         tx.execute(
             "DELETE FROM messages
              WHERE chat_id IN (SELECT chat_id FROM chats WHERE game_id = ?1)",
@@ -518,9 +559,15 @@ mod tests {
             // Index 0 is the start position (no game_moves row); ply 1 and
             // ply 2 are what `save` already created rows for.
             let centipawn_history = vec![0, 20, -10];
+            // Indexed like the evals: the last position's has no row.
+            let best_moves = vec![
+                Some("d2d4".to_string()),
+                Some("g8f6".to_string()),
+                Some("b1c3".to_string()),
+            ];
 
             service
-                .save_move_analysis(game_id, &move_qualities, &centipawn_history)
+                .save_move_analysis(game_id, &move_qualities, &centipawn_history, &best_moves)
                 .unwrap();
 
             let move_count: u32 = conn
@@ -543,6 +590,15 @@ mod tests {
             assert_eq!(eval_cp, 20);
             assert_eq!(quality.as_deref(), Some("good"));
             assert_eq!(centipawn_loss, Some(12));
+
+            // The start position's best move goes on ply 1's row.
+            let best_uci: Vec<Option<String>> = service
+                .game_moves(game_id)
+                .unwrap()
+                .into_iter()
+                .map(|row| row.best_uci)
+                .collect();
+            assert_eq!(best_uci, [Some("d2d4".into()), Some("g8f6".into())]);
 
             let untouched_eval_cp: i32 = conn
                 .query_row(
@@ -626,12 +682,37 @@ mod tests {
             params![chat_id],
         )
         .unwrap();
+        let message_id = conn.last_insert_rowid();
         conn.execute(
             "INSERT INTO message_usage
                  (message_id, model, input_tokens, cached_input_tokens,
                   cache_write_tokens, output_tokens, reasoning_tokens)
              VALUES (?1, 'm', 1, 0, 0, 1, 0)",
-            params![conn.last_insert_rowid()],
+            params![message_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO message_tool_calls (message_id, position, name, arguments, output)
+             VALUES (?1, 0, 'get_position', '{}', '')",
+            params![message_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO game_moments (game_id, ply, kind, outcome, phase)
+             VALUES (?1, 1, 'winning_position', 'won', 'opening')",
+            params![game_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO game_phase_stats
+                 (game_id, phase, moves, mistakes, blunders, loss_cp_total)
+             VALUES (?1, 'opening', 1, 0, 0, 0)",
+            params![game_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO moment_scans (game_id, rules_version) VALUES (?1, 1)",
+            params![game_id],
         )
         .unwrap();
 
@@ -660,6 +741,9 @@ mod tests {
         assert_eq!(count(&conn, "game_moves", game_id), 0);
         assert_eq!(count(&conn, "analysis", game_id), 0);
         assert_eq!(count(&conn, "chats", game_id), 0);
+        for moment_table in ["game_moments", "game_phase_stats", "moment_scans"] {
+            assert_eq!(count(&conn, moment_table, game_id), 0, "{moment_table}");
+        }
         let orphan_messages: i64 = conn
             .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
             .unwrap();

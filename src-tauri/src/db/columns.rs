@@ -12,7 +12,7 @@
 //! parse is a bad write — reported as an error naming the column, never
 //! quietly turned into a default.
 
-use koch_engine::PieceColor;
+use koch_engine::{PieceColor, PieceType};
 use rusqlite::{types::Type, Row};
 
 /// `games.human_color`'s spelling of a side.
@@ -27,6 +27,30 @@ pub fn color_from_db(raw: &str) -> Option<PieceColor> {
     match raw {
         "white" => Some(PieceColor::White),
         "black" => Some(PieceColor::Black),
+        _ => None,
+    }
+}
+
+/// `game_moments.piece`'s spelling of a piece type.
+pub fn piece_to_db(kind: PieceType) -> &'static str {
+    match kind {
+        PieceType::Pawn => "pawn",
+        PieceType::Knight => "knight",
+        PieceType::Bishop => "bishop",
+        PieceType::Rook => "rook",
+        PieceType::Queen => "queen",
+        PieceType::King => "king",
+    }
+}
+
+pub fn piece_from_db(raw: &str) -> Option<PieceType> {
+    match raw {
+        "pawn" => Some(PieceType::Pawn),
+        "knight" => Some(PieceType::Knight),
+        "bishop" => Some(PieceType::Bishop),
+        "rook" => Some(PieceType::Rook),
+        "queen" => Some(PieceType::Queen),
+        "king" => Some(PieceType::King),
         _ => None,
     }
 }
@@ -76,6 +100,21 @@ mod tests {
     fn a_colour_round_trips_through_its_column_spelling() {
         for color in [PieceColor::White, PieceColor::Black] {
             assert_eq!(color_from_db(color_to_db(color)), Some(color));
+        }
+    }
+
+    #[test]
+    fn a_piece_type_round_trips_through_its_column_spelling() {
+        let kinds = [
+            PieceType::Pawn,
+            PieceType::Knight,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::Queen,
+            PieceType::King,
+        ];
+        for kind in kinds {
+            assert_eq!(piece_from_db(piece_to_db(kind)), Some(kind));
         }
     }
 

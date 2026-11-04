@@ -225,11 +225,22 @@ export const threatMask = (uci: string | null): OverlayMask =>
   engineMoveMask(maskIdFor.threat, uci, "danger");
 
 /**
- * A move the assistant named, drawn ghosted while the pointer is on it in
- * the chat: it's a look at the move, not something switched on.
+ * A move the assistant named, while the pointer is on it in the chat: the
+ * move itself, with the moves of its line that came before it ghosted
+ * underneath, so a line stepped through still shows how it got here.
  */
-export const chatMoveMask = (uci: string): OverlayMask =>
-  ghosted(engineMoveMask(maskIdFor.chatMove, uci, "good"));
+export const chatMoveMask = (
+  uci: string,
+  trail: readonly string[],
+): OverlayMask => {
+  const move = engineMoveMask(maskIdFor.chatMove, uci, "good");
+  const earlier = trail.flatMap(
+    (earlierUci) =>
+      ghosted(engineMoveMask(maskIdFor.chatMove, earlierUci, "good")).arrows ??
+      [],
+  );
+  return { ...move, arrows: [...earlier, ...(move.arrows ?? [])] };
+};
 
 /**
  * Every mask the viewed position's findings can draw.

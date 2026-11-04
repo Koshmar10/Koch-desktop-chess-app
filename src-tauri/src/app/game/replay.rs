@@ -54,6 +54,11 @@ pub struct ReplayPosition {
     /// and for an analysis saved before both sides were graded, `None` on
     /// the opponent's moves until it's re-analysed.
     pub quality: Option<MoveQuality>,
+    /// The engine's best move *from* this position, in UCI — unlike the
+    /// fields above, it's about the move to come, not the one played. `None`
+    /// until the game has been analysed, after the last move, and for an
+    /// analysis saved before best moves were.
+    pub best_move_uci: Option<String>,
 }
 
 #[derive(Serialize, TS)]
@@ -98,6 +103,7 @@ impl ReplayPosition {
             time_ms: None,
             eval_cp: None,
             quality: None,
+            best_move_uci: None,
         }
     }
 }
@@ -162,6 +168,10 @@ pub(crate) fn replay_positions(moves: &[GameMoveRow]) -> Result<Vec<ReplayPositi
     for played in moves {
         let (last_move, _) = play_uci(&mut board, &played.uci)
             .map_err(|err| format!("{err} (ply {} of the saved game)", played.ply_number))?;
+        // Stored on the row of the move played from the position before.
+        if let Some(before) = positions.last_mut() {
+            before.best_move_uci = played.best_uci.clone();
+        }
         // The stored SAN, not the one just worked out: it's what the game
         // was saved with, and what the move list shows everywhere else.
         positions.push(ReplayPosition {
@@ -225,6 +235,7 @@ mod tests {
             time_ms: 1_000,
             eval_cp: None,
             quality: None,
+            best_uci: None,
         }
     }
 
@@ -239,6 +250,17 @@ mod tests {
             row(6, "Nf6", "g8f6"),
             row(7, "Qxf7#", "h5f7"),
         ]
+    }
+
+    #[test]
+    fn a_best_move_belongs_to_the_position_it_is_played_from() {
+        let mut moves = scholars_mate();
+        moves[0].best_uci = Some("d2d4".to_string());
+        let positions = replay_positions(&moves).unwrap();
+
+        assert_eq!(positions[0].best_move_uci.as_deref(), Some("d2d4"));
+        assert_eq!(positions[1].best_move_uci, None);
+        assert_eq!(positions[7].best_move_uci, None);
     }
 
     #[test]

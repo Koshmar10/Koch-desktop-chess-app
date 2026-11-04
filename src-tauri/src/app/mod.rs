@@ -10,6 +10,7 @@ pub mod error;
 pub mod events;
 pub mod game;
 pub mod live_engine;
+pub mod moments;
 pub mod puzzle;
 pub mod rating;
 pub mod sessions;

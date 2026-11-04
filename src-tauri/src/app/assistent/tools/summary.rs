@@ -19,18 +19,13 @@ pub(in crate::app::assistent) fn position_summary(ply: i32, position: &ReplayPos
     let describe_all = |ids: &[u32]| ids.iter().filter_map(describe).collect::<Vec<_>>();
 
     let findings = &position.findings;
-    let side_to_move = match position.fen.split_whitespace().nth(1) {
-        Some("b") => "Black",
-        _ => "White",
-    };
 
     json!({
         "ply": ply,
         "fen": position.fen,
-        "side_to_move": side_to_move,
+        "side_to_move": side_to_move(position),
         "move_played": position.san,
-        // Stored White-relative, and said so, rather than flipped to a side.
-        "eval": position.eval_cp.map(|cp| format!("{:+.2} (positive favours White)", f64::from(cp) / 100.0)),
+        "eval": position.eval_cp.map(eval_text),
         "move_quality": position.quality,
         "hanging_pieces": position
             .pieces
@@ -63,4 +58,18 @@ pub(in crate::app::assistent) fn position_summary(ply: i32, position: &ReplayPos
                 "doubled": describe_all(&structure.doubled_pawn_ids),
             }))),
     })
+}
+
+/// "White" or "Black", read from the FEN.
+pub(super) fn side_to_move(position: &ReplayPosition) -> &'static str {
+    match position.fen.split_whitespace().nth(1) {
+        Some("b") => "Black",
+        _ => "White",
+    }
+}
+
+/// An eval in pawns. Stored White-relative, and said so, rather than
+/// flipped to a side.
+pub(super) fn eval_text(cp: i32) -> String {
+    format!("{:+.2} (positive favours White)", f64::from(cp) / 100.0)
 }

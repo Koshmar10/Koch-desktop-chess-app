@@ -31,6 +31,11 @@ pub fn run() {
             app.manage(AnalysisQueue(analysis_tx));
             tauri::async_runtime::spawn(analysis::worker(app.handle().clone(), analysis_rx));
 
+            // Replaying games is CPU work, so it gets a blocking thread
+            // rather than a slot on the async runtime.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn_blocking(move || app::moments::rescan_stale(&handle));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

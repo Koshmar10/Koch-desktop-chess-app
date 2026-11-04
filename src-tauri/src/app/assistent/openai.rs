@@ -16,10 +16,39 @@ pub(super) struct ModelTextRequest {
     pub store: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<Tool>,
+    pub tool_choice: ToolChoice,
+    pub reasoning: Reasoning,
     /// Sends requests with the same key to the same cache, so a chat's
     /// growing prefix keeps hitting it. `None` for the sandbox.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_cache_key: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub(super) struct Reasoning {
+    pub effort: ReasoningEffort,
+}
+
+/// How long the model thinks before it answers. Thinking is billed as
+/// output, the dearest kind of token, so most of an answer's cost is here.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[expect(dead_code, reason = "Medium and High wait for a deep-mode setting")]
+pub(super) enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+}
+
+/// Whether the model may call tools this round. The tools stay in the
+/// request either way, so the cached prefix doesn't change.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum ToolChoice {
+    /// It decides: call tools or answer.
+    Auto,
+    /// It must answer with what it has.
+    None,
 }
 
 /// One item of the request's `input`. Within one answer, each round sends

@@ -30,4 +30,11 @@ eval_cp: number | null,
  * and for an analysis saved before both sides were graded, `None` on
  * the opponent's moves until it's re-analysed.
  */
-quality: MoveQuality | null, };
+quality: MoveQuality | null, 
+/**
+ * The engine's best move *from* this position, in UCI — unlike the
+ * fields above, it's about the move to come, not the one played. `None`
+ * until the game has been analysed, after the last move, and for an
+ * analysis saved before best moves were.
+ */
+best_move_uci: string | null, };

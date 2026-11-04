@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MoveQuality } from "../../../../api/bindings/MoveQuality";
 import { START_POSITION_PLY } from "../../../../lib/ply";
-import { nextMistakePly } from "../nextMistake";
+import { nextMistakePly, previousMistakePly } from "../nextMistake";
 
 // White's moves on even plies, Black's on odd ones.
 const QUALITIES: (MoveQuality | null)[] = [
@@ -34,5 +34,24 @@ describe("nextMistakePly", () => {
 
   it("is null once there are none left", () => {
     expect(nextMistakePly(QUALITIES, 4, null)).toBe(null);
+  });
+});
+
+describe("previousMistakePly", () => {
+  it("finds the last mistake or blunder before the viewed ply", () => {
+    expect(previousMistakePly(QUALITIES, 5, null)).toBe(4);
+  });
+
+  it("skips the move on screen itself", () => {
+    expect(previousMistakePly(QUALITIES, 4, null)).toBe(3);
+  });
+
+  it("only counts the given side's moves", () => {
+    expect(previousMistakePly(QUALITIES, 5, "black")).toBe(3);
+  });
+
+  it("is null before the first one", () => {
+    expect(previousMistakePly(QUALITIES, 3, null)).toBe(null);
+    expect(previousMistakePly(QUALITIES, START_POSITION_PLY, null)).toBe(null);
   });
 });

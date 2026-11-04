@@ -172,6 +172,7 @@ mod tests {
             human_move_times_ms: vec![],
             total_duration_ms: 0,
             position_findings: vec![],
+            best_moves: vec![],
         }
     }
 

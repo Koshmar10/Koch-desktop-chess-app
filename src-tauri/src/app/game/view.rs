@@ -109,7 +109,7 @@ impl GameSource {
 
 /// One piece on the board, flattened for the frontend — just enough to
 /// render it, not `koch_engine::ChessPiece`'s internal `has_moved` etc.
-#[derive(Clone, Serialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct PieceView {
     pub id: u32,
