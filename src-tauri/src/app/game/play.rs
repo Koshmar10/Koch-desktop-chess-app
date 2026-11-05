@@ -199,9 +199,11 @@ pub(super) async fn finish_game(app: &AppHandle, game: Game) -> Result<(), AppEr
 pub(super) fn spawn_engine_reply(app: AppHandle, game: Game) {
     tauri::async_runtime::spawn(async move {
         // A background task has no caller to hand an error back to, so this
-        // is the one place its failures end up.
+        // is the one place its failures end up. The frontend is told too:
+        // it's waiting on a move, and used to wait for one forever.
         if let Err(err) = play_engine_reply(&app, game).await {
             eprintln!("engine reply failed: {err}");
+            let _ = app.emit(events::ENGINE_MOVE_FAILED, err.to_string());
         }
     });
 }

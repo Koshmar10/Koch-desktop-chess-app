@@ -47,6 +47,7 @@ pub fn run() {
             app::game::commands::start_game,
             app::game::commands::end_game,
             app::game::commands::make_move,
+            app::game::commands::retry_engine_reply,
             app::game::commands::get_games,
             app::game::commands::delete_game,
             app::game::commands::analyze_game,

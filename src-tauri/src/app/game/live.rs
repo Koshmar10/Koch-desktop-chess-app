@@ -58,19 +58,8 @@ impl Game {
         human_color: PieceColor,
         time_control: TimeControl,
     ) -> Result<Self, UciError> {
-        // The engine plays at whichever side's rating isn't the human's.
-        let engine_elo = match human_color {
-            PieceColor::White => black_player.elo,
-            PieceColor::Black => white_player.elo,
-        };
-
-        let mut engine = Engine::spawn(ENGINE_PATH).await?;
-        engine.set_option("UCI_LimitStrength", Some("true")).await?;
-        engine
-            .set_option("UCI_Elo", Some(&engine_elo.to_string()))
-            .await?;
-        engine.new_game().await?;
-        engine.set_position_startpos(&[]).await?;
+        let elo = engine_elo(human_color, &white_player, &black_player);
+        let engine = spawn_engine(elo, &[]).await?;
 
         Ok(Game {
             engine,
@@ -119,6 +108,40 @@ impl Game {
             elapsed_this_turn_ms: self.turn_started_at.elapsed().as_millis() as u32,
         }
     }
+
+    /// Swaps in a fresh Stockfish, told the moves played so far — for a
+    /// retry after the engine's reply failed. Asking the old one again
+    /// fails the same way if its process has died.
+    pub async fn restart_engine(&mut self) -> Result<(), UciError> {
+        let uci_moves: Vec<String> = self.move_list.iter().map(|m| m.uci.clone()).collect();
+        let elo = engine_elo(self.human_color, &self.white_player, &self.black_player);
+        // The old engine's process is killed as it's dropped here.
+        self.engine = spawn_engine(elo, &uci_moves).await?;
+        Ok(())
+    }
+}
+
+/// The engine plays at whichever side's rating isn't the human's.
+fn engine_elo(
+    human_color: PieceColor,
+    white_player: &PlayerInfo,
+    black_player: &PlayerInfo,
+) -> u32 {
+    match human_color {
+        PieceColor::White => black_player.elo,
+        PieceColor::Black => white_player.elo,
+    }
+}
+
+/// A Stockfish playing at `elo`, set up for a new game and told `moves`
+/// from the start position.
+async fn spawn_engine(elo: u32, moves: &[String]) -> Result<Engine, UciError> {
+    let mut engine = Engine::spawn(ENGINE_PATH).await?;
+    engine.set_option("UCI_LimitStrength", Some("true")).await?;
+    engine.set_option("UCI_Elo", Some(&elo.to_string())).await?;
+    engine.new_game().await?;
+    engine.set_position_startpos(moves).await?;
+    Ok(engine)
 }
 
 /// Every piece's legal destinations, keyed by piece id — the shape the

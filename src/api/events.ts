@@ -17,6 +17,8 @@ import type { ToolCallStarted } from "./bindings/ToolCallStarted";
  */
 export interface AppEvents {
   "engine-move-complete": GameStateView;
+  // The error's message; no "engine-move-complete" is coming.
+  "engine-move-failed": string;
   "analysis-status": AnalysisStatus;
   // How far the running analysis pass is, 0–100.
   "update-analysis-progress": number;

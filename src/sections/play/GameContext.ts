@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
+import type { GameStateView } from "../../api/bindings/GameStateView";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
@@ -24,6 +25,19 @@ export const isTurn = (
   game: GameCreateResponse | null,
   color: PieceColor,
 ): boolean => (game ? game.state.turn === color : color === "white");
+
+// The engine's reply can arrive before the response to the move it answers:
+// a forced reply takes Stockfish a few milliseconds, and the two travel
+// separately. Showing that response last put the board back to before the
+// reply, waiting on a move already played. Within a game `move_history`
+// only grows, so the longer state is the newer one.
+export const newerState = (
+  current: GameStateView,
+  incoming: GameStateView,
+): GameStateView =>
+  incoming.move_history.length < current.move_history.length
+    ? current
+    : incoming;
 
 export interface GameContextValue {
   game: GameCreateResponse | null;
@@ -57,6 +71,10 @@ export interface GameContextValue {
   selectedMode: GameMode;
   setSelectedMode: (mode: GameMode) => void;
   isStartingGame: boolean;
+  // Why the engine's reply failed, while the board waits on a move that
+  // isn't coming. Null otherwise.
+  engineError: string | null;
+  retryEngineReply: () => Promise<void>;
   startGame: () => Promise<void>;
   // losingSide defaults to humanColor (Resignation is always the human
   // clicking the button) but Timeout can hit either side, so callers can

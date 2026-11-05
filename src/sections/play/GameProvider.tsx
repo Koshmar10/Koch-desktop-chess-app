@@ -3,6 +3,7 @@ import {
   startGame as apiStartGame,
   endGame as apiEndGame,
   makeMove as apiMakeMove,
+  retryEngineReply as apiRetryEngineReply,
 } from "../../api/game";
 import type { GameAnalysis } from "../../api/bindings/GameAnalysis";
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
@@ -11,7 +12,7 @@ import type { Square } from "../../api/bindings/Square";
 import type { TerminationReason } from "../../api/bindings/TerminationReason";
 import { useAppEvent } from "../../app/useAppEvent";
 import { MODE_TIME_CONTROL, type GameMode } from "../../lib/gameModes";
-import { GameContext, type ColorPreference } from "./GameContext";
+import { GameContext, newerState, type ColorPreference } from "./GameContext";
 
 const randomColor = (): PieceColor => (Math.random() < 0.5 ? "white" : "black");
 
@@ -36,6 +37,7 @@ const GameProvider = ({ children }: GameProviderProps) => {
     useState<ColorPreference>("random");
   const [selectedMode, setSelectedMode] = useState<GameMode>("Rapid");
   const [isStartingGame, setIsStartingGame] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   // The backend pushes this once, well after the game-ending response
   // itself, whenever a game finishes (checkmate/stalemate via make_move,
@@ -55,6 +57,9 @@ const GameProvider = ({ children }: GameProviderProps) => {
     setGame((prev) => (prev ? { ...prev, state } : prev));
     setGameReceivedAt(Date.now());
   });
+
+  // Instead of "engine-move-complete", when the engine's reply failed.
+  useAppEvent("engine-move-failed", setEngineError);
 
   const cycleColorPreference = () => {
     setColorPreference((prev) => nextColorPreference(prev));
@@ -88,6 +93,7 @@ const GameProvider = ({ children }: GameProviderProps) => {
       setAnalysisProgress(null);
       setIsResultDismissed(false);
       setIsSharingPgn(false);
+      setEngineError(null);
     } catch (err) {
       console.error("failed to start game:", err);
     } finally {
@@ -109,15 +115,27 @@ const GameProvider = ({ children }: GameProviderProps) => {
       // it went, and the final position/clocks/orientation should stay on
       // screen behind it rather than snapping back to placeholders.
       setGame((prev) => (prev ? { ...prev, state: finalState } : prev));
+      setEngineError(null);
     } catch (err) {
       console.error("failed to end game:", err);
+    }
+  };
+
+  const retryEngineReply = async () => {
+    setEngineError(null);
+    try {
+      await apiRetryEngineReply();
+    } catch (err) {
+      setEngineError(String(err));
     }
   };
 
   const makeMove = async (from: Square, to: Square) => {
     try {
       const newState = await apiMakeMove(from, to, null);
-      setGame((prev) => (prev ? { ...prev, state: newState } : prev));
+      setGame((prev) =>
+        prev ? { ...prev, state: newerState(prev.state, newState) } : prev,
+      );
       setGameReceivedAt(Date.now());
     } catch (err) {
       console.error("move failed:", err);
@@ -142,6 +160,8 @@ const GameProvider = ({ children }: GameProviderProps) => {
         selectedMode,
         setSelectedMode,
         isStartingGame,
+        engineError,
+        retryEngineReply,
         startGame,
         endGame,
         makeMove,

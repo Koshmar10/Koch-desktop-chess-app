@@ -188,6 +188,29 @@ pub async fn make_move(
     Ok(response)
 }
 
+/// Asks for the engine's move again after `engine-move-failed`, from a
+/// fresh Stockfish. Returns once the reply is under way; the move itself
+/// arrives as `engine-move-complete`, like any other engine reply.
+#[tauri::command]
+pub async fn retry_engine_reply(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let mut game = take_active_game(&state)?.ok_or("no active game to retry")?;
+
+    if game.board.turn == game.human_color {
+        restore_active_game(&state, game)?;
+        return Err("it's your move, not the engine's".into());
+    }
+    if let Err(err) = game.restart_engine().await {
+        restore_active_game(&state, game)?;
+        return Err(err.into());
+    }
+
+    spawn_engine_reply(app, game);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, AppError> {
     let conn = db.lock()?;
