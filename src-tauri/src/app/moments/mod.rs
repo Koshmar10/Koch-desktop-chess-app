@@ -69,6 +69,22 @@ impl MomentKind {
             MomentKind::WinningPosition | MomentKind::LosingPosition
         )
     }
+
+    /// Whether `outcome` is the player handling a moment of this kind well.
+    /// The outcome alone can't say: a draw saves a losing position but lets
+    /// a winning one go.
+    pub fn is_handled_by(self, outcome: MomentOutcome) -> bool {
+        match self {
+            MomentKind::MaterialChance => outcome == MomentOutcome::Taken,
+            MomentKind::ThreatenedPiece => {
+                matches!(outcome, MomentOutcome::Saved | MomentOutcome::Countered)
+            }
+            MomentKind::WinningPosition => outcome == MomentOutcome::Won,
+            MomentKind::LosingPosition => {
+                matches!(outcome, MomentOutcome::Won | MomentOutcome::Drew)
+            }
+        }
+    }
 }
 
 /// What the player did. Each kind uses its own few.
@@ -186,4 +202,32 @@ pub struct PhaseStats {
     /// Centipawns lost over those moves, summed so phases can be averaged
     /// across games by move rather than by game.
     pub loss_cp_total: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_kind_is_handled_by_its_own_outcomes() {
+        use MomentKind::*;
+        use MomentOutcome::*;
+        let cases = [
+            (MaterialChance, Taken, true),
+            (MaterialChance, Missed, false),
+            (ThreatenedPiece, Saved, true),
+            (ThreatenedPiece, Countered, true),
+            (ThreatenedPiece, Ignored, false),
+            (WinningPosition, Won, true),
+            (WinningPosition, Drew, false),
+            (WinningPosition, Lost, false),
+            // The same draw that let a win go saved this one.
+            (LosingPosition, Won, true),
+            (LosingPosition, Drew, true),
+            (LosingPosition, Lost, false),
+        ];
+        for (kind, outcome, handled) in cases {
+            assert_eq!(kind.is_handled_by(outcome), handled, "{kind:?} {outcome:?}");
+        }
+    }
 }

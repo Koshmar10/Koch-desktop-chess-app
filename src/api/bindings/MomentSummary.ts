@@ -23,7 +23,12 @@ ply_count: number,
 /**
  * The board `start_ply` was played from, as the moment's card shows it.
  */
-pieces: Array<PieceView>, kind: MomentKind, outcome: MomentOutcome, phase: Phase, 
+pieces: Array<PieceView>, kind: MomentKind, outcome: MomentOutcome, 
+/**
+ * Whether the player handled it well, by its kind's rule
+ * (`MomentKind::is_handled_by`), so no screen decides it for itself.
+ */
+handled: boolean, phase: Phase, 
 /**
  * The piece it's about, for the kinds that have one.
  */

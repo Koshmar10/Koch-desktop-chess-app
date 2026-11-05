@@ -259,6 +259,8 @@ mod tests {
         assert_eq!(summary.opponent_name, "Bo");
         assert_eq!(summary.human_color, PieceColor::White);
         assert_eq!(summary.human_score, Some(GameScore::Win));
+        // The game was won, but this chance was missed.
+        assert!(!summary.handled);
         assert_eq!(summary.piece, Some(PieceType::Pawn));
         assert_eq!(summary.square, square_from_db("e5"));
     }
