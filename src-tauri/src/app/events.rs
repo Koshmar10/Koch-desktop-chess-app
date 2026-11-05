@@ -8,6 +8,10 @@
 /// The engine's reply to the human's move is on the board — a `GameStateView`.
 pub const ENGINE_MOVE_COMPLETE: &str = "engine-move-complete";
 
+/// The engine's reply failed, so no `ENGINE_MOVE_COMPLETE` is coming — the
+/// error's message.
+pub const ENGINE_MOVE_FAILED: &str = "engine-move-failed";
+
 /// One game's analysis has moved through the queue — an `AnalysisStatus`.
 pub const ANALYSIS_STATUS: &str = "analysis-status";
 

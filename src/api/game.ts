@@ -40,6 +40,12 @@ export const makeMove = (
   return invoke<GameStateView>("make_move", { from, to, promotion });
 };
 
+// Asks a fresh engine for its move after "engine-move-failed". Resolves
+// once the reply is under way; the move arrives as "engine-move-complete".
+export const retryEngineReply = (): Promise<void> => {
+  return invoke("retry_engine_reply");
+};
+
 export const getGames = (): Promise<GameSummary[]> => {
   return invoke<GameSummary[]>("get_games");
 };

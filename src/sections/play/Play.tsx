@@ -17,6 +17,7 @@ import { useGameContext, isGameOngoing, isTurn } from "./GameContext";
 import type { PlayerInfo } from "../../api/bindings/PlayerInfo";
 import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameResultCard from "./GameResultCard";
+import EngineErrorCard from "./EngineErrorCard";
 import SharePgnCard from "./SharePgnCard";
 import type { GameCreateResponse } from "../../api/bindings/GameCreateResponse";
 
@@ -61,6 +62,7 @@ const Play = () => {
     humanColor,
     selectedMode,
     isStartingGame,
+    engineError,
     makeMove,
     endGame,
   } = useGameContext();
@@ -155,6 +157,11 @@ const Play = () => {
             {isStartingGame && (
               <BoardOverlay>
                 <LoadingSpinner message="Starting game…" />
+              </BoardOverlay>
+            )}
+            {engineError !== null && (
+              <BoardOverlay>
+                <EngineErrorCard />
               </BoardOverlay>
             )}
             {showResultCard && (
