@@ -1,7 +1,10 @@
 import { createContext, useContext } from "react";
 import type { MovePreview } from "../lib/segments";
 
-/** What the chat needs from the board it sits beside. */
+/**
+ * What the chat needs from the board it sits beside. The Engine tab's
+ * lines read it too, so a line previews and plays the same from either.
+ */
 export interface ChatBoard {
   // The ply on the board, as an index (-1 is the start position).
   viewedPly: number;

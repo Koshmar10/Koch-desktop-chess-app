@@ -1,34 +1,31 @@
 // @vitest-environment jsdom
 import Home from "../Home";
-import { STAT_CARDS } from "../statCards";
 import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
-const HOME_CARD_TEST_ID = "home-card";
+const renderHome = () =>
+  render(
+    <MemoryRouter>
+      <Home />
+    </MemoryRouter>,
+  );
 
 describe("Home tests", () => {
   afterEach(cleanup);
 
-  it("Test that Home renders the greeting message", () => {
-    render(<Home />);
+  it("Test that Home renders each section's title", () => {
+    renderHome();
 
-    expect(screen.getByText("Welcome back, player")).toBeInTheDocument();
-  });
-
-  it("Test that Home renders a HomeCard for every stat card in mock data", () => {
-    render(<Home />);
-
-    const cards = screen.getAllByTestId(HOME_CARD_TEST_ID);
-
-    expect(cards).toHaveLength(STAT_CARDS.length);
-  });
-
-  it("Test that Home renders each stat card's label", () => {
-    render(<Home />);
-
-    STAT_CARDS.forEach((card) => {
-      expect(screen.getByText(card.label)).toBeInTheDocument();
-    });
+    [
+      "Form guide",
+      "Your army",
+      "At the board",
+      "Puzzle record",
+      "This week's moments",
+      "The scoresheet",
+      "Opening lines",
+    ].forEach((title) => expect(screen.getByText(title)).toBeInTheDocument());
   });
 });

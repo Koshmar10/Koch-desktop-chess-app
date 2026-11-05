@@ -73,6 +73,8 @@ pub fn run() {
             app::game::sandbox::sandbox_move,
             app::game::sandbox::sandbox_undo,
             app::puzzle::commands::get_puzzle,
+            app::puzzle::commands::record_puzzle_attempt,
+            app::puzzle::commands::get_puzzle_stats,
             app::assistent::commands::send_assistent_request,
             app::assistent::commands::retry_assistent_request,
             app::assistent::commands::get_assistent_conversation,

@@ -20,8 +20,8 @@ pub struct SegmentMove {
     pub san: String,
     /// `None` if the move isn't legal where it was played.
     pub uci: Option<String>,
-    /// The board the move is played from, so the chat can show it where it
-    /// happens whatever ply the board is on, and step through a line with
+    /// The board the move is played from, so the chat and the Engine tab can
+    /// show it where it happens whatever ply the board is on, and step through a line with
     /// its pieces moving. Empty for a move that isn't verified: there's no
     /// board it can be shown on.
     pub pieces_before: Vec<PieceView>,
@@ -43,6 +43,24 @@ impl SegmentMove {
                 pieces_before,
             },
             None => Self::unverified(san),
+        }
+    }
+
+    /// The same for a move in UCI, as Stockfish sends its lines; its SAN is
+    /// worked out from the board. A move that doesn't play is listed as it
+    /// came, unverified.
+    pub(crate) fn play_uci(board: Option<&mut Board>, uci: &str) -> Self {
+        let Some(board) = board else {
+            return Self::unverified(uci);
+        };
+        let pieces_before = replay::pieces_of(board);
+        match replay::play_uci(board, uci) {
+            Ok((_, played)) => Self {
+                san: played.san,
+                uci: Some(played.uci),
+                pieces_before,
+            },
+            Err(_) => Self::unverified(uci),
         }
     }
 

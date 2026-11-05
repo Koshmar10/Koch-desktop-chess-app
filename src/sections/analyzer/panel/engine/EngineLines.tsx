@@ -1,5 +1,7 @@
 import { Layers, LoaderCircle } from "lucide-react";
 import EmptyNote from "../../../../components/EmptyNote";
+import MovesChip from "../../../../components/MovesChip";
+import { useChatBoard } from "../../../../components/chatBoard";
 import {
   EVAL_UNKNOWN_LABEL,
   evalBarWhiteFraction,
@@ -46,6 +48,7 @@ const StatusPill = ({ status, onToggle }: StatusPillProps) => {
 };
 
 const PvLineRow = ({ line }: { line: PvLine }) => {
+  const { viewedPly } = useChatBoard();
   // The one place that decides what a score's sign means is
   // `evalBarWhiteFraction`; reusing it here keeps the chip and the bar
   // from ever disagreeing about who a position favours.
@@ -53,18 +56,18 @@ const PvLineRow = ({ line }: { line: PvLine }) => {
   const chipClass = favoursWhite
     ? "bg-neutral-100 text-neutral-900"
     : "bg-neutral-900 text-neutral-100";
-  const moves = line.moves.join(" ");
 
   return (
-    <div className="flex flex-row items-center gap-2">
+    // Top-aligned, so the score stays level with the line's first row when
+    // the moves wrap.
+    <div className="flex flex-row items-start gap-2">
       <span
         className={`w-13 shrink-0 rounded px-1 text-right font-mono tabular-nums ${chipClass}`}
       >
         {formatEvalScore(line.score)}
       </span>
-      <span className="truncate text-foreground/80" title={moves}>
-        {moves}
-      </span>
+      {/* Every line starts from the position on the board. */}
+      <MovesChip moves={line.moves} startPly={viewedPly} />
     </div>
   );
 };

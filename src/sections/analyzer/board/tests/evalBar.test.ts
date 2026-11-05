@@ -84,10 +84,14 @@ describe("topLineMove", () => {
     // Black to move, every score White-relative: line 1 is the most
     // negative. The highest-scoring line here is Black's *worst* option.
     const lines = [
-      { score: cp(-180), moves: ["c6a5", "b3c2"] },
-      { score: cp(20), moves: ["h7h6"] },
+      { score: cp(-180), moves: [{ uci: "c6a5" }, { uci: "b3c2" }] },
+      { score: cp(20), moves: [{ uci: "h7h6" }] },
     ];
     expect(topLineMove(lines)).toBe("c6a5");
+  });
+
+  it("has no move when line 1's first move couldn't be verified", () => {
+    expect(topLineMove([{ moves: [{ uci: null }] }])).toBeNull();
   });
 
   it("has no move before the engine reports one", () => {

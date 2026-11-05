@@ -49,6 +49,7 @@ import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
 import ImportPgnFenOverlay from "./board-overlays/ImportPgnFenOverlay";
 import GameSelectOverlay from "./board-overlays/GameSelectOverlay";
 import ChatPannel from "../../components/ChatPannel";
+import { ChatBoardContext } from "../../components/chatBoard";
 import { isTyping } from "./utils";
 import CommandPaletteOverlay from "./board-overlays/CommandPaletteOverlay";
 import { commandForKey, type PaletteCommand } from "../../lib/commandPalette";
@@ -401,6 +402,15 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     },
     [positions, playSandboxLine, navigate],
   );
+  const lineBoard = useMemo(
+    () => ({
+      viewedPly,
+      onGoToPly: goToPly,
+      onPreviewMove: setChatPreview,
+      onPlayLine: playChatLine,
+    }),
+    [viewedPly, goToPly, playChatLine],
+  );
   // The same two steps as opening one from History. The new route remounts
   // this screen, but the overlay's open flag lives in the provider and
   // would survive that — so it's closed here too.
@@ -708,24 +718,28 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
 
             <div className="col-start-3 row-start-2">
               <MaskSelectionContext value={maskSelection}>
-                <SidePanel
-                  game={game}
-                  moves={moves}
-                  qualities={qualities}
-                  whiteAccuracy={whiteAccuracy}
-                  blackAccuracy={blackAccuracy}
-                  viewedPly={viewedPly}
-                  onSelectPly={goToPly}
-                  snapshot={snapshot}
-                  findings={findings}
-                  pieces={pieces}
-                  bestMove={bestMove}
-                  threatMove={threatMove}
-                  engineStatus={engineStatus}
-                  onToggleEngine={toggleEngine}
-                  onEngineSettingsApplied={resumeSearch}
-                  isGameMode={isGameMode}
-                />
+                {/* The Engine tab's lines preview and play the way the
+                    chat's do, on the same board. */}
+                <ChatBoardContext value={lineBoard}>
+                  <SidePanel
+                    game={game}
+                    moves={moves}
+                    qualities={qualities}
+                    whiteAccuracy={whiteAccuracy}
+                    blackAccuracy={blackAccuracy}
+                    viewedPly={viewedPly}
+                    onSelectPly={goToPly}
+                    snapshot={snapshot}
+                    findings={findings}
+                    pieces={pieces}
+                    bestMove={bestMove}
+                    threatMove={threatMove}
+                    engineStatus={engineStatus}
+                    onToggleEngine={toggleEngine}
+                    onEngineSettingsApplied={resumeSearch}
+                    isGameMode={isGameMode}
+                  />
+                </ChatBoardContext>
               </MaskSelectionContext>
             </div>
 

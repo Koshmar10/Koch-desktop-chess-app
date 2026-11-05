@@ -7,8 +7,8 @@ export type SegmentMove = { san: string,
  */
 uci: string | null, 
 /**
- * The board the move is played from, so the chat can show it where it
- * happens whatever ply the board is on, and step through a line with
+ * The board the move is played from, so the chat and the Engine tab can
+ * show it where it happens whatever ply the board is on, and step through a line with
  * its pieces moving. Empty for a move that isn't verified: there's no
  * board it can be shown on.
  */

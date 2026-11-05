@@ -5,4 +5,5 @@ pub mod game;
 pub mod moment;
 pub mod opening;
 pub mod player_rating;
+pub mod puzzle_attempt;
 pub mod session;

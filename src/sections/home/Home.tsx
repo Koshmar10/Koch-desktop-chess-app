@@ -1,58 +1,91 @@
 import { useEffect, useState } from "react";
-import HomeCard from "./HomeCard";
-import { STAT_CARDS } from "./statCards";
-import { randomChessQuote } from "./quotes";
-import { getPlayerStats } from "../../api/stats";
+import { getGames } from "../../api/game";
 import { getAppSettings } from "../../api/settings";
+import { getPlayerStats, getRatingHistory } from "../../api/stats";
+import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { PlayerStats } from "../../api/bindings/PlayerStats";
+import type { RatingPoint } from "../../api/bindings/RatingPoint";
+import AtTheBoard from "./AtTheBoard";
+import FormGuide from "./FormGuide";
+import OpeningLines from "./OpeningLines";
+import PuzzleRecord from "./PuzzleRecord";
+import RatingCard from "./RatingCard";
+import Scoresheet from "./Scoresheet";
+import WeekMoments from "./WeekMoments";
+import YourArmy from "./YourArmy";
+import { randomChessQuote } from "./quotes";
 
-const GreetMessage = () => {
+const DIVIDER_CLASS = "border-border/60";
+
+const Masthead = ({
+  playerName,
+  gameCount,
+}: {
+  playerName: string | null;
+  gameCount: number;
+}) => (
+  <header className="flex items-center justify-between border-b-[1px] border-border/60 pb-2 text-[11px] text-foreground/50">
+    <span>Koch · {playerName ?? "Player"}'s edition</span>
+    <span>
+      {new Date().toLocaleDateString(undefined, { dateStyle: "full" })}
+    </span>
+    <span>{gameCount} games on record</span>
+  </header>
+);
+
+const Quote = () => {
   // Picked once per mount — lazy state, so it isn't re-rolled on re-render.
   const [{ quote, name }] = useState(randomChessQuote);
-  const [playerName, setPlayerName] = useState<string | null>(null);
-  useEffect(() => {
-    getAppSettings()
-      .then((s) => setPlayerName(s?.koch_username ?? null))
-      .catch(console.error);
-  }, []);
 
   return (
-    <>
-      <h1 className="text-3xl mt-6 mb-6 text-foreground">
-        Welcome back, {playerName || "player"}
-      </h1>
-      <div className="text-md text-center text-foreground/60 italic self-center max-w-[60ch]">
-        “{quote}”{" "}
-        <span className="not-italic text-foreground/40">— {name}</span>
-      </div>
-    </>
-  );
-};
-
-const StatCardsSection = () => {
-  const [stats, setStats] = useState<PlayerStats | null>(null);
-  useEffect(() => {
-    getPlayerStats().then(setStats).catch(console.error);
-  }, []);
-
-  return (
-    <div className="grid grid-cols-4 grid-rows-4 gap-4 w-[65%] h-[50rem] pt-20 px-4">
-      {STAT_CARDS.map(({ format, ...card }) => (
-        <HomeCard
-          key={card.label}
-          {...card}
-          value={stats ? format(stats) : "—"}
-        />
-      ))}
-    </div>
+    <p className="max-w-[60ch] text-2xl text-foreground/60 italic">
+      “{quote}” <span className="not-italic text-foreground/40">— {name}</span>
+    </p>
   );
 };
 
 const Home = () => {
+  const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [ratingHistory, setRatingHistory] = useState<RatingPoint[]>([]);
+  const [games, setGames] = useState<GameSummary[]>([]);
+  const [playerName, setPlayerName] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPlayerStats().then(setStats).catch(console.error);
+    getRatingHistory().then(setRatingHistory).catch(console.error);
+    getGames().then(setGames).catch(console.error);
+    getAppSettings()
+      .then((settings) => setPlayerName(settings?.koch_username ?? null))
+      .catch(console.error);
+  }, []);
+
   return (
-    <div className="flex flex-col justify-start items-center w-full">
-      <GreetMessage />
-      <StatCardsSection />
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-8 py-6">
+      <Masthead playerName={playerName} gameCount={games.length} />
+
+      <section className="flex items-start justify-between gap-8">
+        <Quote />
+        <RatingCard rating={stats?.current_rating} history={ratingHistory} />
+      </section>
+
+      <div
+        className={`grid grid-cols-3 justify-center gap-8 border-y-[1px] py-8 ${DIVIDER_CLASS}`}
+      >
+        <FormGuide />
+        <YourArmy />
+        <AtTheBoard stats={stats} />
+      </div>
+
+      <div className={`border-b-[1px] pb-8 ${DIVIDER_CLASS}`}>
+        <PuzzleRecord />
+      </div>
+
+      <WeekMoments />
+
+      <div className="grid grid-cols-2 gap-8">
+        <Scoresheet games={games} />
+        <OpeningLines games={games} />
+      </div>
     </div>
   );
 };

@@ -16,6 +16,7 @@ export interface PuzzleContextValue {
   streak: number;
   // Returns the points the puzzle was worth.
   recordSolvedPuzzle: (rating: number, mistakes: number) => number;
+  recordSkippedPuzzle: (mistakes: number) => void;
   breakStreak: () => void;
 }
 

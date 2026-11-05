@@ -10,7 +10,8 @@ import type {
 // against.
 const MOMENT_PRIORITY = 0;
 
-// The hues of MOMENT_KIND_TEXT_CLASS, so a card's square and its label agree.
+// The one strong colour on a card: the square carries the kind's tone, so
+// the label beneath can stay quiet.
 const MOMENT_KIND_TONE: Record<MomentKind, HighlightTone> = {
   material_chance: "warning",
   threatened_piece: "danger",

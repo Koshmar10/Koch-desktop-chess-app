@@ -8,14 +8,34 @@ use crate::app::{
     },
 };
 
+use crate::db::{self, services::puzzle_attempt::PuzzleAttemptService};
+
 use super::{
     lichess::{self, NextPuzzleResponse},
+    stats::{NewPuzzleAttempt, PuzzleStats},
     view::ChessPuzzle,
 };
 
 #[tauri::command]
 pub async fn get_puzzle() -> Result<ChessPuzzle, AppError> {
     puzzle_from(lichess::fetch_next_puzzle().await?)
+}
+
+#[tauri::command]
+pub fn record_puzzle_attempt(
+    db: tauri::State<'_, db::Db>,
+    attempt: NewPuzzleAttempt,
+) -> Result<(), AppError> {
+    let conn = db.lock()?;
+    PuzzleAttemptService::new(&conn).record(&attempt)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_puzzle_stats(db: tauri::State<'_, db::Db>) -> Result<PuzzleStats, AppError> {
+    let conn = db.lock()?;
+    let attempts = PuzzleAttemptService::new(&conn).all()?;
+    Ok(PuzzleStats::from_attempts(&attempts))
 }
 
 fn puzzle_from(response: NextPuzzleResponse) -> Result<ChessPuzzle, AppError> {

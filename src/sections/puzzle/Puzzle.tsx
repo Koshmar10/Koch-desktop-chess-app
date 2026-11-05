@@ -46,6 +46,7 @@ const Puzzle = () => {
     points,
     streak,
     recordSolvedPuzzle,
+    recordSkippedPuzzle,
     breakStreak,
   } = usePuzzleContext();
   const [wrongMove, setWrongMove] = useState<WrongMove | null>(null);
@@ -168,7 +169,15 @@ const Puzzle = () => {
   };
 
   const handleNewPuzzle = () => {
-    if (!isSolved) breakStreak();
+    if (!isSolved) {
+      breakStreak();
+      // Skipped before playing a move, it wasn't tried, so it isn't
+      // counted against the player.
+      const hasTried =
+        mistakes.length > 0 ||
+        (puzzle !== null && currentPly > puzzle.start_ply);
+      if (hasTried) recordSkippedPuzzle(mistakes.length);
+    }
     setWrongMove(null);
     requestNewPuzzle();
   };
