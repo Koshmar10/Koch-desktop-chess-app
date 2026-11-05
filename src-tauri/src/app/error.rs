@@ -52,8 +52,10 @@ pub enum AppError {
     #[error("the live engine session has stopped")]
     SessionClosed,
 
-    /// A request to an outside service, such as Lichess, failed.
-    #[error(transparent)]
+    /// A request to an outside service, such as OpenAI or Lichess, failed.
+    /// Worded by cause, since reqwest's own text ("error sending request
+    /// for url …") doesn't say what to do about it.
+    #[error("{}", network_message(.0))]
     Network(#[from] reqwest::Error),
 
     /// The assistant called a tool with arguments that don't fit its schema.
@@ -65,6 +67,36 @@ pub enum AppError {
     /// id 4", "Paste a FEN or a PGN to load."
     #[error("{0}")]
     Message(String),
+}
+
+/// A failed request as the user reads it: what went wrong, with whom, and
+/// what to try.
+fn network_message(err: &reqwest::Error) -> String {
+    let service = err
+        .url()
+        .and_then(|url| url.host_str())
+        .unwrap_or("the service")
+        .to_string();
+    if err.is_timeout() {
+        return format!("{service} took too long to answer. Try again.");
+    }
+    if err.is_connect() {
+        return format!("Couldn't reach {service}. Check your internet connection and try again.");
+    }
+    if err.is_decode() {
+        return format!("{service} sent a reply Koch couldn't read.");
+    }
+    match err.status().map(|status| status.as_u16()) {
+        Some(401 | 403) => format!("{service} rejected the API key. Check it in Settings."),
+        Some(429) => format!(
+            "{service} is limiting requests, or the account is out of credit. Wait a moment and try again."
+        ),
+        Some(status @ 500..=599) => {
+            format!("{service} is having problems ({status}). Try again in a minute.")
+        }
+        Some(status) => format!("{service} refused the request ({status})."),
+        None => err.to_string(),
+    }
 }
 
 // Tauri hands a command's error to the frontend through serde. As a bare
@@ -139,6 +171,18 @@ mod tests {
             serde_json::to_string(&err).unwrap(),
             "\"no game with id 4\""
         );
+    }
+
+    #[test]
+    fn a_service_that_cant_be_reached_says_to_check_the_connection() {
+        // Port 9 is the discard port, closed on a normal machine: the
+        // connection is refused straight away, with no network involved.
+        let refused =
+            tauri::async_runtime::block_on(reqwest::Client::new().get("http://127.0.0.1:9").send())
+                .unwrap_err();
+        let message = AppError::from(refused).to_string();
+        assert!(message.starts_with("Couldn't reach 127.0.0.1"), "{message}");
+        assert!(message.contains("internet connection"), "{message}");
     }
 
     #[test]

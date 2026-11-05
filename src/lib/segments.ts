@@ -14,6 +14,15 @@ export interface MovePreview {
   trail: string[];
 }
 
+// The line's moves in UCI, up to its first that isn't verified: past it the
+// board no longer matches the line, so nothing after can be played.
+export const playableMoves = (moves: readonly SegmentMove[]): string[] => {
+  const firstUnverified = moves.findIndex((move) => move.uci === null);
+  const verified =
+    firstUnverified === -1 ? moves : moves.slice(0, firstUnverified);
+  return verified.flatMap((move) => (move.uci === null ? [] : [move.uci]));
+};
+
 // The preview for `moves[index]` of a line (a single move is a line of
 // one). Null for a move that isn't verified: there's no board to show it on.
 export const movePreview = (

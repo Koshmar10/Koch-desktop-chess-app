@@ -1,5 +1,6 @@
 import type { AnalyzerEngineSettings } from "../api/bindings/AnalyzerEngineSettings";
 import type { AppSettings } from "../api/bindings/AppSettings";
+import type { AssistantMode } from "../api/bindings/AssistantMode";
 import type { LiveEngineSettings } from "../api/bindings/LiveEngineSettings";
 import type { PlayerEngineSettings } from "../api/bindings/PlayerEngineSettings";
 import { LIMIT_DEFAULT_VALUE } from "./searchLimit";
@@ -43,10 +44,24 @@ export const DEFAULT_LIVE_ENGINE_SETTINGS: LiveEngineSettings = {
 // The rest are used before saved values load, and when a get_* command
 // returns null — nothing saved yet.
 
+export const ASSISTANT_MODES: AssistantMode[] = ["Fast", "Deep"];
+
+// The binding's variant names ↔ what a select shows.
+export const ASSISTANT_MODE_LABEL: Record<AssistantMode, string> = {
+  Fast: "Fast",
+  Deep: "Deep",
+};
+
+export const LABEL_TO_ASSISTANT_MODE: Record<string, AssistantMode> = {
+  Fast: "Fast",
+  Deep: "Deep",
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   koch_username: null,
   chessdotcom_username: null,
   openai_key: null,
+  assistant_mode: "Fast",
 };
 
 export const DEFAULT_ANALYZER_SETTINGS: AnalyzerEngineSettings = {

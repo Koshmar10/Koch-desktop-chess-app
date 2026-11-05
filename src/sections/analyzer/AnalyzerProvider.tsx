@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
+  sandboxFromLine,
   sandboxLoad,
   sandboxMove,
   sandboxNew,
@@ -134,6 +135,11 @@ const AnalyzerProvider = ({ children }: AnalyzerProviderProps) => {
     async (notation: string) => replaceSandbox(await sandboxLoad(notation)),
     [replaceSandbox],
   );
+  const playSandboxLine = useCallback(
+    async (fen: string, moves: string[]) =>
+      replaceSandbox(await sandboxFromLine(fen, moves)),
+    [replaceSandbox],
+  );
   const undoSandboxMove = useCallback(
     async () => replaceSandbox(await sandboxUndo()),
     [replaceSandbox],
@@ -162,6 +168,7 @@ const AnalyzerProvider = ({ children }: AnalyzerProviderProps) => {
     generation: sandboxGeneration,
     start: startSandbox,
     load: loadSandbox,
+    playLine: playSandboxLine,
     undo: undoSandboxMove,
   };
 

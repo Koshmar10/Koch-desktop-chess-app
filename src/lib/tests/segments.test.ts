@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { PieceView } from "../../api/bindings/PieceView";
 import type { Segment } from "../../api/bindings/Segment";
 import type { SegmentMove } from "../../api/bindings/SegmentMove";
-import { movePreview, segmentIndexOf, segmentsToMarkdown } from "../segments";
+import {
+  movePreview,
+  playableMoves,
+  segmentIndexOf,
+  segmentsToMarkdown,
+} from "../segments";
 
 const PAWN: PieceView = {
   id: 1,
@@ -30,6 +35,18 @@ describe("movePreview", () => {
 
   it("is null for a move that isn't verified", () => {
     expect(movePreview([move("Bxe8", null)], 0)).toBeNull();
+  });
+});
+
+describe("playableMoves", () => {
+  it("plays a line up to its first move that isn't verified", () => {
+    const line = [move("a6", "a7a6"), move("Bxe8", null), move("Nf6", "g8f6")];
+    expect(playableMoves(line)).toEqual(["a7a6"]);
+    expect(playableMoves([move("a6", "a7a6"), move("Ba4", "b5a4")])).toEqual([
+      "a7a6",
+      "b5a4",
+    ]);
+    expect(playableMoves([move("Bxe8", null)])).toEqual([]);
   });
 });
 

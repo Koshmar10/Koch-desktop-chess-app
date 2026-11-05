@@ -19,6 +19,7 @@ use crate::app::assistent::tools::{all, position_summary, run_tool, ToolContext}
 use crate::app::error::AppError;
 use crate::app::events;
 use crate::app::game::replay::{board_of, play_uci, replay_positions, ReplayPosition};
+use crate::app::settings::{AppSettings, AssistantMode};
 use crate::db::schemas::game::Game;
 use crate::db::services::game::GameService;
 use crate::db::{
@@ -37,11 +38,22 @@ const MAX_MODEL_ROUNDS: usize = 10;
 /// repeats the last one exactly and only adds tool items to its end.
 struct Prompt {
     api_key: String,
+    mode: AssistantMode,
     /// The system prompt, with the game's PGN.
     instructions: String,
     /// The conversation, each question with the board it was asked about.
     messages: Vec<InputItem>,
     cache_key: Option<String>,
+}
+
+/// The model a mode answers with and how long it thinks first. The tools do
+/// the chess work, so even Fast thinks little: at the API's default
+/// (medium) thinking was ~85% of an answer's output, the dearest tokens.
+fn model_for(mode: AssistantMode) -> (&'static str, ReasoningEffort) {
+    match mode {
+        AssistantMode::Fast => ("gpt-6-luna", ReasoningEffort::Low),
+        AssistantMode::Deep => ("gpt-6.1-sol", ReasoningEffort::Medium),
+    }
 }
 
 /// The board a question was asked about, as the model reads it. Rebuilt the
@@ -135,11 +147,14 @@ fn build_prompt(
     chat: ChatKey,
     positions: &[ReplayPosition],
 ) -> Result<Prompt, AppError> {
-    let (api_key, players) = {
+    let (api_key, mode, players) = {
         let conn = db.lock()?;
-        let api_key = SettingsService::new(&conn)
+        let settings: AppSettings = SettingsService::new(&conn)
             .get_latest_app_settings()?
-            .and_then(|settings| settings.openai_key)
+            .map(AppSettings::from)
+            .unwrap_or_default();
+        let api_key = settings
+            .openai_key
             .ok_or("No OpenAI key set. Add one in Settings.")?;
         let players = match turn_context.game_id {
             Some(game_id) => players_of(
@@ -149,11 +164,12 @@ fn build_prompt(
             ),
             None => "The sandbox: moves played on the analysis board, no players.".to_string(),
         };
-        (api_key, players)
+        (api_key, settings.assistant_mode, players)
     };
 
     Ok(Prompt {
         api_key,
+        mode,
         instructions: format!(
             "{}\n<game>\n{players}\nMoves ({} plies): {}\n</game>\n",
             include_str!("system-prompt.md"),
@@ -171,8 +187,9 @@ async fn send_model_request(
     tool_items: &[InputItem],
     tool_choice: ToolChoice,
 ) -> Result<ModelResponse, AppError> {
+    let (model, effort) = model_for(prompt.mode);
     let request_body = ModelTextRequest {
-        model: String::from("gpt-6-luna"),
+        model: model.to_string(),
         // The calls made so far for this answer go after the conversation.
         input: prompt.messages.iter().chain(tool_items).cloned().collect(),
         instructions: prompt.instructions.clone(),
@@ -180,11 +197,7 @@ async fn send_model_request(
         store: false,
         tools: all(),
         tool_choice,
-        // The tools do the chess work, so the model needs little thinking of
-        // its own; at the default (medium) thinking was ~85% of the output.
-        reasoning: Reasoning {
-            effort: ReasoningEffort::Low,
-        },
+        reasoning: Reasoning { effort },
         prompt_cache_key: prompt.cache_key.clone(),
     };
     let response = client
@@ -423,16 +436,72 @@ pub async fn send_assistent_request(
         (conversation.messages().to_vec(), chat)
     };
 
-    // If this fails, the question stays in the chat: it's still what was asked.
-    let reply = ask_model(
+    // If this fails, the question stays in the chat: it's still what was
+    // asked, and `retry_assistent_request` asks it again.
+    answer(
         &app,
+        &state,
         &db,
         &history,
-        TurnContext { game_id, ply },
         chat,
+        TurnContext { game_id, ply },
         &tool_context,
     )
-    .await?;
+    .await
+}
+
+/// Asks again for the open chat's last question, after its answer failed
+/// (no connection, a timeout…). The question is already in the chat, so it
+/// isn't added a second time.
+#[tauri::command]
+pub async fn retry_assistent_request(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    db: tauri::State<'_, db::Db>,
+    game_id: Option<u32>,
+) -> Result<RenderedMessage, AppError> {
+    let tool_context = ToolContext {
+        positions: positions_of(&state, &db, game_id)?,
+        db: &db,
+    };
+    let (history, chat, turn_context) = {
+        let mut conversation = state.assistent_conversation.lock()?;
+        let conn = db.lock()?;
+        conversation.open_game(&conn, game_id)?;
+        let question = conversation
+            .unanswered_question()
+            .ok_or("There's no unanswered question to ask again.")?;
+        let turn_context = question.turn_context.clone();
+        (
+            conversation.messages().to_vec(),
+            conversation.key(),
+            turn_context,
+        )
+    };
+    answer(
+        &app,
+        &state,
+        &db,
+        &history,
+        chat,
+        turn_context,
+        &tool_context,
+    )
+    .await
+}
+
+/// Gets the model's answer to the last question in `history`, adds it to
+/// `chat`, and returns it with its move tags checked.
+async fn answer(
+    app: &AppHandle,
+    state: &AppState,
+    db: &db::Db,
+    history: &[ChatMessage],
+    chat: ChatKey,
+    turn_context: TurnContext,
+    tool_context: &ToolContext<'_>,
+) -> Result<RenderedMessage, AppError> {
+    let reply = ask_model(app, db, history, turn_context, chat, tool_context).await?;
     {
         let mut conversation = state.assistent_conversation.lock()?;
         let conn = db.lock()?;
@@ -581,6 +650,15 @@ mod tests {
         let positions = positions(&["e2e4", "e7e5", "g1f3"]);
         assert_eq!(move_text(&positions), "1. e4 e5 2. Nf3");
         assert_eq!(move_text(&positions[..1]), "");
+    }
+
+    #[test]
+    fn deep_mode_thinks_longer_on_a_different_model() {
+        let (fast_model, fast_effort) = model_for(AssistantMode::Fast);
+        let (deep_model, deep_effort) = model_for(AssistantMode::Deep);
+        assert_ne!(fast_model, deep_model);
+        assert_eq!(fast_effort, ReasoningEffort::Low);
+        assert_eq!(deep_effort, ReasoningEffort::Medium);
     }
 
     #[test]

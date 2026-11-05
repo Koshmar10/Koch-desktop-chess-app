@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use crate::db::services::chat::ChatService;
 
-use super::message::ChatMessage;
+use super::message::{ChatMessage, ChatRole};
 
 /// Which chat a message belongs to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -33,6 +33,19 @@ pub struct Conversation {
 impl Conversation {
     pub fn messages(&self) -> &[ChatMessage] {
         &self.messages
+    }
+
+    /// The question at the end of the chat, if nothing answered it: what a
+    /// retry asks again after an answer failed.
+    pub fn unanswered_question(&self) -> Option<&ChatMessage> {
+        self.messages
+            .last()
+            .filter(|message| message.role == ChatRole::User)
+    }
+
+    /// Which chat this is, for an answer that has to land in it.
+    pub fn key(&self) -> ChatKey {
+        self.key
     }
 
     /// Makes the open chat one about `game_id`: kept if it already is,
@@ -249,5 +262,28 @@ mod tests {
             .messages(first_chat.chat_id.unwrap())
             .unwrap();
         assert_eq!(saved.len(), 2);
+    }
+
+    #[test]
+    fn only_a_question_left_without_its_answer_is_unanswered() {
+        let conn = test_conn();
+        let mut conversation = Conversation::default();
+        conversation.open_game(&conn, None).unwrap();
+        assert!(conversation.unanswered_question().is_none());
+
+        let chat = conversation
+            .add_question(&conn, message(ChatRole::User, "why?"))
+            .unwrap();
+        assert_eq!(
+            conversation
+                .unanswered_question()
+                .map(|m| m.content.as_str()),
+            Some("why?")
+        );
+
+        conversation
+            .add_reply(&conn, chat, message(ChatRole::Assistant, "because"))
+            .unwrap();
+        assert!(conversation.unanswered_question().is_none());
     }
 }

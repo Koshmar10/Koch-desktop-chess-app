@@ -13,8 +13,8 @@ use crate::db::{
 };
 
 /// Finds a game's moments from its stored analysis and saves them in place
-/// of any from an earlier scan. A game with no side picked for the player
-/// has none, and is left alone.
+/// of any from an earlier scan, a moment found again keeping its id. A game
+/// with no side picked for the player has none, and is left alone.
 pub fn scan_game(conn: &Connection, game_id: u32) -> Result<(), AppError> {
     let games = GameService::new(conn);
     let game = games

@@ -39,7 +39,13 @@ interface Release {
   landingSquare: Square | null;
 }
 
-const PieceLayer = () => {
+interface PieceLayerProps {
+  // Size of the piece in your hand, as a multiple of the square size.
+  // Defaults to 1.1, slightly larger so it reads as picked up.
+  squareRelativePct?: number;
+}
+
+const PieceLayer = ({ squareRelativePct }: PieceLayerProps) => {
   const {
     pieces,
     squareSize,
@@ -206,6 +212,7 @@ const PieceLayer = () => {
             screenRow,
             screenCol,
             squareSize,
+            squareRelativePct,
           );
           // The container is pointer-events-none; only the player's own,
           // currently-movable pieces opt back in so they can be picked up.

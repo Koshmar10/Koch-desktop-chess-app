@@ -31,13 +31,11 @@ pub(super) struct Reasoning {
 
 /// How long the model thinks before it answers. Thinking is billed as
 /// output, the dearest kind of token, so most of an answer's cost is here.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[expect(dead_code, reason = "Medium and High wait for a deep-mode setting")]
 pub(super) enum ReasoningEffort {
     Low,
     Medium,
-    High,
 }
 
 /// Whether the model may call tools this round. The tools stay in the

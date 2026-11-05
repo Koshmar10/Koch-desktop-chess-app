@@ -7,6 +7,7 @@ import Analyzer from "./sections/analyzer/Analyzer";
 import History from "./sections/history/History";
 import Puzzle from "./sections/puzzle/Puzzle";
 import Settings from "./sections/settings/Settings";
+import Moments from "./sections/moments/Moments";
 
 const App = () => {
   return (
@@ -20,6 +21,7 @@ const App = () => {
           <Route path="/analysis/:gameId?" element={<Analyzer />} />
           <Route path="/history" element={<History />} />
           <Route path="/puzzle" element={<Puzzle />} />
+          <Route path="/moments" element={<Moments />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>

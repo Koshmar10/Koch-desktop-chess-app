@@ -53,7 +53,14 @@ const LegalMoveRing = () => (
   <div className="size-[50%] rounded-full border-6 border-gray-600/70 box-border" />
 );
 
-const Squares = () => {
+interface SquaresProps {
+  // The 1–8 numbers down the left column. Defaults to true.
+  rankLabels?: boolean;
+  // The a–h letters along the bottom row. Defaults to true.
+  fileLabels?: boolean;
+}
+
+const Squares = ({ rankLabels = true, fileLabels = true }: SquaresProps) => {
   const {
     boardSize,
     squareSize,
@@ -98,8 +105,9 @@ const Squares = () => {
 
     // Coordinates label the screen's left column and bottom row, whichever
     // side of the board is at the bottom.
-    const rankLabel = col === 0 ? rankNumber(square) : null;
-    const fileLabel = row === boardSize - 1 ? fileLetter(square) : null;
+    const rankLabel = rankLabels && col === 0 ? rankNumber(square) : null;
+    const fileLabel =
+      fileLabels && row === boardSize - 1 ? fileLetter(square) : null;
     const labelColor = dark ? "text-white/60" : "text-black/60";
     const isLegalDestination = legalDestinations.some((destination) =>
       sameSquare(destination, square),

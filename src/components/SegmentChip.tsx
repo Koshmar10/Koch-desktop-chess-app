@@ -1,7 +1,7 @@
 import { MapPin } from "lucide-react";
 import type { Segment } from "../api/bindings/Segment";
 import type { SegmentMove } from "../api/bindings/SegmentMove";
-import { movePreview, type MovePreview } from "../lib/segments";
+import { movePreview, playableMoves, type MovePreview } from "../lib/segments";
 import { useChatBoard } from "./chatBoard";
 
 const PLY_ICON_SIZE_PX = 12;
@@ -9,8 +9,8 @@ const PLY_ICON_SIZE_PX = 12;
 // Its own text colour, so a chip stays readable in a dimmed answer.
 const CHIP_CLASS =
   "inline-flex flex-wrap gap-x-1 rounded bg-primary/15 px-1 font-mono text-sm text-foreground";
-// A chip whose moves start elsewhere: clicking it moves the board there.
-const GO_TO_CHIP_CLASS =
+// A chip that clicks through to the sandbox, its line played there.
+const PLAYABLE_CHIP_CLASS =
   "cursor-pointer underline decoration-dotted underline-offset-2 hover:bg-primary/30";
 const PREVIEWED_MOVE_CLASS = "cursor-pointer rounded hover:bg-primary/40";
 const REJECTED_MOVE_CLASS = "text-destructive line-through";
@@ -54,19 +54,20 @@ interface MovesChipProps {
 
 // One move or a line. Each move carries its own board, so hovering it
 // shows it wherever the board is, and running the pointer along a line
-// plays it out. Off the line's start, clicking takes the board there.
+// plays it out. Clicking opens the line in the sandbox, to play on from.
 //
 // The preview ends when the pointer leaves the chip, not a move: in the
 // gap between two moves the last one stays on the board, instead of the
 // board snapping back to the game and forward again.
 const MovesChip = ({ moves, startPly }: MovesChipProps) => {
-  const { viewedPly, onGoToPly, onPreviewMove } = useChatBoard();
-  const isOnBoard = startPly === viewedPly;
+  const { onPlayLine, onPreviewMove } = useChatBoard();
   const moveTexts = moves.map((move, index) => (
     <MoveText key={index} move={move} preview={movePreview(moves, index)} />
   ));
   const endPreview = () => onPreviewMove(null);
-  if (isOnBoard) {
+  const playable = playableMoves(moves);
+  // A line whose first move isn't verified has nothing to play.
+  if (playable.length === 0) {
     return (
       <span className={CHIP_CLASS} onMouseLeave={endPreview}>
         {moveTexts}
@@ -76,10 +77,10 @@ const MovesChip = ({ moves, startPly }: MovesChipProps) => {
   return (
     <button
       type="button"
-      title={`Go to ply ${startPly + 1}, where this is played from`}
-      onClick={() => onGoToPly(startPly)}
+      title="Play this line in the sandbox"
+      onClick={() => onPlayLine(startPly, playable)}
       onMouseLeave={endPreview}
-      className={`${CHIP_CLASS} ${GO_TO_CHIP_CLASS}`}
+      className={`${CHIP_CLASS} ${PLAYABLE_CHIP_CLASS}`}
     >
       {moveTexts}
     </button>

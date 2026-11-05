@@ -34,6 +34,7 @@ import {
   threatMask,
 } from "./overlays/masks";
 import { useLiveEngine } from "./useLiveEngine";
+import { useThreat } from "./useThreat";
 import type {
   EngineStatus,
   GameActions,
@@ -77,6 +78,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     game: saved,
     game: { setSelectedTab },
     sandbox,
+    sandbox: { playLine: playSandboxLine },
     openGame,
     isCopyOverlayOpen,
     setIsCopyOverlayOpen,
@@ -213,9 +215,8 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
       ? liveSnapshot
       : null;
   const snapshot = isEngineShowing ? liveForThisPosition : null;
-  // Nothing searches for the threat yet — that's KOCH-14's flipped-turn
-  // probe — so there's none to show.
-  const threatMove = null;
+  // Like the lines, the threat stops with the engine.
+  const threatMove = useThreat(position?.fen ?? null, isEngineShowing);
   const bestMove = topLineMove(snapshot?.pv_lines);
 
   // The live engine's top line when it has one for this position.
@@ -382,6 +383,24 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
     replaceSandbox(sandbox.load(notation)).then(() =>
       setIsImportOverlayOpen(false),
     );
+  // A line from the chat, opened in the sandbox to play on from. Like
+  // trying a position there, it waits for the new sandbox before switching
+  // to it. Stable, so the memoised chat doesn't re-render for it.
+  const playChatLine = useCallback(
+    (startPly: number, lineMoves: string[]) => {
+      const fen = positions[startPly + 1]?.fen;
+      if (fen === undefined) return;
+      playSandboxLine(fen, lineMoves)
+        .then(() => {
+          // The chip under the pointer may not survive the switch.
+          setChatPreview(null);
+          setPreviewMaskId(null);
+          navigate("/analysis");
+        })
+        .catch(console.error);
+    },
+    [positions, playSandboxLine, navigate],
+  );
   // The same two steps as opening one from History. The new route remounts
   // this screen, but the overlay's open flag lives in the provider and
   // would survive that — so it's closed here too.
@@ -727,6 +746,7 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
         viewedPly={viewedPly}
         onGoToPly={goToPly}
         onPreviewMove={setChatPreview}
+        onPlayLine={playChatLine}
         focusRequest={chatFocusRequest}
       />
     </div>

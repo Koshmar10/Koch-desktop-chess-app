@@ -12,7 +12,8 @@
 //! parse is a bad write — reported as an error naming the column, never
 //! quietly turned into a default.
 
-use koch_engine::{PieceColor, PieceType};
+use koch_engine::board::BOARD_SIZE;
+use koch_engine::{PieceColor, PieceType, Square};
 use rusqlite::{types::Type, Row};
 
 /// `games.human_color`'s spelling of a side.
@@ -53,6 +54,18 @@ pub fn piece_from_db(raw: &str) -> Option<PieceType> {
         "king" => Some(PieceType::King),
         _ => None,
     }
+}
+
+/// `game_moments.square`'s spelling of a square: its algebraic name, "e4",
+/// the way `Square` displays. This reads one back.
+pub fn square_from_db(raw: &str) -> Option<Square> {
+    let &[file @ b'a'..=b'h', rank @ b'1'..=b'8'] = raw.as_bytes() else {
+        return None;
+    };
+    Some(Square::new(
+        BOARD_SIZE - usize::from(rank - b'0'),
+        usize::from(file - b'a'),
+    ))
 }
 
 /// Reads a TEXT column that has to be one of `parse`'s spellings.
@@ -115,6 +128,22 @@ mod tests {
         ];
         for kind in kinds {
             assert_eq!(piece_from_db(piece_to_db(kind)), Some(kind));
+        }
+    }
+
+    #[test]
+    fn a_square_round_trips_through_its_algebraic_name() {
+        for index in 0..BOARD_SIZE * BOARD_SIZE {
+            let square = Square::from_index(index);
+            assert_eq!(square_from_db(&square.to_string()), Some(square));
+        }
+        assert_eq!(square_from_db("e4"), Some(Square::new(4, 4)));
+    }
+
+    #[test]
+    fn a_square_name_off_the_board_doesnt_parse() {
+        for raw in ["", "e", "e44", "i4", "e0", "e9", "E4", "4e"] {
+            assert_eq!(square_from_db(raw), None, "{raw:?}");
         }
     }
 

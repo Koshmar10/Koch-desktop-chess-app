@@ -12,6 +12,13 @@ export const sendAssistantRequest = (
 ): Promise<RenderedMessage> =>
   invoke<RenderedMessage>("send_assistent_request", { gameId, message, ply });
 
+// Asks again for the chat's last question after its answer failed. The
+// question is already in the chat, so it isn't sent a second time.
+export const retryAssistantRequest = (
+  gameId: number | null,
+): Promise<RenderedMessage> =>
+  invoke<RenderedMessage>("retry_assistent_request", { gameId });
+
 // The open chat about this game: its latest saved one if another game's
 // chat was open.
 export const getAssistantConversation = (

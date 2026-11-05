@@ -65,25 +65,28 @@ pub fn detect(positions: &[ReplayPosition], player: PieceColor, result: GameResu
     let mut found = GameMoments::default();
     for played in players_moves {
         let (before_cp, after_cp) = (eval_of(played.before), eval_of(played.after));
-        let moment = |kind, outcome, piece| Moment {
-            ply: played.ply,
+        let moment = |kind, outcome, piece, square| Moment {
+            start_ply: played.ply,
+            ply_count: 1,
             kind,
             outcome,
             phase: played.phase,
-            piece,
+            piece: Some(piece),
+            square: Some(square),
             eval_before_cp: before_cp,
             eval_after_cp: after_cp,
+            fen_before: played.before.fen.clone(),
         };
 
-        if let Some((piece, outcome)) = material_chance(&played, player) {
+        if let Some((piece, square, outcome)) = material_chance(&played, player) {
             found
                 .moments
-                .push(moment(MomentKind::MaterialChance, outcome, Some(piece)));
+                .push(moment(MomentKind::MaterialChance, outcome, piece, square));
         }
-        for (piece, outcome) in threatened_pieces(&played, player) {
+        for (piece, square, outcome) in threatened_pieces(&played, player) {
             found
                 .moments
-                .push(moment(MomentKind::ThreatenedPiece, outcome, Some(piece)));
+                .push(moment(MomentKind::ThreatenedPiece, outcome, piece, square));
         }
 
         let stats = found.phases.entry(played.phase).or_default();
@@ -107,17 +110,22 @@ pub fn detect(positions: &[ReplayPosition], player: PieceColor, result: GameResu
             GameScore::Loss => MomentOutcome::Lost,
         };
         let final_cp = positions.iter().rev().find_map(eval_of);
+        // Positions a move led to: the start position has no move to show.
         let first_reaching = |is_reached: &dyn Fn(i32) -> bool, kind: MomentKind| {
-            positions.iter().enumerate().find_map(|(ply, position)| {
-                let cp = eval_of(position).filter(|&cp| is_reached(cp))?;
+            positions.windows(2).enumerate().find_map(|(index, pair)| {
+                let cp = eval_of(&pair[1]).filter(|&cp| is_reached(cp))?;
+                let ply = index + 1;
                 Some(Moment {
-                    ply: ply as u32,
+                    start_ply: ply as u32,
+                    ply_count: 1,
                     kind,
                     outcome,
                     phase: phases[ply],
                     piece: None,
+                    square: None,
                     eval_before_cp: Some(cp),
                     eval_after_cp: final_cp,
+                    fen_before: pair[0].fen.clone(),
                 })
             })
         };
@@ -137,7 +145,10 @@ pub fn detect(positions: &[ReplayPosition], player: PieceColor, result: GameResu
 /// captured it: did the player take it? The engine has to agree, because
 /// a piece that only looks free may be poisoned. Needs the stored best
 /// move, so a game analysed before those were kept has none.
-fn material_chance(played: &Move, player: PieceColor) -> Option<(PieceType, MomentOutcome)> {
+fn material_chance(
+    played: &Move,
+    player: PieceColor,
+) -> Option<(PieceType, Square, MomentOutcome)> {
     let best = played.before.best_move_uci.as_deref()?;
     let target = best.get(2..4)?;
     let piece = played.before.pieces.iter().find(|piece| {
@@ -151,13 +162,14 @@ fn material_chance(played: &Move, player: PieceColor) -> Option<(PieceType, Mome
     } else {
         MomentOutcome::Missed
     };
-    Some((piece.kind, outcome))
+    Some((piece.kind, piece.square, outcome))
 }
 
 /// The player's pieces that hung before the move, followed by id to wherever
-/// the move left them. Pawns are left out: one hangs in most openings, and
-/// counting them would drown the pieces.
-fn threatened_pieces(played: &Move, player: PieceColor) -> Vec<(PieceType, MomentOutcome)> {
+/// the move left them, with the square each stood on before it. Pawns are
+/// left out: one hangs in most openings, and counting them would drown the
+/// pieces.
+fn threatened_pieces(played: &Move, player: PieceColor) -> Vec<(PieceType, Square, MomentOutcome)> {
     let was_sound = !matches!(
         played.after.quality,
         Some(MoveQuality::Inaccuracy | MoveQuality::Mistake | MoveQuality::Blunder)
@@ -184,7 +196,7 @@ fn threatened_pieces(played: &Move, player: PieceColor) -> Vec<(PieceType, Momen
             } else {
                 MomentOutcome::Ignored
             };
-            Some((threatened.kind, outcome))
+            Some((threatened.kind, threatened.square, outcome))
         })
         .collect()
 }
@@ -234,6 +246,7 @@ fn phases(positions: &[ReplayPosition]) -> Vec<Phase> {
 mod tests {
     use super::*;
     use crate::app::game::replay::{play_uci, position_after};
+    use crate::db::columns::square_from_db;
     use koch_engine::{Board, FenString};
 
     fn replay_from(board: Board, uci_moves: &[&str]) -> Vec<ReplayPosition> {
@@ -262,14 +275,18 @@ mod tests {
         positions
     }
 
+    fn at(name: &str) -> Option<Square> {
+        square_from_db(name)
+    }
+
     fn moments_of(
         positions: &[ReplayPosition],
         player: PieceColor,
-    ) -> Vec<(u32, MomentKind, MomentOutcome)> {
+    ) -> Vec<(u32, MomentKind, MomentOutcome, Option<Square>)> {
         detect(positions, player, GameResult::Unfinished)
             .moments
             .iter()
-            .map(|moment| (moment.ply, moment.kind, moment.outcome))
+            .map(|moment| (moment.start_ply, moment.kind, moment.outcome, moment.square))
             .collect()
     }
 
@@ -279,8 +296,18 @@ mod tests {
         assert_eq!(
             moments_of(&positions, PieceColor::White),
             [
-                (5, MomentKind::MaterialChance, MomentOutcome::Taken),
-                (5, MomentKind::ThreatenedPiece, MomentOutcome::Saved),
+                (
+                    5,
+                    MomentKind::MaterialChance,
+                    MomentOutcome::Taken,
+                    at("e5")
+                ),
+                (
+                    5,
+                    MomentKind::ThreatenedPiece,
+                    MomentOutcome::Saved,
+                    at("h5")
+                ),
             ]
         );
     }
@@ -288,11 +315,22 @@ mod tests {
     #[test]
     fn retreating_saves_the_queen_but_misses_the_pawn() {
         let positions = queen_attacked("h5h3", MoveQuality::Inaccuracy);
+        // The queen's square is where it stood when threatened, not h3.
         assert_eq!(
             moments_of(&positions, PieceColor::White),
             [
-                (5, MomentKind::MaterialChance, MomentOutcome::Missed),
-                (5, MomentKind::ThreatenedPiece, MomentOutcome::Saved),
+                (
+                    5,
+                    MomentKind::MaterialChance,
+                    MomentOutcome::Missed,
+                    at("e5")
+                ),
+                (
+                    5,
+                    MomentKind::ThreatenedPiece,
+                    MomentOutcome::Saved,
+                    at("h5")
+                ),
             ]
         );
     }
@@ -303,14 +341,16 @@ mod tests {
         assert!(moments_of(&ignored, PieceColor::White).contains(&(
             5,
             MomentKind::ThreatenedPiece,
-            MomentOutcome::Ignored
+            MomentOutcome::Ignored,
+            at("h5")
         )));
 
         let countered = queen_attacked("d2d3", MoveQuality::Good);
         assert!(moments_of(&countered, PieceColor::White).contains(&(
             5,
             MomentKind::ThreatenedPiece,
-            MomentOutcome::Countered
+            MomentOutcome::Countered,
+            at("h5")
         )));
     }
 
@@ -327,7 +367,7 @@ mod tests {
         positions[4].best_move_uci = Some("h5h3".to_string());
         assert!(!moments_of(&positions, PieceColor::White)
             .iter()
-            .any(|(_, kind, _)| *kind == MomentKind::MaterialChance));
+            .any(|(_, kind, _, _)| *kind == MomentKind::MaterialChance));
     }
 
     #[test]
@@ -340,8 +380,14 @@ mod tests {
             .iter()
             .find(|m| m.kind == MomentKind::WinningPosition)
             .unwrap();
-        assert_eq!((won.ply, won.outcome), (5, MomentOutcome::Drew));
+        assert_eq!((won.start_ply, won.outcome), (5, MomentOutcome::Drew));
         assert_eq!(won.eval_before_cp, Some(250));
+        // One move, the one that reached the position, from where it was
+        // played.
+        assert_eq!(won.ply_count, 1);
+        assert_eq!(won.fen_before, positions[4].fen);
+        // A position isn't about one piece.
+        assert_eq!((won.piece, won.square), (None, None));
 
         // The same eval is Black's lost position, read from Black's side.
         let as_black = detect(&positions, PieceColor::Black, GameResult::WhiteWin).moments;
@@ -361,7 +407,7 @@ mod tests {
         positions[5].eval_cp = Some(250);
         assert!(!moments_of(&positions, PieceColor::White)
             .iter()
-            .any(|(_, kind, _)| *kind == MomentKind::WinningPosition));
+            .any(|(_, kind, _, _)| *kind == MomentKind::WinningPosition));
     }
 
     #[test]

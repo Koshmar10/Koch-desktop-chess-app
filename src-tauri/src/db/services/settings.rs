@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
+use crate::app::settings::AssistantMode;
 use crate::db::schemas::app_settings::AppSettings;
 use crate::db::schemas::engine_settings::EngineSettings;
 
@@ -43,7 +44,8 @@ impl<'a> SettingsService<'a> {
     pub fn get_latest_app_settings(&self) -> rusqlite::Result<Option<AppSettings>> {
         self.conn
             .query_row(
-                "SELECT app_settings_id, koch_username, chessdotcom_username, openai_key, created_at
+                "SELECT app_settings_id, koch_username, chessdotcom_username, openai_key,
+                        assistant_mode, created_at
                  FROM app_settings
                  ORDER BY app_settings_id DESC
                  LIMIT 1",
@@ -80,9 +82,15 @@ impl<'a> SettingsService<'a> {
     /// `created_at` are DB-assigned. Returns the new row id.
     pub fn insert_app_settings(&self, s: &AppSettings) -> rusqlite::Result<i64> {
         self.conn.execute(
-            "INSERT INTO app_settings (koch_username, chessdotcom_username, openai_key)
-             VALUES (?1, ?2, ?3)",
-            params![s.koch_username, s.chessdotcom_username, s.openai_key],
+            "INSERT INTO app_settings
+                 (koch_username, chessdotcom_username, openai_key, assistant_mode)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                s.koch_username,
+                s.chessdotcom_username,
+                s.openai_key,
+                s.assistant_mode.map(AssistantMode::as_db_str),
+            ],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -233,6 +241,7 @@ mod tests {
             koch_username: Some("petru".to_string()),
             chessdotcom_username: None,
             openai_key: Some("sk-x".to_string()),
+            assistant_mode: Some(AssistantMode::Deep),
             created_at: String::new(),
         };
 
@@ -242,6 +251,22 @@ mod tests {
         assert_eq!(latest.koch_username.as_deref(), Some("petru"));
         assert_eq!(latest.chessdotcom_username, None);
         assert_eq!(latest.openai_key.as_deref(), Some("sk-x"));
+        assert_eq!(latest.assistant_mode, Some(AssistantMode::Deep));
         assert!(!latest.created_at.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_assistant_mode_is_an_error_naming_the_column() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO app_settings (assistant_mode) VALUES ('turbo')",
+            [],
+        )
+        .unwrap();
+        let err = SettingsService::new(&conn)
+            .get_latest_app_settings()
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("assistant_mode"), "{err}");
     }
 }

@@ -13,6 +13,10 @@ use crate::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Saves the window's size, position and maximised state on close and
+        // puts them back on launch. All on the Rust side, so the frontend
+        // needs no permission for it.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::default())
         .setup(|app| {
             let db = db::init(app.handle())?;
@@ -61,16 +65,21 @@ pub fn run() {
             app::live_engine::commands::stop_live_engine,
             app::live_engine::commands::apply_live_engine_settings,
             app::live_engine::commands::get_live_engine_settings,
+            app::live_engine::threat::find_threat,
             app::game::sandbox::sandbox_new,
             app::game::sandbox::sandbox_load,
+            app::game::sandbox::sandbox_from_line,
             app::game::sandbox::sandbox_move,
             app::game::sandbox::sandbox_undo,
             app::puzzle::commands::get_puzzle,
             app::assistent::commands::send_assistent_request,
+            app::assistent::commands::retry_assistent_request,
             app::assistent::commands::get_assistent_conversation,
             app::assistent::commands::list_assistent_chats,
             app::assistent::commands::open_assistent_chat,
             app::assistent::commands::start_new_assistent_chat,
+            app::moments::commands::list_moments,
+            app::moments::commands::get_moment,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

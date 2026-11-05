@@ -54,9 +54,11 @@ export interface SandboxAnalyzerContextValue {
   // Each of these replaces the whole sandbox and puts the view on its last
   // position. `start` begins on `fen`, the standard start when null; `load`
   // on a pasted FEN or PGN, rejecting with a message to show if it's
-  // neither; `undo` takes back the last move.
+  // neither; `playLine` on `fen` with `moves` (UCI) played, a line from
+  // the chat; `undo` takes back the last move.
   start: (fen: string | null) => Promise<void>;
   load: (notation: string) => Promise<void>;
+  playLine: (fen: string, moves: string[]) => Promise<void>;
   undo: () => Promise<void>;
 }
 

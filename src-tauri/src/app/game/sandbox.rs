@@ -167,6 +167,21 @@ pub fn sandbox_load(
     Ok(started)
 }
 
+/// Starts a fresh sandbox on `fen` with `moves` (UCI) already played, to
+/// play on from: a line the assistant suggested, opened from its chip.
+/// Replaces any open one.
+#[tauri::command]
+pub fn sandbox_from_line(
+    fen: String,
+    moves: Vec<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<SandboxStarted, AppError> {
+    let sandbox = sandbox_from(FenString::try_from(fen)?, &moves)?;
+    let started = started(&sandbox);
+    *state.sandbox_game.lock()? = Some(sandbox);
+    Ok(started)
+}
+
 /// Plays a move in the open sandbox. A pawn reaching the last rank with no
 /// `promotion` given becomes a queen.
 #[tauri::command]

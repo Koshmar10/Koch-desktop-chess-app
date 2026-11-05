@@ -9,6 +9,9 @@ export interface ChatBoard {
   // The move the pointer is on in an answer, shown on its own board; null
   // once it leaves.
   onPreviewMove: (preview: MovePreview | null) => void;
+  // Opens a line in the sandbox to play on from: `moves` (UCI) played from
+  // the position after `startPly`.
+  onPlayLine: (startPly: number, moves: string[]) => void;
 }
 
 /**

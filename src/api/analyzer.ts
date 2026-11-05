@@ -12,6 +12,14 @@ import type { Square } from "./bindings/Square";
 export const loadGameReplay = (gameId: number): Promise<GameReplay> =>
   invoke<GameReplay>("load_game_replay", { gameId });
 
+/**
+ * What the side not to move would play if it were their turn, as UCI, from
+ * a short search of its own. Null when the side to move is in check, or
+ * the other side has no move.
+ */
+export const findThreat = (fen: string): Promise<string | null> =>
+  invoke<string | null>("find_threat", { fen });
+
 // ---- Sandbox ----
 
 /**
@@ -29,6 +37,16 @@ export const sandboxNew = (fen: string | null): Promise<SandboxStarted> =>
  */
 export const sandboxLoad = (notation: string): Promise<SandboxStarted> =>
   invoke<SandboxStarted>("sandbox_load", { notation });
+
+/**
+ * Starts a fresh sandbox on `fen` with `moves` (UCI) already played — a
+ * line from the chat, to play on from — replacing any open one.
+ */
+export const sandboxFromLine = (
+  fen: string,
+  moves: string[],
+): Promise<SandboxStarted> =>
+  invoke<SandboxStarted>("sandbox_from_line", { fen, moves });
 
 /**
  * Takes back the sandbox's last move. Resolves to the whole sandbox, the

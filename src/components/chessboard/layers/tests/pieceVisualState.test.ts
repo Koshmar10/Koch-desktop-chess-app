@@ -27,6 +27,13 @@ describe("getPieceVisualState", () => {
     });
   });
 
+  it("pads a piece in proportion to its square, so small boards keep full-size pieces", () => {
+    const small = getPieceVisualState(false, null, 0, 0, 25).style;
+    const large = getPieceVisualState(false, null, 0, 0, 100).style;
+
+    expect(Number(large.padding)).toBeCloseTo(Number(small.padding) * 4);
+  });
+
   it("slides a resting piece between squares", () => {
     const { className } = getPieceVisualState(
       false,

@@ -79,9 +79,42 @@ pub struct PlayerEngineSettings {
     pub ponder: bool,
 }
 
+/// How the assistant answers: which model, and how long it thinks first.
+/// One choice rather than two settings, so a model is never paired with an
+/// effort it isn't meant for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum AssistantMode {
+    /// The everyday model, thinking briefly: quick and cheap.
+    #[default]
+    Fast,
+    /// The stronger model, thinking longer: for a hard question, at a few
+    /// times the cost.
+    Deep,
+}
+
+impl AssistantMode {
+    /// `app_settings.assistant_mode`'s spelling, independent of the variant
+    /// names, as `SearchLimitMode`'s is.
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            AssistantMode::Fast => "fast",
+            AssistantMode::Deep => "deep",
+        }
+    }
+
+    pub fn from_db_str(raw: &str) -> Option<Self> {
+        match raw {
+            "fast" => Some(AssistantMode::Fast),
+            "deep" => Some(AssistantMode::Deep),
+            _ => None,
+        }
+    }
+}
+
 /// App-level preferences as the frontend edits them — the persisted
-/// [`AppSettingsRow`] without the DB-managed id/timestamp. Every field is
-/// optional: a user with no chess.com account or no key is a normal
+/// [`AppSettingsRow`] without the DB-managed id/timestamp. The text fields
+/// are optional: a user with no chess.com account or no key is a normal
 /// state, not a partial write, so the conversion in is a plain `From`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -89,6 +122,7 @@ pub struct AppSettings {
     pub koch_username: Option<String>,
     pub chessdotcom_username: Option<String>,
     pub openai_key: Option<String>,
+    pub assistant_mode: AssistantMode,
 }
 
 impl From<AppSettingsRow> for AppSettings {
@@ -97,6 +131,8 @@ impl From<AppSettingsRow> for AppSettings {
             koch_username: row.koch_username,
             chessdotcom_username: row.chessdotcom_username,
             openai_key: row.openai_key,
+            // Rows saved before the setting existed have none: the default.
+            assistant_mode: row.assistant_mode.unwrap_or_default(),
         }
     }
 }
@@ -109,6 +145,7 @@ impl From<AppSettings> for AppSettingsRow {
             koch_username: s.koch_username,
             chessdotcom_username: s.chessdotcom_username,
             openai_key: s.openai_key,
+            assistant_mode: Some(s.assistant_mode),
             created_at: String::new(),
         }
     }
@@ -376,9 +413,17 @@ mod tests {
             koch_username: Some("petru".to_string()),
             chessdotcom_username: None,
             openai_key: Some("sk-test".to_string()),
+            assistant_mode: AssistantMode::Deep,
         };
 
         let row: AppSettingsRow = original.clone().into();
         assert_eq!(AppSettings::from(row), original);
+    }
+
+    #[test]
+    fn an_assistant_mode_round_trips_through_its_column_spelling() {
+        for mode in [AssistantMode::Fast, AssistantMode::Deep] {
+            assert_eq!(AssistantMode::from_db_str(mode.as_db_str()), Some(mode));
+        }
     }
 }

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChessboardContext } from "./ChessboardContext";
 import { applyMove } from "./lib/applyMove";
-import { BOARD_SIZE, BOARD_SIZE_PX, SQUARE_SIZE_PX } from "./lib/constants";
+import { BOARD_SIZE, BOARD_SIZE_PX } from "./lib/constants";
 import { pieceAt } from "./lib/pieces";
 import { STARTING_POSITION } from "./lib/startingPosition";
 import type { PieceColor, PlacedPiece } from "./lib/types";
@@ -36,6 +36,10 @@ interface ChessboardProps {
   // The two squares of whichever move was played most recently. Left
   // undefined/null, nothing gets highlighted.
   lastMove?: LastMove | null;
+  // Width (and height) of the whole board. Every layer sizes itself from
+  // the square size derived here, so this is the only knob. Defaults to
+  // BOARD_SIZE_PX.
+  sizePx?: number;
 }
 
 const Chessboard = ({
@@ -47,6 +51,7 @@ const Chessboard = ({
   onMove,
   legalMoves,
   lastMove = null,
+  sizePx = BOARD_SIZE_PX,
 }: ChessboardProps) => {
   const [pieces, setPieces] = useState<PlacedPiece[]>(
     externalPieces ?? STARTING_POSITION,
@@ -88,7 +93,7 @@ const Chessboard = ({
     <ChessboardContext.Provider
       value={{
         boardSize: BOARD_SIZE,
-        squareSize: SQUARE_SIZE_PX,
+        squareSize: sizePx / BOARD_SIZE,
         pieces,
         legalDestinations,
         isFlipped: flipped,
@@ -101,10 +106,7 @@ const Chessboard = ({
         lastMove,
       }}
     >
-      <div
-        className="relative"
-        style={{ width: BOARD_SIZE_PX, height: BOARD_SIZE_PX }}
-      >
+      <div className="relative" style={{ width: sizePx, height: sizePx }}>
         {children}
       </div>
     </ChessboardContext.Provider>

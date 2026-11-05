@@ -408,7 +408,7 @@ mod tests {
     use crate::app::analysis::{MoveQuality, MoveQualityEntry};
     use crate::app::game::{PlayerInfo, TimeControl};
     use crate::db::migrations::MIGRATIONS;
-    use koch_engine::{MoveStruct, PieceColor};
+    use koch_engine::{FenString, MoveStruct, PieceColor};
 
     fn test_conn() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
@@ -698,9 +698,9 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO game_moments (game_id, ply, kind, outcome, phase)
-             VALUES (?1, 1, 'winning_position', 'won', 'opening')",
-            params![game_id],
+            "INSERT INTO game_moments (game_id, start_ply, kind, outcome, phase, fen_before)
+             VALUES (?1, 1, 'winning_position', 'won', 'opening', ?2)",
+            params![game_id, FenString::default().as_str()],
         )
         .unwrap();
         conn.execute(

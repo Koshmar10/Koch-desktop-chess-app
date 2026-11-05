@@ -19,6 +19,7 @@ import {
   History,
   MapPin,
   MessageSquarePlus,
+  RotateCcw,
   SendHorizontal,
   User,
   Wrench,
@@ -28,6 +29,7 @@ import {
   getAssistantConversation,
   listAssistantChats,
   openAssistantChat,
+  retryAssistantRequest,
   sendAssistantRequest,
   startNewAssistantChat,
 } from "../api/assistant";
@@ -405,6 +407,9 @@ interface ChatPannelProps {
   // The move the pointer is on in an answer, on the board it's played
   // from; null once it leaves.
   onPreviewMove: (preview: MovePreview | null) => void;
+  // Opens a line from an answer in the sandbox: `moves` (UCI) played from
+  // the position after `startPly`.
+  onPlayLine: (startPly: number, moves: string[]) => void;
   // Each new value focuses the question box: how the screen's `/`
   // shortcut asks for it. Zero, the first value, asks for nothing.
   focusRequest: number;
@@ -416,6 +421,7 @@ const ChatPannel = ({
   viewedPly,
   onGoToPly,
   onPreviewMove,
+  onPlayLine,
   focusRequest,
 }: ChatPannelProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -438,8 +444,8 @@ const ChatPannel = ({
   // A new object only when something in it changes, so typing a question
   // doesn't re-render every chip that reads it.
   const chatBoard = useMemo(
-    () => ({ viewedPly, onGoToPly, onPreviewMove }),
-    [viewedPly, onGoToPly, onPreviewMove],
+    () => ({ viewedPly, onGoToPly, onPreviewMove, onPlayLine }),
+    [viewedPly, onGoToPly, onPreviewMove, onPlayLine],
   );
 
   useAppEvent("assistant-tool-call", (call) =>
@@ -489,16 +495,29 @@ const ChatPannel = ({
     }
   };
 
+  // Waits for an answer and adds it, or says why there isn't one. Shared by
+  // asking a question and asking it again.
+  const awaitAnswer = async (ask: () => Promise<RenderedMessage>) => {
+    setError(null);
+    setPendingCalls([]);
+    setIsSending(true);
+    try {
+      const reply = await ask();
+      // Updater form: by the time the reply arrives, `messages` from this
+      // render is stale, and the reply must land after the question.
+      setMessages((prev) => [...prev, reply]);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const sendMessage = async () => {
     const content = message.trim();
     if (!content || isSending) return;
 
     setMessage("");
-    setError(null);
-    setPendingCalls([]);
-    setIsSending(true);
-    // Updater form: by the time the reply arrives, `messages` from this
-    // render is stale, and the reply must land after the question.
     setMessages((prev) => [
       ...prev,
       {
@@ -511,15 +530,12 @@ const ChatPannel = ({
         segments: [],
       },
     ]);
-    try {
-      const reply = await sendAssistantRequest(gameId, content, viewedPly);
-      setMessages((prev) => [...prev, reply]);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setIsSending(false);
-    }
+    await awaitAnswer(() => sendAssistantRequest(gameId, content, viewedPly));
   };
+
+  // A failed answer leaves the question at the end of the chat, saved: it
+  // can be asked again as it is, rather than typed out a second time.
+  const canRetry = !isSending && messages[messages.length - 1]?.role === "User";
 
   return (
     <div
@@ -571,7 +587,19 @@ const ChatPannel = ({
           </div>
         </div>
         {error && (
-          <p className="w-full px-2 text-xs text-destructive">{error}</p>
+          <div className="flex w-full items-center justify-between gap-2 px-2">
+            <p className="text-xs text-destructive">{error}</p>
+            {canRetry && (
+              <TooltipButton
+                icon={RotateCcw}
+                tooltip="Ask again"
+                tooltipAlign="right"
+                onClick={() =>
+                  void awaitAnswer(() => retryAssistantRequest(gameId))
+                }
+              />
+            )}
+          </div>
         )}
         <hr className="w-full h-2 text-primary/50" />
         <form
