@@ -13,6 +13,7 @@ const MOMENT: MomentSummary = {
   pieces: [],
   kind: "material_chance",
   outcome: "missed",
+  handled: false,
   phase: "opening",
   piece: "pawn",
   square: E5,

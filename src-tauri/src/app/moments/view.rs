@@ -60,6 +60,9 @@ pub struct MomentSummary {
     pub pieces: Vec<PieceView>,
     pub kind: MomentKind,
     pub outcome: MomentOutcome,
+    /// Whether the player handled it well, by its kind's rule
+    /// (`MomentKind::is_handled_by`), so no screen decides it for itself.
+    pub handled: bool,
     pub phase: Phase,
     /// The piece it's about, for the kinds that have one.
     pub piece: Option<PieceType>,
@@ -94,6 +97,7 @@ impl TryFrom<&MomentRow> for MomentSummary {
             pieces: pieces_of(&before),
             kind: moment.kind,
             outcome: moment.outcome,
+            handled: moment.kind.is_handled_by(moment.outcome),
             phase: moment.phase,
             piece: moment.piece,
             square: moment.square,
