@@ -72,5 +72,5 @@ export const topLineScore = (
  * back to picking the highest-scoring line.
  */
 export const topLineMove = (
-  lines: { moves: string[] }[] | undefined,
-): string | null => lines?.[0]?.moves[0] ?? null;
+  lines: { moves: { uci: string | null }[] }[] | undefined,
+): string | null => lines?.[0]?.moves[0]?.uci ?? null;

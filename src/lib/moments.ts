@@ -23,13 +23,6 @@ export const MOMENT_KIND_ICON: Record<MomentKind, LucideIcon> = {
   losing_position: TrendingDown,
 };
 
-export const MOMENT_KIND_TEXT_CLASS: Record<MomentKind, string> = {
-  material_chance: "text-amber-400",
-  threatened_piece: "text-red-400",
-  winning_position: "text-green-400",
-  losing_position: "text-red-400",
-};
-
 export const MOMENT_OUTCOME_LABEL: Record<MomentOutcome, string> = {
   taken: "Taken",
   missed: "Missed",
@@ -41,10 +34,10 @@ export const MOMENT_OUTCOME_LABEL: Record<MomentOutcome, string> = {
   lost: "Lost",
 };
 
-// A moment the player handled well, and one they didn't, in the kind
-// labels' green and red.
-export const HANDLED_PILL_CLASS = "bg-green-400/15 text-green-400";
-export const UNHANDLED_PILL_CLASS = "bg-red-400/15 text-red-400";
+// The dot beside a moment's outcome: green when the player handled it
+// well, red when they didn't. The word beside it stays neutral.
+export const HANDLED_DOT_CLASS = "bg-emerald-500";
+export const UNHANDLED_DOT_CLASS = "bg-red-400";
 
 /** The day a game was played: "5 Nov 2026". Empty for a missing date. */
 export const formatPlayedDate = (stored: string | null): string =>

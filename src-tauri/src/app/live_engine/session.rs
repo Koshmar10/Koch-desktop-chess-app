@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
-use super::snapshot::{EngineSnapshot, PvLine};
+use super::snapshot::{board_at, EngineSnapshot, PvLine};
 use crate::app::events;
 use crate::app::ENGINE_PATH;
 
@@ -132,6 +132,10 @@ pub async fn spawn_live_engine_session(
                     PieceColor::Black
                 };
 
+                // Built once per search, so each line is played out from a
+                // copy of it rather than from the FEN again.
+                let board = board_at(&fen, &moves);
+
                 let golimits = GoLimits {
                     infinite: true,
                     ..Default::default()
@@ -141,7 +145,7 @@ pub async fn spawn_live_engine_session(
                 engine.set_position_fen(fen.as_str(), &moves).await?;
                 engine
                     .go_until(&golimits, &cancel, |info| {
-                        let pv_line_result = PvLine::from_info(&info, side_to_move);
+                        let pv_line_result = PvLine::from_info(&info, side_to_move, board.as_ref());
                         if let Ok(pv_line) = pv_line_result {
                             snapshot.depth = info.depth;
                             snapshot.pv_lines.push(pv_line);
