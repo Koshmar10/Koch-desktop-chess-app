@@ -86,6 +86,7 @@ pub fn run() {
             app::moments::commands::list_moments,
             app::moments::commands::count_moments,
             app::moments::commands::get_moment,
+            app::moments::form::get_form_guide,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

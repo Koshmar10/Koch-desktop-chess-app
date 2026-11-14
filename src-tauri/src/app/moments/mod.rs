@@ -11,6 +11,7 @@
 // `generate_handler!`, as `app::game::commands` does.
 pub(crate) mod commands;
 mod detect;
+pub(crate) mod form;
 pub mod profile;
 mod scan;
 mod view;

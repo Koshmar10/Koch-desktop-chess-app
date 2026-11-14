@@ -6,11 +6,15 @@ import type { PieceColor } from "../../api/bindings/PieceColor";
 import GameCard from "./GameCard";
 import AnalyzeSidePopup from "./AnalyzeSidePopup";
 import { useAnalyzerContext } from "../analyzer/AnalyzerContext";
+import { HistoryIcon, RefreshCcw, Swords, Upload } from "lucide-react";
+import { OutlineButton, PrimaryButton } from "../../components/buttons";
 import EmptyNote from "../../components/EmptyNote";
+import EmptyState from "../../components/EmptyState";
 import Pager from "../../components/Pager";
 
 // Ten rows of four cards.
 const PAGE_SIZE = 40;
+const ACTION_ICON_SIZE_PX = 16;
 
 interface GamePage {
   index: number;
@@ -18,13 +22,38 @@ interface GamePage {
   pageCount: number;
 }
 
-const MissingGames = () => (
-  <div className="px-6 py-8 text-center">
-    <EmptyNote>No saved games yet</EmptyNote>
-  </div>
-);
+interface NoGamesProps {
+  syncing: boolean;
+  onSync: () => void;
+  onImport: () => void;
+}
 
-interface GameCardsSectionProps {
+// A history with no games at all: the three ways to get some.
+const NoGames = ({ syncing, onSync, onImport }: NoGamesProps) => {
+  const navigate = useNavigate();
+  return (
+    <EmptyState
+      icon={HistoryIcon}
+      message="Your games show up here: play one against the engine, import a PGN, or sync your chess.com games."
+    >
+      <PrimaryButton onClick={() => navigate("/play")}>
+        <Swords size={ACTION_ICON_SIZE_PX} /> Play a game
+      </PrimaryButton>
+      <OutlineButton onClick={onImport}>
+        <Upload size={ACTION_ICON_SIZE_PX} /> Import PGN
+      </OutlineButton>
+      <OutlineButton onClick={onSync} disabled={syncing}>
+        <RefreshCcw
+          size={ACTION_ICON_SIZE_PX}
+          className={syncing ? "animate-spin" : undefined}
+        />
+        Sync chess.com
+      </OutlineButton>
+    </EmptyState>
+  );
+};
+
+interface GameCardsSectionProps extends NoGamesProps {
   search: string;
   // The first day to include, as "YYYY-MM-DD"; none for all time.
   playedFrom?: string;
@@ -36,6 +65,9 @@ const GameCardsSection = ({
   search,
   playedFrom,
   reloadKey,
+  syncing,
+  onSync,
+  onImport,
 }: GameCardsSectionProps) => {
   const [pageIndex, setPageIndex] = useState(0);
   // The page on screen. Kept while the next one loads, so the cards don't
@@ -107,27 +139,41 @@ const GameCardsSection = ({
     setSideNeeded(null);
   };
 
-  return (
-    <div ref={top}>
-      {page && page.games.length > 0 ? (
-        <div className="flex flex-wrap gap-3 px-6 py-4">
-          {page.games.map((game) => (
-            <div
-              key={game.game_id}
-              className="w-full max-w-[calc(25%-0.6875rem)]"
-            >
-              <GameCard
-                gameSummary={game}
-                onOpen={handleOpen}
-                onAnalyze={handleAnalyze}
-                onDelete={handleDelete}
-              />
-            </div>
-          ))}
+  // Nothing until the first page arrives, so a full history doesn't flash
+  // the empty state on its way in.
+  const cards = () => {
+    if (page === null) return null;
+    if (page.games.length === 0) {
+      return search || playedFrom ? (
+        <div className="px-6 py-8 text-center">
+          <EmptyNote>No games match this search</EmptyNote>
         </div>
       ) : (
-        <MissingGames />
-      )}
+        <NoGames syncing={syncing} onSync={onSync} onImport={onImport} />
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-3 px-6 py-4">
+        {page.games.map((game) => (
+          <div
+            key={game.game_id}
+            className="w-full max-w-[calc(25%-0.6875rem)]"
+          >
+            <GameCard
+              gameSummary={game}
+              onOpen={handleOpen}
+              onAnalyze={handleAnalyze}
+              onDelete={handleDelete}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div ref={top}>
+      {cards()}
       {page && (
         <Pager
           pageIndex={page.index}

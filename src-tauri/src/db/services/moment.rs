@@ -296,29 +296,62 @@ impl<'a> MomentService<'a> {
             .query_row("SELECT COUNT(*) FROM moment_scans", [], |row| row.get(0))
     }
 
-    /// Every moment, counted by kind, outcome, phase and piece.
-    pub fn moment_counts(&self) -> rusqlite::Result<Vec<MomentCount>> {
-        let mut stmt = self.conn.prepare(
+    /// How many games `last_games` covers: all the scanned ones, or the
+    /// latest that many, whichever is fewer.
+    pub fn recent_scanned_games(&self, last_games: Option<u32>) -> rusqlite::Result<u32> {
+        self.conn.query_row(
+            &format!("SELECT COUNT(*) FROM ({RECENT_SCANNED_GAMES_SQL})"),
+            params![last_games_limit(last_games)],
+            |row| row.get(0),
+        )
+    }
+
+    /// The moments of the latest `last_games` scanned games, or of all of
+    /// them, counted by kind, outcome, phase and piece.
+    pub fn moment_counts(&self, last_games: Option<u32>) -> rusqlite::Result<Vec<MomentCount>> {
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT kind, outcome, phase, piece, COUNT(*) AS count
              FROM game_moments
+             WHERE game_id IN ({RECENT_SCANNED_GAMES_SQL})
              GROUP BY kind, outcome, phase, piece
-             ORDER BY kind, outcome, phase, piece",
-        )?;
-        let rows = stmt.query_map([], |row| MomentCount::try_from(row))?;
+             ORDER BY kind, outcome, phase, piece"
+        ))?;
+        let rows = stmt.query_map(params![last_games_limit(last_games)], |row| {
+            MomentCount::try_from(row)
+        })?;
         rows.collect()
     }
 
-    /// The player's moves per phase, summed over every scanned game.
-    pub fn phase_totals(&self) -> rusqlite::Result<Vec<PhaseTotal>> {
-        let mut stmt = self.conn.prepare(
+    /// The player's moves per phase, summed over the latest `last_games`
+    /// scanned games, or over all of them.
+    pub fn phase_totals(&self, last_games: Option<u32>) -> rusqlite::Result<Vec<PhaseTotal>> {
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT phase, SUM(moves) AS moves, SUM(mistakes) AS mistakes,
                     SUM(blunders) AS blunders, SUM(loss_cp_total) AS loss_cp_total
              FROM game_phase_stats
-             GROUP BY phase",
-        )?;
-        let rows = stmt.query_map([], |row| PhaseTotal::try_from(row))?;
+             WHERE game_id IN ({RECENT_SCANNED_GAMES_SQL})
+             GROUP BY phase"
+        ))?;
+        let rows = stmt.query_map(params![last_games_limit(last_games)], |row| {
+            PhaseTotal::try_from(row)
+        })?;
         rows.collect()
     }
+}
+
+/// The player's scanned games, latest first, `?1` of them. Moments and
+/// phase stats exist only for these.
+const RECENT_SCANNED_GAMES_SQL: &str = "
+    SELECT g.game_id FROM games g
+    JOIN moment_scans s ON s.game_id = g.game_id
+    WHERE g.human_color IS NOT NULL
+    ORDER BY g.date_played DESC, g.game_id DESC
+    LIMIT ?1";
+
+/// `last_games` as `RECENT_SCANNED_GAMES_SQL` binds it: SQLite reads a
+/// negative limit as none.
+fn last_games_limit(last_games: Option<u32>) -> i64 {
+    last_games.map_or(-1, i64::from)
 }
 
 #[cfg(test)]
@@ -463,11 +496,11 @@ mod tests {
             .save_scan(game_id, &found(vec![missed_queen(20)], 12), 2)
             .unwrap();
 
-        let counts = moments.moment_counts().unwrap();
+        let counts = moments.moment_counts(None).unwrap();
         assert_eq!(counts.len(), 1);
         assert_eq!(counts[0].count, 1);
         assert_eq!(counts[0].piece, Some(PieceType::Queen));
-        let phases = moments.phase_totals().unwrap();
+        let phases = moments.phase_totals(None).unwrap();
         assert_eq!(phases[0].stats.moves, 12);
         assert_eq!(moments.scanned_games().unwrap(), 1);
     }
@@ -497,10 +530,37 @@ mod tests {
                 .save_scan(game_id, &found(vec![missed_queen(20)], 10), 1)
                 .unwrap();
         }
-        assert_eq!(moments.moment_counts().unwrap()[0].count, 2);
-        let middlegame = &moments.phase_totals().unwrap()[0].stats;
+        assert_eq!(moments.moment_counts(None).unwrap()[0].count, 2);
+        let middlegame = &moments.phase_totals(None).unwrap()[0].stats;
         assert_eq!((middlegame.moves, middlegame.mistakes), (20, 2));
         assert_eq!(middlegame.loss_cp_total, 200);
+    }
+
+    #[test]
+    fn totals_over_the_last_games_take_the_latest_played() {
+        let conn = test_conn();
+        let moments = MomentService::new(&conn);
+        // Older game: 10 moves, a missed queen. Newer: 30 moves, none.
+        for (date_played, list, moves) in [
+            ("2026-03-01 10:00:00", vec![missed_queen(20)], 10),
+            ("2026-03-09 10:00:00", vec![], 30),
+        ] {
+            let game_id = seed_game(&conn, Some("white"), true);
+            conn.execute(
+                "UPDATE games SET date_played = ?2 WHERE game_id = ?1",
+                params![game_id, date_played],
+            )
+            .unwrap();
+            moments
+                .save_scan(game_id, &found(list, moves), 2)
+                .unwrap();
+        }
+
+        assert_eq!(moments.phase_totals(Some(1)).unwrap()[0].stats.moves, 30);
+        assert!(moments.moment_counts(Some(1)).unwrap().is_empty());
+        assert_eq!(moments.phase_totals(None).unwrap()[0].stats.moves, 40);
+        assert_eq!(moments.recent_scanned_games(Some(1)).unwrap(), 1);
+        assert_eq!(moments.recent_scanned_games(Some(10)).unwrap(), 2);
     }
 
     #[test]
@@ -720,7 +780,7 @@ mod tests {
         assert!(moments.save_scan(game_id, &twice, 2).is_err());
 
         assert_eq!(saved(&conn, game_id), before);
-        assert_eq!(moments.phase_totals().unwrap()[0].stats.moves, 10);
+        assert_eq!(moments.phase_totals(None).unwrap()[0].stats.moves, 10);
     }
 
     /// Three games played on different days, as different sides, from

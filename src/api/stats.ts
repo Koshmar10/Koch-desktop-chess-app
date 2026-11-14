@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { FormGuide } from "./bindings/FormGuide";
 import type { PlayerStats } from "./bindings/PlayerStats";
 import type { RatingPoint } from "./bindings/RatingPoint";
 
@@ -6,6 +7,10 @@ import type { RatingPoint } from "./bindings/RatingPoint";
 // analysis / sessions plus the rating table.
 export const getPlayerStats = (): Promise<PlayerStats> =>
   invoke<PlayerStats>("get_player_stats");
+
+// Six skills scored 0–100, over the last ten games and all-time.
+export const getFormGuide = (): Promise<FormGuide> =>
+  invoke<FormGuide>("get_form_guide");
 
 // Full rating trajectory, oldest first — for a rating-over-time chart.
 export const getRatingHistory = (): Promise<RatingPoint[]> =>

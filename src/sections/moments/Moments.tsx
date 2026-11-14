@@ -1,13 +1,18 @@
 import type { MomentFilter } from "../../api/bindings/MomentFilter";
 import type { MomentSummary } from "../../api/bindings/MomentSummary";
+import { Eye, HistoryIcon, RotateCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { countMoments, listMoments } from "../../api/moments";
+import { OutlineButton, PrimaryButton } from "../../components/buttons";
 import EmptyNote from "../../components/EmptyNote";
+import EmptyState from "../../components/EmptyState";
 import LoadError from "../../components/LoadError";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import Pager from "../../components/Pager";
 import {
   DEFAULT_MOMENT_FILTERS,
+  sameFilters,
   toMomentFilter,
   type MomentFilters,
 } from "./filters";
@@ -20,6 +25,7 @@ const PAGE_SIZE = 24;
 const PAGE_CENTER_CLASS = "flex h-full items-center justify-center";
 // Long enough that typing a name searches once, not once per letter.
 const SEARCH_DEBOUNCE_MS = 300;
+const ACTION_ICON_SIZE_PX = 16;
 
 interface MomentPage {
   // Which request it answers, so a page for an older filter reads as loading.
@@ -27,9 +33,53 @@ interface MomentPage {
   index: number;
   moments: MomentSummary[];
   pageCount: number;
+  // Whether there are moments at all, whatever the filter.
+  anyAtAll: boolean;
 }
 
+interface FilteredOutProps {
+  filters: MomentFilters;
+  search: string;
+  onChange: (filters: MomentFilters) => void;
+  onSearchChange: (search: string) => void;
+}
+
+// There are moments, but the filters hide them all. On the defaults that
+// means every moment went well, which is worth saying as such.
+const FilteredOut = ({
+  filters,
+  search,
+  onChange,
+  onSearchChange,
+}: FilteredOutProps) => {
+  const onDefaults = sameFilters(filters, DEFAULT_MOMENT_FILTERS) && !search;
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <EmptyNote>
+        {onDefaults
+          ? "Every moment so far was handled well"
+          : "No moments match these filters"}
+      </EmptyNote>
+      {onDefaults ? (
+        <OutlineButton onClick={() => onChange({ ...filters, handled: null })}>
+          <Eye size={ACTION_ICON_SIZE_PX} /> Show them
+        </OutlineButton>
+      ) : (
+        <OutlineButton
+          onClick={() => {
+            onChange(DEFAULT_MOMENT_FILTERS);
+            onSearchChange("");
+          }}
+        >
+          <RotateCcw size={ACTION_ICON_SIZE_PX} /> Reset filters
+        </OutlineButton>
+      )}
+    </div>
+  );
+};
+
 const Moments = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<MomentFilters>(DEFAULT_MOMENT_FILTERS);
   const [search, setSearch] = useState("");
   const [searched, setSearched] = useState("");
@@ -64,7 +114,10 @@ const Moments = () => {
       }),
       countMoments(query),
     ])
-      .then(([moments, total]) => {
+      // Counting them all only when the filter found none, to tell an empty
+      // collection from one the filter hides.
+      .then(async ([moments, total]) => {
+        const anyAtAll = total > 0 || (await countMoments({})) > 0;
         if (stale) return;
         setError(null);
         setPage({
@@ -72,6 +125,7 @@ const Moments = () => {
           index: pageIndex,
           moments,
           pageCount: Math.ceil(total / PAGE_SIZE),
+          anyAtAll,
         });
       })
       .catch((err) => {
@@ -110,7 +164,23 @@ const Moments = () => {
     if (page.moments.length === 0) {
       return (
         <div className={PAGE_CENTER_CLASS}>
-          <EmptyNote>No moments match these filters</EmptyNote>
+          {page.anyAtAll ? (
+            <FilteredOut
+              filters={filters}
+              search={searched}
+              onChange={changeFilters}
+              onSearchChange={setSearch}
+            />
+          ) : (
+            <EmptyState
+              icon={Sparkles}
+              message="Moments are the chances and threats found in your analysed games. Analyse a game from History to find yours."
+            >
+              <PrimaryButton onClick={() => navigate("/history")}>
+                <HistoryIcon size={ACTION_ICON_SIZE_PX} /> Go to History
+              </PrimaryButton>
+            </EmptyState>
+          )}
         </div>
       );
     }

@@ -7,8 +7,10 @@ import {
   type ReactNode,
 } from "react";
 import { ChatBoardContext, useChatBoard } from "./chatBoard";
+import { OutlineButton } from "./buttons";
 import Dropdown from "./Dropdown";
 import EmptyNote from "./EmptyNote";
+import EmptyState from "./EmptyState";
 import Markdown from "./Markdown";
 import Tooltip from "./Tooltip";
 import TooltipButton from "./TooltipButton";
@@ -18,6 +20,7 @@ import {
   Coins,
   History,
   MapPin,
+  MessageCircleQuestion,
   MessageSquarePlus,
   RotateCcw,
   SendHorizontal,
@@ -55,6 +58,17 @@ const MESSAGE_HEADER_ICON_SIZE_PX = 12;
 const HEADER_ICON_SIZE_PX = 18;
 const TOKEN_ICON_SIZE_PX = 14;
 const SCROLL_ARROW_ICON_SIZE_PX = 16;
+
+// What an empty chat offers to ask, so a first question is one click. The
+// game ones only make sense with a saved game loaded, not in the sandbox.
+const POSITION_QUESTIONS = [
+  "What's the best move here?",
+  "What's the plan for both sides?",
+];
+const GAME_QUESTIONS = [
+  "Where did this game turn?",
+  "What should I learn from this game?",
+];
 
 // Scrolls without showing a scrollbar: `scrollbar-width` for engines that
 // support the standard property, the `::-webkit-scrollbar` rule for WebKit.
@@ -513,8 +527,9 @@ const ChatPannel = ({
     }
   };
 
-  const sendMessage = async () => {
-    const content = message.trim();
+  // The typed message, or an example question picked from an empty chat.
+  const sendMessage = async (text: string = message) => {
+    const content = text.trim();
     if (!content || isSending) return;
 
     setMessage("");
@@ -560,6 +575,26 @@ const ChatPannel = ({
             onScroll={(e) => setIsAtLatest(isNearEnd(e.currentTarget))}
             className={`absolute inset-0 flex flex-col gap-2 overflow-y-auto px-2 ${HIDDEN_SCROLLBAR_CLASS}`}
           >
+            {messages.length === 0 && !isSending && (
+              <div className="my-auto">
+                <EmptyState
+                  icon={MessageCircleQuestion}
+                  message="Ask about the position on the board, or about the game you're reviewing."
+                >
+                  {(gameId === null
+                    ? POSITION_QUESTIONS
+                    : [...POSITION_QUESTIONS, ...GAME_QUESTIONS]
+                  ).map((question) => (
+                    <OutlineButton
+                      key={question}
+                      onClick={() => void sendMessage(question)}
+                    >
+                      {question}
+                    </OutlineButton>
+                  ))}
+                </EmptyState>
+              </div>
+            )}
             <ChatBoardContext value={chatBoard}>
               {messages.map((pastMessage, index) => (
                 <MessageBubble

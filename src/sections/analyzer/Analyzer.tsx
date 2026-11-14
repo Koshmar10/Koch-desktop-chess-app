@@ -43,6 +43,7 @@ import type {
   TimelineMove,
 } from "./types";
 import type { Square } from "../../api/bindings/Square";
+import type { AnalysisStage } from "../../api/bindings/AnalysisStage";
 import { useAnalyzerContext } from "./AnalyzerContext";
 import CopyPgnFenOverlay from "./board-overlays/CopyPgnFenOverlay";
 import { buildSandboxPgn, buildSavedGamePgn } from "../play/buildPgn";
@@ -58,6 +59,13 @@ import type { MovePreview } from "../../lib/segments";
 // Key repeat outpaces a step's render, so a held key queues up events. One
 // that waited this long is a backlog from earlier, not where you are now.
 const STALE_KEY_REPEAT_MS = 100;
+
+/** What the board says while the loaded game is being analysed, if it is. */
+const analysisMessage = (stage: AnalysisStage | undefined): string | null => {
+  if (stage?.kind === "Queued") return "Waiting to analyse…";
+  if (stage?.kind === "Running") return `Analysing… ${stage.percent}%`;
+  return null;
+};
 
 /**
  * The Analyzer screen, in one of two modes.
@@ -104,6 +112,9 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
   const game = replay?.summary ?? null;
   const whiteAccuracy = replay?.white_accuracy ?? null;
   const blackAccuracy = replay?.black_accuracy ?? null;
+  const analysisProgress = isGameMode
+    ? analysisMessage(saved.analysisStage)
+    : null;
   // Each mode keeps its own place and its own overlays, so nothing done in
   // one shows up in the other.
   const viewedPly = isGameMode ? saved.viewedPly : sandbox.viewedPly;
@@ -674,6 +685,13 @@ const Analyzer = ({ gameId }: { gameId: number | null }) => {
                 {isGameMode && saved.error && (
                   <BoardOverlay>
                     <LoadError what="this game" message={saved.error} />
+                  </BoardOverlay>
+                )}
+                {/* Before the overlays opened on purpose, so a copy or the
+                    palette still opens over it. */}
+                {analysisProgress && (
+                  <BoardOverlay>
+                    <LoadingSpinner message={analysisProgress} />
                   </BoardOverlay>
                 )}
                 {isCopyOverlayOpen && (

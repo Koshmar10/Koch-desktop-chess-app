@@ -102,8 +102,8 @@ pub fn player_profile(conn: &Connection) -> rusqlite::Result<PlayerProfile> {
         average_accuracy: AnalysisService::new(conn).average_human_accuracy()?,
         results,
         games_scanned: moments.scanned_games()?,
-        phases: moments.phase_totals()?.iter().map(phase_line).collect(),
-        moments: moment_lines(&moments.moment_counts()?),
+        phases: moments.phase_totals(None)?.iter().map(phase_line).collect(),
+        moments: moment_lines(&moments.moment_counts(None)?),
         openings: opening_lines(&games.human_games_by_opening()?),
     })
 }

@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { getGames } from "../../api/game";
 import { getAppSettings } from "../../api/settings";
-import { getPlayerStats, getRatingHistory } from "../../api/stats";
+import {
+  getFormGuide,
+  getPlayerStats,
+  getRatingHistory,
+} from "../../api/stats";
+import type { FormGuide as FormGuideData } from "../../api/bindings/FormGuide";
 import type { GameSummary } from "../../api/bindings/GameSummary";
 import type { PlayerStats } from "../../api/bindings/PlayerStats";
 import type { RatingPoint } from "../../api/bindings/RatingPoint";
@@ -47,9 +52,11 @@ const Home = () => {
   const [ratingHistory, setRatingHistory] = useState<RatingPoint[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [playerName, setPlayerName] = useState<string | null>(null);
+  const [form, setForm] = useState<FormGuideData | null>(null);
 
   useEffect(() => {
     getPlayerStats().then(setStats).catch(console.error);
+    getFormGuide().then(setForm).catch(console.error);
     getRatingHistory().then(setRatingHistory).catch(console.error);
     getGames().then(setGames).catch(console.error);
     getAppSettings()
@@ -58,7 +65,7 @@ const Home = () => {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-6">
+    <div className="mx-auto flex w-5/6 flex-col gap-6 py-6">
       <Masthead playerName={playerName} gameCount={games.length} />
 
       <section className="flex items-start justify-between gap-8">
@@ -67,7 +74,7 @@ const Home = () => {
       </section>
 
       <div className="grid grid-cols-3 gap-6">
-        <FormGuide />
+        <FormGuide form={form} />
         <YourArmy />
         <AtTheBoard stats={stats} />
       </div>
