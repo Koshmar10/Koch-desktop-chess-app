@@ -160,8 +160,15 @@ pub(crate) fn position_after(
 /// stored with that start, so its first move won't fit here — that comes
 /// back as an error naming the move rather than as a wrong board.
 pub(crate) fn replay_positions(moves: &[GameMoveRow]) -> Result<Vec<ReplayPosition>, String> {
-    let mut board = Board::default();
+    replay_positions_from(Board::default(), moves)
+}
 
+/// The same from a position partway through a game, such as where a moment
+/// starts: `moves` are the ones played from `board` on.
+pub(crate) fn replay_positions_from(
+    mut board: Board,
+    moves: &[GameMoveRow],
+) -> Result<Vec<ReplayPosition>, String> {
     let mut positions = Vec::with_capacity(moves.len() + 1);
     positions.push(ReplayPosition::of(&board));
 

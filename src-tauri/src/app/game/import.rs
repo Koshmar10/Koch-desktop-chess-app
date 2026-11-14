@@ -2,7 +2,8 @@
 //! its opening, turn `[%clk]` stamps into per-move think time, and persist
 //! it through `GameService::save_pgn`.
 
-use koch_engine::{PgnError, PgnGame, PgnMove, PgnTags};
+use koch_engine::{PgnError, PgnGame, PgnMove, PgnTags, PieceColor};
+use rusqlite::Connection;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -32,7 +33,20 @@ pub struct ImportPgnResult {
 
 #[tauri::command]
 pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgnResult, AppError> {
-    let parse = PgnGame::parse(&pgn).map_err(|err| match err {
+    let conn = db.lock()?;
+    import_pgn_text(&conn, &pgn, GameSource::Pgn, None)
+}
+
+/// Parses and saves one PGN, from a paste or a sync. `player` is the user's
+/// name on the site the game came from, when known: the side it names is
+/// recorded as the one they played.
+pub(crate) fn import_pgn_text(
+    conn: &Connection,
+    pgn: &str,
+    source: GameSource,
+    player: Option<&str>,
+) -> Result<ImportPgnResult, AppError> {
+    let parse = PgnGame::parse(pgn).map_err(|err| match err {
         PgnError::Empty => "The PGN is empty.",
         PgnError::NoMoves => "The PGN has no moves to import.",
     })?;
@@ -47,8 +61,6 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         return Err(message.into());
     }
 
-    let conn = db.lock()?;
-
     let uci_line = parse
         .game
         .moves
@@ -56,7 +68,7 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         .map(|m| m.uci.as_str())
         .collect::<Vec<_>>()
         .join(" ");
-    let opening_id = OpeningService::new(&conn)
+    let opening_id = OpeningService::new(conn)
         .find_by_uci_prefix(&uci_line)?
         .map(|opening| opening.opening_id);
 
@@ -77,15 +89,16 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
     });
 
     let meta = SaveMeta {
-        source: GameSource::Pgn,
+        source,
         date_played: pgn_date_to_sqlite(&parse.game.tags),
         partial_import: parse.truncated.is_some(),
+        human_color: player.and_then(|name| side_named(&parse.game.tags, name)),
     };
 
     // `None` only for a game already in the library. A failed insert used to
     // come back as `None` too, and the popup told the user it was a
     // duplicate; now it's an error they actually see.
-    let game_id = GameService::new(&conn).save_pgn(
+    let game_id = GameService::new(conn).save_pgn(
         &parse.game,
         opening_id,
         time_control,
@@ -99,6 +112,23 @@ pub fn import_pgn(db: tauri::State<'_, db::Db>, pgn: String) -> Result<ImportPgn
         truncated_at_ply: parse.truncated.as_ref().map(|t| t.ply),
         truncated_token: parse.truncated.map(|t| t.token),
     })
+}
+
+/// The side whose `[White]`/`[Black]` tag is `name`, ignoring case as the
+/// sites do for usernames.
+fn side_named(tags: &PgnTags, name: &str) -> Option<PieceColor> {
+    let is_named = |player: &Option<String>| {
+        player
+            .as_deref()
+            .is_some_and(|player| player.eq_ignore_ascii_case(name))
+    };
+    if is_named(&tags.white) {
+        Some(PieceColor::White)
+    } else if is_named(&tags.black) {
+        Some(PieceColor::Black)
+    } else {
+        None
+    }
 }
 
 /// Splits a PGN `TimeControl` tag into `(initial_ms, increment_ms)`.
@@ -192,6 +222,29 @@ mod tests {
             nags: Vec::new(),
             clock_cs,
         }
+    }
+
+    #[test]
+    fn a_synced_game_records_the_side_its_player_had() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::db::migrations::MIGRATIONS.to_latest(&mut conn).unwrap();
+        let pgn = |white: &str, black: &str| {
+            format!("[White \"{white}\"]\n[Black \"{black}\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0\n")
+        };
+
+        let as_black =
+            import_pgn_text(&conn, &pgn("Bo", "Ada"), GameSource::ChessCom, Some("ada")).unwrap();
+        let game = GameService::new(&conn)
+            .find_game(as_black.game_id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(game.human_color, Some(PieceColor::Black));
+        assert_eq!(game.source, GameSource::ChessCom);
+
+        // The same moves again are the same game, whoever played them.
+        let again =
+            import_pgn_text(&conn, &pgn("Cy", "Di"), GameSource::ChessCom, Some("ada")).unwrap();
+        assert_eq!(again.game_id, None);
     }
 
     #[test]

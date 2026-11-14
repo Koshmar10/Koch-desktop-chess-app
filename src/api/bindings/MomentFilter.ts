@@ -21,6 +21,19 @@ opening?: string,
  */
 played_from?: string, played_to?: string, 
 /**
+ * Only the moments the player handled well, or only the others.
+ */
+handled?: boolean, 
+/**
+ * Matched anywhere in the opponent's name or the opening's, ignoring
+ * case. Unlike `opening`, which names one family exactly.
+ */
+search?: string, 
+/**
  * Most recent game first when left out.
  */
-sort?: MomentSort, limit?: number, };
+sort?: MomentSort, limit?: number, 
+/**
+ * How many moments to skip from the start of the list, for paging.
+ */
+offset?: number, };

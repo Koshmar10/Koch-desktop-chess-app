@@ -1,94 +1,88 @@
 import { useState } from "react";
 
-import { Check, ChevronDown, RefreshCcw, Search, Upload } from "lucide-react";
+import { RefreshCcw, Upload } from "lucide-react";
+import { syncChessCom } from "../../api/game";
+import SearchBox from "../../components/SearchBox";
+import SelectMenu from "../../components/SelectMenu";
 import TooltipButton from "../../components/TooltipButton";
-import Dropdown from "../../components/Dropdown";
+import { PERIODS, type Period } from "../../lib/period";
 import ImportPgnPopup from "./ImportPgnPopup";
 
-type SelectOption = "Last Month" | "Last 3 Months" | "All Time";
-const SelectOptions: SelectOption[] = [
-  "Last Month",
-  "Last 3 Months",
-  "All Time",
-];
+// What the last sync did, in a few words beside its button.
+interface SyncNote {
+  text: string;
+  failed: boolean;
+}
 
-const SearchBox = () => (
-  <div className="relative flex items-center bg-input/30 border-2 border-border rounded p-2 gap-2 outline-none focus-within:border-primary transition-colors">
-    <Search className="text-muted-foreground w-4 h-4" />
-    <input
-      type="text"
-      placeholder="Search games..."
-      className="bg-transparent outline-none text-foreground placeholder:text-muted-foreground w-full"
-    />
-  </div>
-);
-
-const MonthSelectMenu = ({
-  selectOption,
-  onSelect,
-}: {
-  selectOption: SelectOption;
-  onSelect: (option: SelectOption) => void;
-}) => (
-  <div className="bg-card border-2 border-border rounded shadow-lg">
-    {SelectOptions.map((option) => (
-      <div
-        key={option}
-        className="px-4 py-2 hover:bg-border cursor-pointer flex flex-row w-44 justify-between"
-        onClick={() => onSelect(option)}
-      >
-        <span className="flex-1">{option}</span>
-        <span>{option === selectOption ? <Check /> : ""}</span>
-      </div>
-    ))}
-  </div>
-);
-
-const MonthSelect = () => {
-  const [selectOption, setSelectOption] = useState<SelectOption>("Last Month");
-
-  return (
-    <Dropdown
-      trigger={({ toggle }) => (
-        <div
-          className="w-44 bg-card/30 border-2 border-border rounded cursor-pointer select-none flex flex-row items-center justify-between p-2"
-          onClick={toggle}
-        >
-          <span className="block">{selectOption}</span>
-          <ChevronDown />
-        </div>
-      )}
-    >
-      {(close) => (
-        <MonthSelectMenu
-          selectOption={selectOption}
-          onSelect={(option) => {
-            setSelectOption(option);
-            close();
-          }}
-        />
-      )}
-    </Dropdown>
-  );
+const syncNoteText = (imported: number, failed: number): string => {
+  const games = imported === 1 ? "1 new game" : `${imported} new games`;
+  const base = imported === 0 ? "Up to date" : games;
+  return failed === 0 ? base : `${base}, ${failed} couldn't be read`;
 };
 
 interface HistoryToolbarProps {
+  search: string;
+  onSearchChange: (search: string) => void;
+  period: Period;
+  onPeriodChange: (period: Period) => void;
+  // After an import or a sync that saved games, so the list fetches again.
   onImported?: () => void;
 }
 
-const HistoryToolbar = ({ onImported }: HistoryToolbarProps) => {
+const HistoryToolbar = ({
+  search,
+  onSearchChange,
+  period,
+  onPeriodChange,
+  onImported,
+}: HistoryToolbarProps) => {
   const [importOpen, setImportOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<SyncNote | null>(null);
+
+  const handleSync = () => {
+    setSyncing(true);
+    setSyncNote(null);
+    syncChessCom()
+      .then(({ imported, failed }) => {
+        setSyncNote({ text: syncNoteText(imported, failed), failed: false });
+        if (imported > 0) onImported?.();
+      })
+      .catch((err) => setSyncNote({ text: String(err), failed: true }))
+      .finally(() => setSyncing(false));
+  };
 
   return (
     <div className="gap-4 text-foreground border-b-2 border-border flex flex-row items-center p-3">
-      <SearchBox />
-      <MonthSelect />
-      <TooltipButton icon={RefreshCcw} tooltip="Sync with chess.com" />
+      <SearchBox
+        value={search}
+        onChange={onSearchChange}
+        placeholder="Search players or openings..."
+      />
+      <SelectMenu
+        options={PERIODS.map((option) => ({ value: option, label: option }))}
+        value={period}
+        onChange={onPeriodChange}
+      />
+      <TooltipButton
+        icon={RefreshCcw}
+        iconClassName={syncing ? "animate-spin" : undefined}
+        tooltip={syncing ? "Syncing with chess.com…" : "Sync with chess.com"}
+        onClick={handleSync}
+        disabled={syncing}
+      />
       <TooltipButton
         icon={Upload}
         tooltip="Import PGN"
         onClick={() => setImportOpen(true)}
       />
+      {syncNote && (
+        <span
+          className={`text-sm ${syncNote.failed ? "text-red-400" : "text-foreground/60"}`}
+        >
+          {syncNote.text}
+        </span>
+      )}
       <ImportPgnPopup
         open={importOpen}
         onClose={() => setImportOpen(false)}

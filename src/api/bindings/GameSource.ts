@@ -4,4 +4,4 @@
  * Where a saved game came from. A closed set rather than a string, so the
  * frontend's checks against it are checked by the compiler too.
  */
-export type GameSource = "koch" | "pgn";
+export type GameSource = "koch" | "pgn" | "chess.com";

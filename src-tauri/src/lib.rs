@@ -49,6 +49,8 @@ pub fn run() {
             app::game::commands::make_move,
             app::game::commands::retry_engine_reply,
             app::game::commands::get_games,
+            app::game::commands::count_games,
+            app::game::chess_com::sync_chess_com,
             app::game::commands::delete_game,
             app::game::commands::analyze_game,
             app::game::import::import_pgn,
@@ -82,6 +84,7 @@ pub fn run() {
             app::assistent::commands::open_assistent_chat,
             app::assistent::commands::start_new_assistent_chat,
             app::moments::commands::list_moments,
+            app::moments::commands::count_moments,
             app::moments::commands::get_moment,
         ])
         .build(tauri::generate_context!())

@@ -8,6 +8,10 @@ import type { MomentSummary } from "./bindings/MomentSummary";
 export const listMoments = (filter: MomentFilter): Promise<MomentSummary[]> =>
   invoke<MomentSummary[]>("list_moments", { filter });
 
+// How many moments fit the filter, whatever its limit and offset.
+export const countMoments = (filter: MomentFilter): Promise<number> =>
+  invoke<number>("count_moments", { filter });
+
 // One moment and the board it is about. Null when no moment has that id: a
 // rule change can find a game's moments again without it, so a saved id
 // can go stale.

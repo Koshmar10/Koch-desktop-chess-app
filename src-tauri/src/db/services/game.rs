@@ -2,10 +2,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use koch_engine::{PgnGame, PieceColor};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, ToSql};
 
 use crate::app::analysis::MoveQualityEntry;
-use crate::app::game::{Game, GameResult, GameSource, TimeControl};
+use crate::app::game::{Game, GameFilter, GameResult, GameSource, TimeControl};
 use crate::db::columns::{color_from_db, color_to_db, parse_text};
 use crate::db::schemas::game::{Game as GameRow, GameMoveRow};
 
@@ -17,6 +17,10 @@ pub struct SaveMeta {
     /// `None` records the current time (`datetime('now')`).
     pub date_played: Option<String>,
     pub partial_import: bool,
+    /// The side the user played, when the import knows it: a chess.com game
+    /// names the user as one of its players. Ignored by `save`, which takes
+    /// it from the game itself.
+    pub human_color: Option<PieceColor>,
 }
 
 impl SaveMeta {
@@ -25,8 +29,38 @@ impl SaveMeta {
             source: GameSource::Koch,
             date_played: None,
             partial_import: false,
+            human_color: None,
         }
     }
+}
+
+/// The columns `GameRow` reads, prefixed for the join with `openings`.
+const SELECT_GAME_COLUMNS_SQL: &str = "
+    SELECT g.game_id, g.game_hash, g.date_played, g.white_player, g.black_player,
+           g.white_elo, g.black_elo, g.result, g.opening_id, g.time_control,
+           g.pgn_data, g.source, g.human_color, g.partial_import";
+
+/// What a `GameFilter` narrows the games to; `game_filter_params` binds it.
+const GAME_FILTER_SQL: &str = "
+    FROM games g
+    LEFT JOIN openings o ON o.opening_id = g.opening_id
+    WHERE (:search IS NULL
+           OR g.white_player LIKE '%' || :search || '%'
+           OR g.black_player LIKE '%' || :search || '%'
+           OR o.opening_name LIKE '%' || :search || '%')
+      AND (:played_from IS NULL OR date(g.date_played) >= date(:played_from))";
+
+/// The values `GAME_FILTER_SQL` binds. A blank search is no search.
+fn game_filter_params(filter: &GameFilter) -> [(&'static str, Option<&str>); 2] {
+    let search = filter
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|search| !search.is_empty());
+    [
+        (":search", search),
+        (":played_from", filter.played_from.as_deref()),
+    ]
 }
 
 /// `game_hash` for dedup — a stable digest of the move sequence, so
@@ -122,8 +156,8 @@ impl<'a> GameService<'a> {
     /// `Ok(None)` for a game already in the library. `time_control` is
     /// `None` if the PGN had no usable clock (the caller converts the PGN's
     /// seconds). `move_times_ms` is aligned to `game.moves`; anything
-    /// missing is stored as 0. `human_color` stays NULL — an import only
-    /// gains a side when the user picks one to analyse (see
+    /// missing is stored as 0. `human_color` is `meta`'s; when that is
+    /// `None` the game gains a side once the user picks one to analyse (see
     /// [`GameService::set_human_color`]).
     pub fn save_pgn(
         &self,
@@ -149,7 +183,7 @@ impl<'a> GameService<'a> {
             time_control: time_control.map(TimeControl::to_ms_pair),
             pgn_data: game.raw.clone(),
             source: meta.source.as_db_str().to_string(),
-            human_color: None,
+            human_color: meta.human_color.map(|color| color_to_db(color).to_string()),
             partial_import: meta.partial_import,
         })?
         else {
@@ -284,15 +318,51 @@ impl<'a> GameService<'a> {
     /// history / library view. Raw rows: `opening_id` stays a bare id here,
     /// no join into `openings` for a name — a follow-up once a history UI
     /// actually needs it.
-    pub fn get_games(&self) -> rusqlite::Result<Vec<GameRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT game_id, game_hash, date_played, white_player, black_player,
-                    white_elo, black_elo, result, opening_id, time_control,
-                    pgn_data, source, human_color, partial_import
-             FROM games ORDER BY date_played DESC",
-        )?;
-        let rows = stmt.query_map([], |row| GameRow::try_from(row))?;
+    ///
+    /// The filter narrows them and pages through them. Ties on the date
+    /// fall back to the newest id, so pages never overlap.
+    pub fn get_games(&self, filter: &GameFilter) -> rusqlite::Result<Vec<GameRow>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "{SELECT_GAME_COLUMNS_SQL} {GAME_FILTER_SQL}
+             ORDER BY g.date_played DESC, g.game_id DESC
+             LIMIT :limit OFFSET :offset"
+        ))?;
+        // SQLite reads a negative limit as none.
+        let limit = filter.limit.map_or(-1, i64::from);
+        let offset = filter.offset.unwrap_or(0);
+        let narrowing = game_filter_params(filter);
+        let mut params: Vec<(&str, &dyn ToSql)> = narrowing
+            .iter()
+            .map(|(name, value)| (*name, value as &dyn ToSql))
+            .collect();
+        params.extend([(":limit", &limit as &dyn ToSql), (":offset", &offset)]);
+        let rows = stmt.query_map(params.as_slice(), |row| GameRow::try_from(row))?;
         rows.collect()
+    }
+
+    /// How many games fit the filter, whatever its limit and offset, so a
+    /// paged history knows its page count.
+    pub fn count_games(&self, filter: &GameFilter) -> rusqlite::Result<u32> {
+        let narrowing = game_filter_params(filter);
+        let params: Vec<(&str, &dyn ToSql)> = narrowing
+            .iter()
+            .map(|(name, value)| (*name, value as &dyn ToSql))
+            .collect();
+        self.conn.query_row(
+            &format!("SELECT COUNT(*) {GAME_FILTER_SQL}"),
+            params.as_slice(),
+            |row| row.get(0),
+        )
+    }
+
+    /// When the newest game from `source` was played, or `None` if there is
+    /// none: where a sync picks up from.
+    pub fn latest_date_played(&self, source: GameSource) -> rusqlite::Result<Option<String>> {
+        self.conn.query_row(
+            "SELECT MAX(date_played) FROM games WHERE source = ?1",
+            params![source.as_db_str()],
+            |row| row.get(0),
+        )
     }
 
     /// A single saved game by id, or `None` if there's no such row.
@@ -628,7 +698,9 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-            let games = GameService::new(&conn).get_games().unwrap();
+            let games = GameService::new(&conn)
+                .get_games(&GameFilter::default())
+                .unwrap();
 
             assert_eq!(games.len(), 1);
             assert_eq!(games[0].game_id as u32, game_id);
@@ -775,6 +847,7 @@ mod tests {
             source: GameSource::Pgn,
             date_played: Some("2024-03-15 19:30:00".to_string()),
             partial_import: false,
+            human_color: None,
         };
         let time_control = TimeControl {
             initial_ms: 600_000,
@@ -893,11 +966,124 @@ mod tests {
         )
         .unwrap();
 
-        let Err(err) = GameService::new(&conn).get_games() else {
+        let Err(err) = GameService::new(&conn).get_games(&GameFilter::default()) else {
             panic!("a row with an unknown source should not read back");
         };
 
         assert!(err.to_string().contains("source"), "got {err}");
+    }
+
+    #[test]
+    fn games_page_newest_first_and_are_counted_whole() {
+        let conn = test_conn();
+        // Two games on the same day, so the id has to break the tie.
+        for (hash, date_played) in [
+            ("a", "2026-03-01 10:00:00"),
+            ("b", "2026-03-05 10:00:00"),
+            ("c", "2026-03-05 10:00:00"),
+        ] {
+            conn.execute(
+                "INSERT INTO games
+                     (game_hash, white_player, black_player, white_elo, black_elo,
+                      result, pgn_data, source, date_played)
+                 VALUES (?1, 'W', 'B', 0, 0, '1-0', '', 'koch', ?2)",
+                params![hash, date_played],
+            )
+            .unwrap();
+        }
+        let games = GameService::new(&conn);
+        let hashes = |limit, offset| -> Vec<String> {
+            games
+                .get_games(&GameFilter {
+                    limit,
+                    offset: Some(offset),
+                    ..Default::default()
+                })
+                .unwrap()
+                .into_iter()
+                .map(|game| game.game_hash)
+                .collect()
+        };
+
+        assert_eq!(hashes(Some(2), 0), ["c", "b"]);
+        assert_eq!(hashes(Some(2), 2), ["a"]);
+        assert_eq!(hashes(None, 0), ["c", "b", "a"]);
+        assert_eq!(games.count_games(&GameFilter::default()).unwrap(), 3);
+    }
+
+    #[test]
+    fn games_narrow_by_a_name_or_opening_and_by_the_first_day() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO openings (opening_name, uci, echo) VALUES ('Italian Game', '', '')",
+            [],
+        )
+        .unwrap();
+        let italian = conn.last_insert_rowid();
+        for (hash, white, black, date_played, opening_id) in [
+            ("a", "Ada", "Bo", "2026-03-01 10:00:00", None),
+            ("b", "Cy", "Ada", "2026-03-10 10:00:00", Some(italian)),
+            ("c", "Cy", "Di", "2026-03-20 10:00:00", None),
+        ] {
+            conn.execute(
+                "INSERT INTO games
+                     (game_hash, white_player, black_player, white_elo, black_elo,
+                      result, pgn_data, source, date_played, opening_id)
+                 VALUES (?1, ?2, ?3, 0, 0, '1-0', '', 'koch', ?4, ?5)",
+                params![hash, white, black, date_played, opening_id],
+            )
+            .unwrap();
+        }
+        let games = GameService::new(&conn);
+        let found = |search: Option<&str>, played_from: Option<&str>| {
+            let filter = GameFilter {
+                search: search.map(str::to_string),
+                played_from: played_from.map(str::to_string),
+                ..Default::default()
+            };
+            let hashes: Vec<String> = games
+                .get_games(&filter)
+                .unwrap()
+                .into_iter()
+                .map(|game| game.game_hash)
+                .collect();
+            assert_eq!(games.count_games(&filter).unwrap() as usize, hashes.len());
+            hashes
+        };
+
+        // Either side, any case, part of a name.
+        assert_eq!(found(Some("ada"), None), ["b", "a"]);
+        assert_eq!(found(Some("italian"), None), ["b"]);
+        assert_eq!(found(Some("  "), None), ["c", "b", "a"]);
+        assert_eq!(found(None, Some("2026-03-10")), ["c", "b"]);
+        assert_eq!(found(Some("Ada"), Some("2026-03-05")), ["b"]);
+    }
+
+    #[test]
+    fn the_latest_game_of_a_source_is_where_a_sync_picks_up() {
+        let conn = test_conn();
+        let games = GameService::new(&conn);
+        assert_eq!(games.latest_date_played(GameSource::ChessCom).unwrap(), None);
+
+        for (hash, source, date_played) in [
+            ("a", "chess.com", "2026-02-01 10:00:00"),
+            ("b", "chess.com", "2026-03-01 10:00:00"),
+            ("c", "pgn", "2026-04-01 10:00:00"),
+        ] {
+            conn.execute(
+                "INSERT INTO games
+                     (game_hash, white_player, black_player, white_elo, black_elo,
+                      result, pgn_data, source, date_played)
+                 VALUES (?1, 'W', 'B', 0, 0, '1-0', '', ?2, ?3)",
+                params![hash, source, date_played],
+            )
+            .unwrap();
+        }
+
+        assert_eq!(
+            games.latest_date_played(GameSource::ChessCom).unwrap().as_deref(),
+            Some("2026-03-01 10:00:00")
+        );
     }
 
     #[test]

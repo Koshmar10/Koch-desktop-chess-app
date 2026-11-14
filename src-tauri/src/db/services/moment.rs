@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use koch_engine::Square;
-use rusqlite::{named_params, params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, ToSql};
 
 use crate::app::moments::{
     GameMoments, MomentFilter, MomentKind, MomentOutcome, MomentSort, Phase,
@@ -13,17 +13,60 @@ use crate::db::schemas::moment::{MomentCount, MomentRow, PhaseTotal};
 /// start ply, ply count, kind and square.
 type MomentKey = (u32, u32, MomentKind, Option<Square>);
 
-/// A saved moment, its game and the game's opening: the rows `MomentRow`
-/// reads. Only games with a side picked for the player, the only ones that
-/// have moments.
-const SELECT_MOMENTS_SQL: &str = "
+/// A saved moment, its game and the game's opening: the columns `MomentRow`
+/// reads.
+const SELECT_MOMENT_COLUMNS_SQL: &str = "
     SELECT m.moment_id, m.game_id, m.start_ply, m.ply_count, m.kind, m.outcome,
            m.phase, m.piece, m.square, m.eval_before_cp, m.eval_after_cp, m.fen_before,
            g.white_player, g.black_player, g.human_color, g.date_played,
-           g.result, o.opening_name
+           g.result, o.opening_name";
+
+/// Where moments are read from, for a list and for its count alike. Only
+/// games with a side picked for the player, the only ones that have moments.
+const MOMENTS_FROM_SQL: &str = "
     FROM game_moments m
     JOIN games g ON g.game_id = m.game_id AND g.human_color IS NOT NULL
     LEFT JOIN openings o ON o.opening_id = g.opening_id";
+
+/// `:handled` as `filter_params` binds it.
+const HANDLED: &str = "handled";
+const NOT_HANDLED: &str = "not_handled";
+
+/// What a `MomentFilter` narrows a list to; `filter_params` binds it.
+///
+/// The opening is matched on its family, the name up to the first ':' (all
+/// of it when there is none), as the profile groups them. Whether a moment
+/// was handled well is spelled out as the kind:outcome pairs that are,
+/// from `MomentKind::handled_outcomes`, so SQL and Rust can't disagree.
+fn moment_filter_sql() -> String {
+    let handled_pairs = MomentKind::ALL
+        .iter()
+        .flat_map(|kind| {
+            kind.handled_outcomes()
+                .iter()
+                .map(|outcome| format!("'{}:{}'", kind.as_db_str(), outcome.as_db_str()))
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "WHERE (:kind IS NULL OR m.kind = :kind)
+           AND (:outcome IS NULL OR m.outcome = :outcome)
+           AND (:phase IS NULL OR m.phase = :phase)
+           AND (:piece IS NULL OR m.piece = :piece)
+           AND (:opening IS NULL OR
+                trim(substr(o.opening_name, 1, instr(o.opening_name || ':', ':') - 1))
+                    = :opening COLLATE NOCASE)
+           AND (:played_from IS NULL OR date(g.date_played) >= date(:played_from))
+           AND (:played_to IS NULL OR date(g.date_played) <= date(:played_to))
+           AND (:handled IS NULL OR
+                CASE WHEN m.kind || ':' || m.outcome IN ({handled_pairs})
+                     THEN '{HANDLED}' ELSE '{NOT_HANDLED}' END = :handled)
+           AND (:search IS NULL
+                OR CASE g.human_color WHEN 'white' THEN g.black_player ELSE g.white_player END
+                       LIKE '%' || :search || '%'
+                OR o.opening_name LIKE '%' || :search || '%')"
+    )
+}
 
 pub struct MomentService<'a> {
     conn: &'a Connection,
@@ -157,37 +200,65 @@ impl<'a> MomentService<'a> {
                 "m.eval_before_cp - m.eval_after_cp DESC, g.date_played DESC, m.moment_id"
             }
         };
-        // The opening is matched on its family, the name up to the first ':'
-        // (all of it when there is none), as the profile groups them.
         let mut stmt = self.conn.prepare(&format!(
-            "{SELECT_MOMENTS_SQL}
-             WHERE (:kind IS NULL OR m.kind = :kind)
-               AND (:outcome IS NULL OR m.outcome = :outcome)
-               AND (:phase IS NULL OR m.phase = :phase)
-               AND (:piece IS NULL OR m.piece = :piece)
-               AND (:opening IS NULL OR
-                    trim(substr(o.opening_name, 1, instr(o.opening_name || ':', ':') - 1))
-                        = :opening COLLATE NOCASE)
-               AND (:played_from IS NULL OR date(g.date_played) >= date(:played_from))
-               AND (:played_to IS NULL OR date(g.date_played) <= date(:played_to))
+            "{SELECT_MOMENT_COLUMNS_SQL} {MOMENTS_FROM_SQL}
+             {}
              ORDER BY {order}
-             LIMIT :limit"
+             LIMIT :limit OFFSET :offset",
+            moment_filter_sql()
         ))?;
-        let rows = stmt.query_map(
-            named_params! {
-                ":kind": filter.kind.map(MomentKind::as_db_str),
-                ":outcome": filter.outcome.map(MomentOutcome::as_db_str),
-                ":phase": filter.phase.map(Phase::as_db_str),
-                ":piece": filter.piece.map(piece_to_db),
-                ":opening": &filter.opening,
-                ":played_from": &filter.played_from,
-                ":played_to": &filter.played_to,
-                // SQLite reads a negative limit as none.
-                ":limit": filter.limit.map_or(-1, i64::from),
-            },
-            |row| MomentRow::try_from(row),
-        )?;
+        // SQLite reads a negative limit as none.
+        let limit = filter.limit.map_or(-1, i64::from);
+        let offset = filter.offset.unwrap_or(0);
+        let narrowing = Self::filter_params(filter);
+        let mut params: Vec<(&str, &dyn ToSql)> = narrowing
+            .iter()
+            .map(|(name, value)| (*name, value as &dyn ToSql))
+            .collect();
+        params.extend([(":limit", &limit as &dyn ToSql), (":offset", &offset)]);
+        let rows = stmt.query_map(params.as_slice(), |row| MomentRow::try_from(row))?;
         rows.collect()
+    }
+
+    /// How many moments fit `filter`, whatever its limit and offset: what a
+    /// paged list counts its pages from.
+    pub fn count(&self, filter: &MomentFilter) -> rusqlite::Result<u32> {
+        let narrowing = Self::filter_params(filter);
+        let params: Vec<(&str, &dyn ToSql)> = narrowing
+            .iter()
+            .map(|(name, value)| (*name, value as &dyn ToSql))
+            .collect();
+        self.conn.query_row(
+            &format!("SELECT COUNT(*) {MOMENTS_FROM_SQL} {}", moment_filter_sql()),
+            params.as_slice(),
+            |row| row.get(0),
+        )
+    }
+
+    /// The values `moment_filter_sql` binds, `None` for a field left out. A
+    /// blank search is no search.
+    fn filter_params(filter: &MomentFilter) -> [(&'static str, Option<&str>); 9] {
+        let search = filter
+            .search
+            .as_deref()
+            .map(str::trim)
+            .filter(|search| !search.is_empty());
+        [
+            (
+                ":handled",
+                filter
+                    .handled
+                    .map(|handled| if handled { HANDLED } else { NOT_HANDLED }),
+            ),
+            (":search", search),
+            (":kind", filter.kind.map(MomentKind::as_db_str)),
+            (":outcome", filter.outcome.map(MomentOutcome::as_db_str)),
+            (":phase", filter.phase.map(Phase::as_db_str)),
+            (":piece", filter.piece.map(piece_to_db)),
+            (":opening", filter.opening.as_deref()),
+            (":played_from", filter.played_from.as_deref()),
+            (":played_to", filter.played_to.as_deref()),
+        ]
     }
 
     /// One moment by id, or `None` if there is no such moment — including a
@@ -195,7 +266,9 @@ impl<'a> MomentService<'a> {
     pub fn find(&self, moment_id: u32) -> rusqlite::Result<Option<MomentRow>> {
         self.conn
             .query_row(
-                &format!("{SELECT_MOMENTS_SQL} WHERE m.moment_id = ?1"),
+                &format!(
+                    "{SELECT_MOMENT_COLUMNS_SQL} {MOMENTS_FROM_SQL} WHERE m.moment_id = ?1"
+                ),
                 params![moment_id],
                 |row| MomentRow::try_from(row),
             )
@@ -786,6 +859,46 @@ mod tests {
     }
 
     #[test]
+    fn a_list_narrows_to_the_moments_handled_well_or_the_others() {
+        let conn = test_conn();
+        seed_list(&conn);
+        let handled = |handled| {
+            plies(
+                &conn,
+                &MomentFilter {
+                    handled: Some(handled),
+                    ..Default::default()
+                },
+            )
+        };
+
+        // Only the pawn on 7 was taken; the rest were missed, ignored or lost.
+        assert_eq!(handled(true), [7]);
+        assert_eq!(handled(false), [31, 40, 12, 20]);
+    }
+
+    #[test]
+    fn a_search_matches_part_of_the_opponents_name_or_the_opening() {
+        let conn = test_conn();
+        seed_list(&conn);
+        let searched = |search: &str| {
+            plies(
+                &conn,
+                &MomentFilter {
+                    search: Some(search.to_string()),
+                    ..Default::default()
+                },
+            )
+        };
+
+        assert_eq!(searched("najdorf"), [20]);
+        assert_eq!(searched("ITALIAN"), [31, 40]);
+        // The second game is the only one played as Black, against "W".
+        assert_eq!(searched("w"), [7, 12]);
+        assert_eq!(searched(" "), [31, 40, 7, 12, 20]);
+    }
+
+    #[test]
     fn a_list_narrows_by_the_openings_family() {
         let conn = test_conn();
         seed_list(&conn);
@@ -853,6 +966,49 @@ mod tests {
                 }
             ),
             [31, 40, 7]
+        );
+    }
+
+    #[test]
+    fn pages_follow_on_from_each_other_in_either_order() {
+        let conn = test_conn();
+        seed_list(&conn);
+        let page = |sort, offset| {
+            plies(
+                &conn,
+                &MomentFilter {
+                    sort: Some(sort),
+                    limit: Some(2),
+                    offset: Some(offset),
+                    ..Default::default()
+                },
+            )
+        };
+
+        assert_eq!(page(MomentSort::MostRecent, 0), [31, 40]);
+        assert_eq!(page(MomentSort::MostRecent, 2), [7, 12]);
+        assert_eq!(page(MomentSort::MostRecent, 4), [20]);
+        assert_eq!(page(MomentSort::Costliest, 2), [31, 7]);
+        assert!(page(MomentSort::MostRecent, 6).is_empty());
+    }
+
+    #[test]
+    fn a_count_is_every_moment_the_filter_fits_whatever_the_page() {
+        let conn = test_conn();
+        seed_list(&conn);
+        let moments = MomentService::new(&conn);
+
+        assert_eq!(moments.count(&MomentFilter::default()).unwrap(), 5);
+        assert_eq!(
+            moments
+                .count(&MomentFilter {
+                    kind: Some(MomentKind::MaterialChance),
+                    limit: Some(1),
+                    offset: Some(2),
+                    ..Default::default()
+                })
+                .unwrap(),
+            3
         );
     }
 

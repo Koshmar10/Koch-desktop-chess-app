@@ -21,7 +21,9 @@ use ts_rs::TS;
 
 pub use detect::{detect, GameMoments};
 pub use scan::{rescan_stale, scan_game};
-pub use view::{MomentDetail, MomentFilter, MomentSort, MomentSummary, MoveNotation};
+pub use view::{
+    MomentDetail, MomentFilter, MomentSort, MomentStep, MomentSummary, MoveNotation,
+};
 
 /// Bumped whenever a rule in `detect` changes. A game scanned with an older
 /// version is scanned again on the next launch, from its stored analysis.
@@ -70,20 +72,28 @@ impl MomentKind {
         )
     }
 
-    /// Whether `outcome` is the player handling a moment of this kind well.
-    /// The outcome alone can't say: a draw saves a losing position but lets
-    /// a winning one go.
-    pub fn is_handled_by(self, outcome: MomentOutcome) -> bool {
+    pub const ALL: [MomentKind; 4] = [
+        MomentKind::MaterialChance,
+        MomentKind::ThreatenedPiece,
+        MomentKind::WinningPosition,
+        MomentKind::LosingPosition,
+    ];
+
+    /// The outcomes that are the player handling a moment of this kind
+    /// well. The outcome alone can't say: a draw saves a losing position but
+    /// lets a winning one go.
+    pub fn handled_outcomes(self) -> &'static [MomentOutcome] {
         match self {
-            MomentKind::MaterialChance => outcome == MomentOutcome::Taken,
-            MomentKind::ThreatenedPiece => {
-                matches!(outcome, MomentOutcome::Saved | MomentOutcome::Countered)
-            }
-            MomentKind::WinningPosition => outcome == MomentOutcome::Won,
-            MomentKind::LosingPosition => {
-                matches!(outcome, MomentOutcome::Won | MomentOutcome::Drew)
-            }
+            MomentKind::MaterialChance => &[MomentOutcome::Taken],
+            MomentKind::ThreatenedPiece => &[MomentOutcome::Saved, MomentOutcome::Countered],
+            MomentKind::WinningPosition => &[MomentOutcome::Won],
+            MomentKind::LosingPosition => &[MomentOutcome::Won, MomentOutcome::Drew],
         }
+    }
+
+    /// Whether `outcome` is the player handling a moment of this kind well.
+    pub fn is_handled_by(self, outcome: MomentOutcome) -> bool {
+        self.handled_outcomes().contains(&outcome)
     }
 }
 

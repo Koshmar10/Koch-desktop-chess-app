@@ -10,6 +10,7 @@
 // `pub(crate)` so `lib.rs` can name the commands at their real path in
 // `generate_handler!` — the `#[tauri::command]` macro generates helper
 // items next to each fn that a `pub use` re-export wouldn't carry along.
+pub(crate) mod chess_com;
 pub(crate) mod commands;
 pub(crate) mod import;
 mod live;
@@ -21,6 +22,7 @@ mod view;
 pub(crate) use live::legal_moves_view;
 pub use live::Game;
 pub use view::{
-    GameCreateResponse, GameResult, GameSource, GameStateView, GameSummary, LastMove, PieceView,
+    GameCreateResponse, GameFilter, GameResult, GameSource, GameStateView, GameSummary, LastMove,
+    PieceView,
     PlayerInfo, TerminationReason, TimeControl,
 };

@@ -7,8 +7,9 @@ use ts_rs::TS;
 
 use super::{MomentKind, MomentOutcome, Phase};
 use crate::app::error::AppError;
-use crate::app::game::replay::pieces_of;
-use crate::app::game::PieceView;
+use crate::app::analysis::MoveQuality;
+use crate::app::game::replay::{pieces_of, ReplayPosition};
+use crate::app::game::{LastMove, PieceView};
 use crate::app::rating::GameScore;
 use crate::db::schemas::moment::MomentRow;
 
@@ -29,9 +30,16 @@ pub struct MomentFilter {
     /// ISO timestamp, whose time is ignored. Both days are included.
     pub played_from: Option<String>,
     pub played_to: Option<String>,
+    /// Only the moments the player handled well, or only the others.
+    pub handled: Option<bool>,
+    /// Matched anywhere in the opponent's name or the opening's, ignoring
+    /// case. Unlike `opening`, which names one family exactly.
+    pub search: Option<String>,
     /// Most recent game first when left out.
     pub sort: Option<MomentSort>,
     pub limit: Option<u32>,
+    /// How many moments to skip from the start of the list, for paging.
+    pub offset: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, TS)]
@@ -134,4 +142,36 @@ pub struct MomentDetail {
     /// The engine's best move in the position `played` was played from.
     /// `None` when none was stored with the game.
     pub best: Option<MoveNotation>,
+    /// The positions the moment's moves pass through, to step through: the
+    /// one its first move was played from, then one after each move.
+    pub steps: Vec<MomentStep>,
+}
+
+/// One position in a moment's moves: a `ReplayPosition` without the
+/// findings, which a moment's view doesn't draw.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct MomentStep {
+    pub pieces: Vec<PieceView>,
+    /// The move that led here; `None` on the first step.
+    pub last_move: Option<LastMove>,
+    pub san: Option<String>,
+    /// White-relative, in centipawns.
+    pub eval_cp: Option<i32>,
+    pub quality: Option<MoveQuality>,
+    /// The engine's best move from here, in UCI.
+    pub best_move_uci: Option<String>,
+}
+
+impl From<ReplayPosition> for MomentStep {
+    fn from(position: ReplayPosition) -> Self {
+        MomentStep {
+            pieces: position.pieces,
+            last_move: position.last_move,
+            san: position.san,
+            eval_cp: position.eval_cp,
+            quality: position.quality,
+            best_move_uci: position.best_move_uci,
+        }
+    }
 }

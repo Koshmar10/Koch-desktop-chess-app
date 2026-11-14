@@ -64,9 +64,10 @@ const CardLine = ({
 interface MomentCardProps {
   moment: MomentSummary;
   boardSizePx: number;
+  onOpen?: () => void;
 }
 
-const MomentCard = ({ moment, boardSizePx }: MomentCardProps) => {
+const MomentCard = ({ moment, boardSizePx, onOpen }: MomentCardProps) => {
   const KindIcon = MOMENT_KIND_ICON[moment.kind];
 
   return (
@@ -74,8 +75,9 @@ const MomentCard = ({ moment, boardSizePx }: MomentCardProps) => {
     // board plus its padding and the board sits centred in a column sized
     // to that.
     <div
-      className="rounded-md bg-card/40 ring-1 ring-border/60"
+      className="rounded-md bg-card/40 ring-1 ring-border/60 hover:bg-primary/20 transition-color duration-150 ease-in cursor-pointer"
       style={{ padding: CARD_PADDING_PX }}
+      onClick={onOpen}
     >
       <div className="flex items-center justify-between gap-2 px-0.5 pb-2 text-xs">
         <span className="truncate text-foreground/70">

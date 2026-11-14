@@ -85,6 +85,10 @@ pub enum GameSource {
     Koch,
     /// Imported from a pasted PGN.
     Pgn,
+    /// Pulled from the player's chess.com archive.
+    #[serde(rename = "chess.com")]
+    #[ts(rename = "chess.com")]
+    ChessCom,
 }
 
 impl GameSource {
@@ -95,6 +99,7 @@ impl GameSource {
         match self {
             GameSource::Koch => "koch",
             GameSource::Pgn => "pgn",
+            GameSource::ChessCom => "chess.com",
         }
     }
 
@@ -102,9 +107,25 @@ impl GameSource {
         match raw {
             "koch" => Some(GameSource::Koch),
             "pgn" => Some(GameSource::Pgn),
+            "chess.com" => Some(GameSource::ChessCom),
             _ => None,
         }
     }
+}
+
+/// Which saved games a history page holds. Every field narrows it; none
+/// set is all of them, most recent first.
+#[derive(Clone, Debug, Default, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, optional_fields)]
+pub struct GameFilter {
+    /// Matched anywhere in either player's name or the opening's name,
+    /// ignoring case.
+    pub search: Option<String>,
+    /// The first day to include, as "YYYY-MM-DD".
+    pub played_from: Option<String>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
 }
 
 /// One piece on the board, flattened for the frontend — just enough to
@@ -132,7 +153,7 @@ impl From<&ChessPiece> for PieceView {
 /// The two squares of the most recently played move — for highlighting it
 /// on the board, distinct from `selectedSquare` (which is about the
 /// player's *next* move, not the one that just happened).
-#[derive(Clone, Serialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct LastMove {
     pub from: Square,

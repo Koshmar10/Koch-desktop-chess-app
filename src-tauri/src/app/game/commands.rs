@@ -18,7 +18,7 @@ use crate::db::{
 use super::live::{restore_active_game, take_active_game, Game};
 use super::play::{apply_move, finish_game, prepare_next_move, spawn_engine_reply, update_opening};
 use super::view::{
-    GameCreateResponse, GameResult, GameSource, GameStateView, GameSummary, PlayerInfo,
+    GameCreateResponse, GameFilter, GameResult, GameSource, GameStateView, GameSummary, PlayerInfo,
     TerminationReason, TimeControl,
 };
 
@@ -211,17 +211,28 @@ pub async fn retry_engine_reply(
     Ok(())
 }
 
+/// Saved games, most recent first. With no filter, all of them.
 #[tauri::command]
-pub fn get_games(db: tauri::State<'_, db::Db>) -> Result<Vec<GameSummary>, AppError> {
+pub fn get_games(
+    db: tauri::State<'_, db::Db>,
+    filter: Option<GameFilter>,
+) -> Result<Vec<GameSummary>, AppError> {
     let conn = db.lock()?;
 
-    let games = GameService::new(&conn).get_games()?;
+    let games = GameService::new(&conn).get_games(&filter.unwrap_or_default())?;
 
     let summaries = games
         .iter()
         .map(|game| game_summary_from(game, &conn))
         .collect::<rusqlite::Result<_>>()?;
     Ok(summaries)
+}
+
+/// How many games fit `filter`, whatever its limit and offset.
+#[tauri::command]
+pub fn count_games(db: tauri::State<'_, db::Db>, filter: GameFilter) -> Result<u32, AppError> {
+    let conn = db.lock()?;
+    Ok(GameService::new(&conn).count_games(&filter)?)
 }
 
 #[tauri::command]
@@ -252,8 +263,9 @@ pub fn analyze_game(
             .find_game(game_id)?
             .ok_or_else(|| format!("no game with id {game_id}"))?;
         let side = match game.source {
-            // An import's side comes from the popup, or a previous pick.
-            GameSource::Pgn => human_color
+            // An import's side comes from the popup, or a previous pick; a
+            // chess.com game's usually from the sync, which knows the user.
+            GameSource::Pgn | GameSource::ChessCom => human_color
                 .or(game.human_color)
                 .ok_or("pick which side you played to analyse this game")?,
             // A koch-played game always has the side it was played from.

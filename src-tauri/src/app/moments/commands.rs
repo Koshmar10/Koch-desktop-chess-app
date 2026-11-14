@@ -4,9 +4,9 @@
 use koch_engine::{Board, FenString};
 use rusqlite::Connection;
 
-use super::{MomentDetail, MomentFilter, MomentSummary, MoveNotation};
+use super::{MomentDetail, MomentFilter, MomentStep, MomentSummary, MoveNotation};
 use crate::app::error::AppError;
-use crate::app::game::replay::{fen_of, play_uci};
+use crate::app::game::replay::{fen_of, play_uci, replay_positions_from};
 use crate::db::{
     self,
     services::{game::GameService, moment::MomentService},
@@ -20,6 +20,17 @@ pub fn list_moments(
     let conn = db.lock()?;
     let rows = MomentService::new(&conn).list(&filter)?;
     rows.iter().map(MomentSummary::try_from).collect()
+}
+
+/// How many moments fit `filter`, ignoring its limit and offset, so a paged
+/// list knows how many pages it has.
+#[tauri::command]
+pub fn count_moments(
+    db: tauri::State<'_, db::Db>,
+    filter: MomentFilter,
+) -> Result<u32, AppError> {
+    let conn = db.lock()?;
+    Ok(MomentService::new(&conn).count(&filter)?)
 }
 
 /// One moment and its board. `None` when there is no moment with that id: a
@@ -57,6 +68,11 @@ fn moment_detail(conn: &Connection, moment_id: u32) -> Result<Option<MomentDetai
         .as_deref()
         .map(|uci| best_move(&before, uci))
         .transpose()?;
+    let moment_moves = &moves[ply - 1..(ply - 1 + row.moment.ply_count as usize).min(moves.len())];
+    let steps = replay_positions_from(before.clone(), moment_moves)?
+        .into_iter()
+        .map(MomentStep::from)
+        .collect();
 
     Ok(Some(MomentDetail {
         summary: MomentSummary::try_from(&row)?,
@@ -66,6 +82,7 @@ fn moment_detail(conn: &Connection, moment_id: u32) -> Result<Option<MomentDetai
             san: played.san.clone(),
         },
         best,
+        steps,
     }))
 }
 
@@ -263,6 +280,27 @@ mod tests {
         assert!(!summary.handled);
         assert_eq!(summary.piece, Some(PieceType::Pawn));
         assert_eq!(summary.square, square_from_db("e5"));
+    }
+
+    #[test]
+    fn a_moment_steps_from_before_its_first_move_to_after_its_last() {
+        let conn = test_conn();
+        // 2...Nf6 and 3.d3: two plies from the fourth.
+        let ids = seed_moments(
+            &conn,
+            vec![Moment {
+                ply_count: 2,
+                ..moment(4, MomentKind::MaterialChance, Some("e5"))
+            }],
+        );
+
+        let steps = moment_detail(&conn, ids[0]).unwrap().unwrap().steps;
+
+        let sans: Vec<_> = steps.iter().map(|step| step.san.as_deref()).collect();
+        assert_eq!(sans, [None, Some("Nf6"), Some("d3")]);
+        // The engine's best is on the position it was found for.
+        assert_eq!(steps[1].best_move_uci.as_deref(), Some("h5e5"));
+        assert!(steps[0].last_move.is_none());
     }
 
     #[test]

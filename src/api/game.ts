@@ -8,6 +8,8 @@ import type { TerminationReason } from "./bindings/TerminationReason";
 import type { TimeControl } from "./bindings/TimeControl";
 import type { GameSummary } from "./bindings/GameSummary";
 import type { ImportPgnResult } from "./bindings/ImportPgnResult";
+import type { GameFilter } from "./bindings/GameFilter";
+import type { ChessComSync } from "./bindings/ChessComSync";
 
 export const startGame = async (
   humanColor: PieceColor,
@@ -46,8 +48,20 @@ export const retryEngineReply = (): Promise<void> => {
   return invoke("retry_engine_reply");
 };
 
-export const getGames = (): Promise<GameSummary[]> => {
-  return invoke<GameSummary[]>("get_games");
+// Saved games, most recent first. Without a filter, all of them.
+export const getGames = (filter?: GameFilter): Promise<GameSummary[]> => {
+  return invoke<GameSummary[]>("get_games", { filter });
+};
+
+// How many games fit the filter, whatever its limit and offset.
+export const countGames = (filter: GameFilter): Promise<number> => {
+  return invoke<number>("count_games", { filter });
+};
+
+// Imports new games from the chess.com username in Settings. Rejects with a
+// readable message when no username is set or chess.com doesn't know it.
+export const syncChessCom = (): Promise<ChessComSync> => {
+  return invoke<ChessComSync>("sync_chess_com");
 };
 
 export const deleteGame = (gameId: number): Promise<void> => {
