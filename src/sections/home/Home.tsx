@@ -15,8 +15,6 @@ import WeekMoments from "./WeekMoments";
 import YourArmy from "./YourArmy";
 import { randomChessQuote } from "./quotes";
 
-const DIVIDER_CLASS = "border-border/60";
-
 const Masthead = ({
   playerName,
   gameCount,
@@ -60,7 +58,7 @@ const Home = () => {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-8 py-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-6">
       <Masthead playerName={playerName} gameCount={games.length} />
 
       <section className="flex items-start justify-between gap-8">
@@ -68,21 +66,17 @@ const Home = () => {
         <RatingCard rating={stats?.current_rating} history={ratingHistory} />
       </section>
 
-      <div
-        className={`grid grid-cols-3 justify-center gap-8 border-y-[1px] py-8 ${DIVIDER_CLASS}`}
-      >
+      <div className="grid grid-cols-3 gap-6">
         <FormGuide />
         <YourArmy />
         <AtTheBoard stats={stats} />
       </div>
 
-      <div className={`border-b-[1px] pb-8 ${DIVIDER_CLASS}`}>
-        <PuzzleRecord />
-      </div>
+      <PuzzleRecord />
 
       <WeekMoments />
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-2 gap-6">
         <Scoresheet games={games} />
         <OpeningLines games={games} />
       </div>

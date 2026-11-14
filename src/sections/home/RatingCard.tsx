@@ -1,5 +1,6 @@
 import { Line, LineChart, ResponsiveContainer, YAxis } from "recharts";
 import type { RatingPoint } from "../../api/bindings/RatingPoint";
+import { HOME_CARD_CLASS } from "./homeStyles";
 
 const SPARKLINE_HEIGHT_PX = 56;
 
@@ -12,7 +13,7 @@ const RatingCard = ({ rating, history }: RatingCardProps) => {
   const ratings = history.map((point) => point.rating);
 
   return (
-    <div className="flex w-72 shrink-0 flex-col gap-2 rounded-md border-[1px] border-border/60 bg-card/40 p-4">
+    <div className={`flex w-72 shrink-0 flex-col gap-2 ${HOME_CARD_CLASS}`}>
       <span className="text-xs tracking-wide text-foreground/50 uppercase">
         Rating
       </span>
